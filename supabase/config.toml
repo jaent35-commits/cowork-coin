@@ -1,0 +1,19 @@
+# 코웍-코인 Edge Function 설정 (supabase CLI 배포용)
+# JWT 검사는 함수 안에서 직접 함 (_shared/mod.ts caller) — 로그인 전 호출(bootstrap-admin)과
+# 새 publishable 키(JWT 아님)를 함께 쓰기 위해 게이트웨이 검사는 끔
+project_id = "yqaioqxkqcwejwqqwatl"
+
+[functions.bootstrap-admin]
+verify_jwt = false
+
+[functions.change-password]
+verify_jwt = false
+
+[functions.admin-create-team]
+verify_jwt = false
+
+[functions.admin-reset-password]
+verify_jwt = false
+
+[functions.admin-delete-team]
+verify_jwt = false
