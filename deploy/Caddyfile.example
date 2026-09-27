@@ -1,0 +1,15 @@
+# Set COWORK_SITE_ROOT to the absolute directory containing the Vite build (dist).
+# Point cw-coin.duckdns.org to this Windows PC and forward TCP 80 and 443 here.
+cw-coin.duckdns.org {
+  encode zstd gzip
+
+  handle /api/* {
+    reverse_proxy 127.0.0.1:8000
+  }
+
+  handle {
+    root * "{$COWORK_SITE_ROOT}"
+    try_files {path} /index.html
+    file_server
+  }
+}
