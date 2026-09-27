@@ -2,8 +2,6 @@ import type {
   AllocRow, ChecklistItem, ExecRecord, MonthlyExec, NotifItem, Project, QuarterData, Team,
 } from '@/types';
 
-/** 새 팀을 추가하거나 비밀번호를 초기화할 때 사용하는 임시 비밀번호. */
-export const DEFAULT_TEAM_PASSWORD = '1234';
 export const DEFAULT_MEETING_RATE = 30000;
 export const CATEGORIES = ['식비', '교통비', '자재비', '숙박비', '기타'] as const;
 

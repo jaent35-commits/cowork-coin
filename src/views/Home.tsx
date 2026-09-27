@@ -9,7 +9,7 @@ import { Alert, Badge, Btn, Card, FilterChip, ProgressBar, MonthGrid, SectionHea
 import { IconPlus } from '@/components/icons';
 import InstallCard from '@/components/InstallCard';
 import IntroPopup from '@/components/IntroPopup';
-import CheckRows, { byCheckDate } from '@/components/CheckRows';
+import CheckRows, { byCheckDate, checkDateOf } from '@/components/CheckRows';
 import { openTeamTab } from './Meeting';
 import './Home.css';
 
@@ -63,7 +63,7 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
   const projById = new Map(state.projects.map(p => [p.id, p]));
   const scopeOf = (projectId: string): Scope => (projById.get(projectId)?.isMine ? 'my' : 'cowork');
   const homeChecklist = visibleChecklist(state)
-    .filter(c => !c.date || !c.checked || c.date.startsWith(CUR_YYYYMM))
+    .filter(c => !c.checked || !checkDateOf(c) || checkDateOf(c)!.startsWith(CUR_YYYYMM))
     .sort(byCheckDate);
   const myChecklist = homeChecklist.filter(c => scopes.has(scopeOf(c.projectId)));
   // 상태 필터 = 요약 숫자 (My 체크리스트와 같은 '전체 n' 형식)
@@ -71,6 +71,7 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
   const statusOptions = STATUS.map(o => ({ ...o, label: `${o.label} ${statusCount[o.value]}` }));
   const shown = myChecklist.filter(c => (status === 'todo' ? !c.checked : status === 'done' ? c.checked : true));
   const toggle = (id: string) => dispatch({ type: 'TOGGLE_CHECK', id });
+  const setExec = (id: string, patch: { spent?: number; spentDate?: string }) => dispatch({ type: 'SET_CHECK_EXEC', id, patch });
 
   return (
     <div className="view-enter">
@@ -156,7 +157,7 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
               aria-pressed={status === o.value} onClick={() => setStatus(o.value)}>{o.label}</button>
           ))}
         </div>
-        <CheckRows items={shown} projects={state.projects} onToggle={toggle} empty={{ icon: '🎉', message: '모두 처리되었습니다!' }} />
+        <CheckRows items={shown} projects={state.projects} onToggle={toggle} onExec={setExec} empty={{ icon: '🎉', message: '모두 처리되었습니다!' }} />
       </Card>
     </div>
   );

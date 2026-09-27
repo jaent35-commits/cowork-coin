@@ -495,6 +495,7 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
               <div className="mb-14">
                 <CheckRows items={items} projects={[selected]} hideProject
                   onToggle={id => dispatch({ type: 'TOGGLE_CHECK', id })}
+                  onExec={(id, patch) => dispatch({ type: 'SET_CHECK_EXEC', id, patch })}
                   empty={<div className="soft-empty">등록된 항목이 없습니다</div>}
                   actions={editMode ? item => (<>
                     <Badge variant={isPublicCheck(item) ? 'outline' : 'dark'} size="lg" pressed={!isPublicCheck(item)}

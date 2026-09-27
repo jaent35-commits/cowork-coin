@@ -4,7 +4,7 @@ import { useAppState, useDispatch } from '@/store/StoreContext';
 import { fmt } from '@/lib/format';
 import { Card, Segmented, Select } from '@/components/ui';
 import { ownerBudget, visibleChecklist } from '@/store/selectors';
-import CheckRows, { byCheckDate } from '@/components/CheckRows';
+import CheckRows, { byCheckDate, checkDateOf } from '@/components/CheckRows';
 import type { ChecklistItem } from '@/types';
 
 type Status = 'all' | 'todo' | 'done';
@@ -21,9 +21,11 @@ const last: Record<Scope, Filters> = { my: DEFAULT_FILTERS, cowork: DEFAULT_FILT
 /** 탭 전환(My 프로젝트 ↔ My 체크리스트) 중에는 필터 유지, 메뉴로 새로 들어오면 기본값 */
 export const resetChecklistFilters = (scope: Scope) => { last[scope] = DEFAULT_FILTERS; };
 
-/** 집행 예정일 늦은 순 (예정일 없는 항목은 맨 뒤) */
-const byCheckDateDesc = (a: ChecklistItem, b: ChecklistItem) =>
-  !a.date ? (b.date ? 1 : 0) : !b.date ? -1 : b.date.localeCompare(a.date);
+/** 날짜 늦은 순 — 완료는 집행일, 미완료는 예정일 (날짜 없는 항목은 맨 뒤) */
+const byCheckDateDesc = (a: ChecklistItem, b: ChecklistItem) => {
+  const x = checkDateOf(a), y = checkDateOf(b);
+  return !x ? (y ? 1 : 0) : !y ? -1 : y.localeCompare(x);
+};
 
 /**
  * 경비 집행 체크리스트 목록 — 활성(진행 중) 프로젝트
@@ -117,6 +119,7 @@ export default function ProjectChecklist({ scope }: { scope: Scope }) {
         </div>
         {budgetNote && <p className="proj-check__budget">{budgetNote}</p>}
         <CheckRows selectable items={shown} projects={projects} flashId={flashId} onToggle={id => dispatch({ type: 'TOGGLE_CHECK', id })}
+          onExec={(id, patch) => dispatch({ type: 'SET_CHECK_EXEC', id, patch })}
           empty={active.length === 0
             ? (scope === 'my'
               ? { icon: '📁', message: '진행 중인 주관 프로젝트가 없습니다' }

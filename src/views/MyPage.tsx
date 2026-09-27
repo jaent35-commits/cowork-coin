@@ -5,19 +5,18 @@ import { Alert, Avatar, Btn, Card, Divider, Field, Input, PageHead, PasswordInpu
 import { useFontMode } from '@/lib/fontScale';
 import { useTheme, setThemePref, type ThemePref } from '@/lib/theme';
 import { CUR_YEAR } from '@/lib/date';
-import { DEFAULT_TEAM_PASSWORD } from '@/data/seed';
+import { MIN_PASSWORD_LENGTH } from '@/lib/password';
 import './Pages.css';
 
 const THEME_OPTIONS: { value: ThemePref; label: string }[] = [
   { value: 'light', label: '라이트' }, { value: 'dark', label: '다크' }, { value: 'system', label: '시스템 설정' },
 ];
 
-type PwError = '' | 'current' | 'mismatch' | 'short' | 'same' | 'initial';
+type PwError = '' | 'current' | 'mismatch' | 'short' | 'same';
 const ERR: Record<Exclude<PwError, ''>, { v: 'danger' | 'warn'; msg: string }> = {
-  initial: { v: 'warn', msg: '초기 비밀번호는 사용할 수 없습니다. 다른 비밀번호를 입력하세요.' },
   current: { v: 'danger', msg: '현재 비밀번호가 일치하지 않습니다.' },
   mismatch: { v: 'danger', msg: '새 비밀번호가 서로 일치하지 않습니다.' },
-  short: { v: 'warn', msg: '비밀번호는 4자 이상이어야 합니다.' },
+  short: { v: 'warn', msg: `비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 합니다.` },
   same: { v: 'warn', msg: '현재 비밀번호와 다른 비밀번호를 입력하세요.' },
 };
 
@@ -38,10 +37,9 @@ export default function MyPage() {
   const save = () => {
     if (!team) return;
     if (cur !== team.password) return setError('current');
-    if (next.length < 4) return setError('short');
+    if (next.length < MIN_PASSWORD_LENGTH) return setError('short');
     if (next !== next2) return setError('mismatch');
     if (next === cur) return setError('same');
-    if (next === DEFAULT_TEAM_PASSWORD) return setError('initial'); // 초기 비밀번호로 되돌리면 다음 로그인 때 다시 변경해야 함
     dispatch({ type: 'SET_TEAM_PASSWORD', teamName, password: next, by: 'self' });
     setError('');
     setCur(''); setNext(''); setNext2('');
@@ -95,7 +93,7 @@ export default function MyPage() {
               <Field label="현재 비밀번호" htmlFor="pw-cur">
                 <PasswordInput id="pw-cur" value={cur} onChange={edit(setCur)} autoComplete="current-password" />
               </Field>
-              <Field label="새 비밀번호 입력" htmlFor="pw-new" hint="4자 이상">
+              <Field label="새 비밀번호 입력" htmlFor="pw-new" hint={`${MIN_PASSWORD_LENGTH}자 이상`}>
                 <PasswordInput id="pw-new" value={next} onChange={edit(setNext)} autoComplete="new-password" />
               </Field>
               <Field label="새 비밀번호 확인" htmlFor="pw-new2">

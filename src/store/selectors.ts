@@ -43,6 +43,8 @@ export function budgetOverview(s: AppState) {
 
 /** 체크리스트 공개 여부 (값이 없던 기존 항목은 공개) */
 export const isPublicCheck = (c: Pick<ChecklistItem, 'visibility'>) => c.visibility !== 'private';
+/** 체크리스트 기준 날짜 — 완료는 집행일(없으면 예정일), 미완료는 예정일 */
+export const checkDateOf = (c: Pick<ChecklistItem, 'checked' | 'date' | 'spentDate'>) => (c.checked ? c.spentDate ?? c.date : c.date);
 
 /** 로그인한 팀이 볼 수 있는 체크리스트 — 주관 프로젝트는 전부, 배분받은 참여 프로젝트는 공개 항목만 */
 export function visibleChecklist(s: AppState): ChecklistItem[] {

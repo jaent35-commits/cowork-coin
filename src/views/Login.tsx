@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useAppState, useDispatch } from '@/store/StoreContext';
-import { DEFAULT_TEAM_PASSWORD } from '@/data/seed';
+import { MIN_PASSWORD_LENGTH, passwordError } from '@/lib/password';
 import { getLastTeam, getRemember, saveLoginPrefs } from '@/lib/remember';
 import { holdLightTheme } from '@/lib/theme';
 import { IconEye } from '@/components/icons';
@@ -53,9 +53,9 @@ function LgPassword({ id, label, value, onChange, placeholder, autoComplete, hin
 
 /**
  * 로그인 화면.
- * 초기 비밀번호(DEFAULT_TEAM_PASSWORD — 팀 추가·관리자 초기화 값)로 로그인하면 바로 들어가지 않고
+ * 임시 비밀번호(팀 추가·관리자 초기화 때 관리자가 받은 8자, mustChangePassword)로 로그인하면 바로 들어가지 않고
  * '비밀번호 변경' 단계를 거쳐야 앱에 진입합니다. 변경 전에는 세션을 만들지 않습니다.
- * pendingTeam: 이미 로그인된 세션이 초기 비밀번호인 경우(App 에서 전달) 변경 단계부터 시작.
+ * pendingTeam: 이미 로그인된 세션이 임시 비밀번호 상태인 경우(App 에서 전달) 변경 단계부터 시작.
  */
 export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
   const { teams } = useAppState();
@@ -86,7 +86,7 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
       setLoading(false);
       const found = activeTeams.find(t => t.name === team && t.password === password);
       if (!found) { setError('팀 또는 비밀번호가 일치하지 않습니다.'); return; }
-      if (found.password === DEFAULT_TEAM_PASSWORD) {
+      if (found.mustChangePassword) {
         setPassword(''); setError(''); setChangeFor(found.name);
         return;
       }
@@ -104,10 +104,9 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
   const submitChange = (e: FormEvent) => {
     e.preventDefault();
     if (!changeTeam) return;
-    if (!next || !next2) { setError('새 비밀번호를 두 번 입력하세요.'); return; }
-    if (next.length < 4) { setError('비밀번호는 4자 이상이어야 합니다.'); return; }
-    if (next === DEFAULT_TEAM_PASSWORD) { setError('초기 비밀번호와 다른 비밀번호를 입력하세요.'); return; }
-    if (next !== next2) { setError('새 비밀번호가 서로 일치하지 않습니다.'); return; }
+    // 임시 비밀번호를 그대로 다시 쓰는 것도 막음
+    const err = passwordError(next, next2, changeTeam.password);
+    if (err) { setError(err); return; }
     dispatch({ type: 'SET_TEAM_PASSWORD', teamName: changeTeam.name, password: next, by: 'self' });
     saveLoginPrefs(remember, changeTeam.name);
     dispatch({ type: 'LOGIN', session: { team: changeTeam.name, isAdmin: !!changeTeam.isAdmin } });
@@ -123,9 +122,8 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
     e.preventDefault();
     const name = setupName.trim();
     if (!name) return setError('관리자 팀 이름을 입력하세요.');
-    if (setupPassword.length < 8) return setError('비밀번호는 8자 이상이어야 합니다.');
-    if (setupPassword === DEFAULT_TEAM_PASSWORD) return setError('다른 비밀번호를 입력하세요.');
-    if (setupPassword !== setupConfirm) return setError('비밀번호가 서로 일치하지 않습니다.');
+    const err = passwordError(setupPassword, setupConfirm);
+    if (err) return setError(err);
     dispatch({ type: 'INITIALIZE', name, password: setupPassword });
   };
 
@@ -192,8 +190,8 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
               <h1>비밀번호 변경</h1>
               <p>
                 <b className="lg-welcome__team">{changeTeam.name}</b>
-                <span className="lg-only-desk">은(는) 초기 비밀번호로 로그인했어요. 안전을 위해 새 비밀번호로 바꾼 뒤 시작합니다.</span>
-                <span className="lg-only-mob">은(는) 초기 비밀번호로 로그인했어요.<br />새 비밀번호로 바꾼 뒤 시작합니다.</span>
+                <span className="lg-only-desk">은(는) 임시 비밀번호로 로그인했어요. 안전을 위해 새 비밀번호로 바꾼 뒤 시작합니다.</span>
+                <span className="lg-only-mob">은(는) 임시 비밀번호로 로그인했어요.<br />새 비밀번호로 바꾼 뒤 시작합니다.</span>
               </p>
             </div>
 
@@ -201,7 +199,7 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
 
             <input type="text" name="username" value={changeTeam.name} autoComplete="username" readOnly hidden />
             <div className="lg-fields">
-              <LgPassword id="login-pw-new" label="새 비밀번호" hint="4자 이상" value={next} onChange={editChange(setNext)}
+              <LgPassword id="login-pw-new" label="새 비밀번호" hint={`${MIN_PASSWORD_LENGTH}자 이상`} value={next} onChange={editChange(setNext)}
                 placeholder="새 비밀번호를 입력하세요" autoComplete="new-password" />
               <LgPassword id="login-pw-new2" label="새 비밀번호 확인" value={next2} onChange={editChange(setNext2)}
                 placeholder="한 번 더 입력하세요" autoComplete="new-password" />
@@ -229,7 +227,7 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
                   <input id="setup-name" value={setupName} onChange={e => { setSetupName(e.target.value); setError(''); }} placeholder="팀 이름" autoComplete="organization" />
                 </div>
               </div>
-              <LgPassword id="setup-password" label="비밀번호" hint="8자 이상" value={setupPassword} onChange={editChange(setSetupPassword)} placeholder="비밀번호를 입력하세요" autoComplete="new-password" />
+              <LgPassword id="setup-password" label="비밀번호" hint={`${MIN_PASSWORD_LENGTH}자 이상`} value={setupPassword} onChange={editChange(setSetupPassword)} placeholder="비밀번호를 입력하세요" autoComplete="new-password" />
               <LgPassword id="setup-confirm" label="비밀번호 확인" value={setupConfirm} onChange={editChange(setSetupConfirm)} placeholder="한 번 더 입력하세요" autoComplete="new-password" />
             </div>
             <button type="submit" className="lg-submit">관리자 팀 만들기</button>

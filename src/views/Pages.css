@@ -67,6 +67,14 @@ li:last-child > .notif { border-bottom: 0; }
 .team-table__me { margin-left: 6px; }
 .team-table tr.is-dormant .team-table__name { color: var(--faint); }
 .team-table__act .icon-btn { margin: 0 auto; }
+/* 임시 비밀번호 안내 (한 번만 표시) — 받아 적기 쉽게 고정폭·넓은 자간 */
+.temp-pw {
+  display: inline-block; margin-left: 4px; padding: 3px 10px; border-radius: var(--r-xs);
+  background: var(--primary-50); color: var(--text);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: calc(15px * var(--fs)); font-weight: 800; letter-spacing: 0.12em;
+  user-select: all;
+}
+.temp-pw__note { display: block; margin-top: 6px; font-size: calc(12px * var(--fs)); color: var(--faint); }
 /* 표 정렬 규칙: 순번·상태·권한·초기화·수정·삭제(구분·버튼) 가운데 · 팀명(입력 값) 왼쪽 — 모바일 grid 는 제외 */
 @media (min-width: 1025px) {
   .team-table td:not(.team-table__name):not([colspan]) { text-align: center; } /* 팀 추가 줄(입력 폼)은 왼쪽 그대로 */

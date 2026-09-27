@@ -3,6 +3,7 @@ import { reducer, seedState, type Action, type AppState } from './reducer';
 import { shouldDropSession } from '@/lib/remember';
 import { splitRecords } from '@/lib/records';
 import { toEndDate, toStartDate } from '@/lib/date';
+import { LEGACY_INITIAL_PASSWORD } from '@/lib/password';
 
 /** 시드/스키마를 바꾸면 버전을 올려 저장본을 무효화한다. */
 const STORAGE_KEY = 'cowork-coin-v5'; // 데모 데이터 제거: 이전 버전의 로컬 저장본은 가져오지 않음
@@ -22,6 +23,8 @@ function loadInitial(): AppState {
       // 착수월·종료월(YYYY-MM) 저장본 → 착수일(1일)·종료일(말일)
       state.projects = state.projects.map(p => ({ ...p, startDate: toStartDate(p.startDate), endDate: toEndDate(p.endDate) }));
       state.teams = state.teams.map(t => ('isAdmin' in t ? t : { ...t, isAdmin: seed.teams.find(s => s.id === t.id)?.isAdmin ?? false }));
+      // 임시 비밀번호 상태가 없던 저장본 → 예전 고정 초기 비밀번호(1234)를 쓰는 팀은 변경 필요
+      state.teams = state.teams.map(t => ('mustChangePassword' in t ? t : { ...t, mustChangePassword: t.password === LEGACY_INITIAL_PASSWORD }));
       return shouldDropSession() ? { ...state, session: null } : state;
     }
   } catch {

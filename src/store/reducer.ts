@@ -6,7 +6,7 @@ import {
   DEFAULT_MEETING_RATE, SEED_ALLOCS, SEED_CHECKLIST, SEED_MONTHLY, SEED_NOTIFICATIONS,
   SEED_PROJECT_MONTHLY, SEED_PROJECTS, SEED_QUARTERS, SEED_RECORDS, SEED_TEAMS, SEED_WORK_BUDGETS,
 } from '@/data/seed';
-import { CUR_QUARTER, CUR_YEAR, monthsUntil, parseYm, quarterOf, toEndDate } from '@/lib/date';
+import { CUR_QUARTER, CUR_YEAR, TODAY_ISO, monthsUntil, parseYm, quarterOf, toEndDate } from '@/lib/date';
 import { fmt, uid } from '@/lib/format';
 import { budgetName, workBudgetOf } from '@/lib/budget';
 
@@ -68,6 +68,8 @@ export type Action =
   | { type: 'UPDATE_PROJECT'; id: string; draft: ProjectDraft; allocs: AllocRow[] }
   | { type: 'DEACTIVATE_PROJECT'; id: string; month: string }
   | { type: 'TOGGLE_CHECK'; id: string }
+  /** 완료 항목의 집행 금액 · 집행일 수정 */
+  | { type: 'SET_CHECK_EXEC'; id: string; patch: Pick<ChecklistItem, 'spent' | 'spentDate'> }
   | { type: 'ADD_CHECK'; item: Omit<ChecklistItem, 'id' | 'checked'> }
   | { type: 'DELETE_CHECK'; id: string }
   | { type: 'SET_CHECK_VISIBILITY'; id: string; visibility: CheckVisibility }
@@ -152,7 +154,7 @@ export function reducer(state: AppState, action: Action): AppState {
       if (state.teams.length) return state;
       return {
         ...state,
-        teams: [{ id: uid('t'), name: action.name, password: action.password, active: true, isAdmin: true }],
+        teams: [{ id: uid('t'), name: action.name, password: action.password, active: true, isAdmin: true, mustChangePassword: false }],
         session: { team: action.name, isAdmin: true },
       };
     case 'LOGIN':
@@ -163,7 +165,8 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'TOGGLE_TEAM':
       return { ...state, teams: state.teams.map(t => (t.id === action.id ? { ...t, active: !t.active } : t)) };
     case 'ADD_TEAM':
-      return { ...state, teams: [...state.teams, { id: uid('t'), name: action.name, password: action.password, active: true, isAdmin: false }] };
+      // password = 관리자에게 한 번 보여 준 임시 비밀번호 → 첫 로그인 때 변경 필수
+      return { ...state, teams: [...state.teams, { id: uid('t'), name: action.name, password: action.password, active: true, isAdmin: false, mustChangePassword: true }] };
     case 'RENAME_TEAM': {
       const prev = state.teams.find(t => t.id === action.id);
       if (!prev || prev.name === action.name) return state;
@@ -186,10 +189,11 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'SET_TEAM_PASSWORD':
       return {
         ...state,
-        teams: state.teams.map(t => (t.name === action.teamName ? { ...t, password: action.password } : t)),
+        // 관리자 초기화 = 임시 비밀번호 → 다음 로그인 때 변경 필수 / 팀 본인 변경 = 해제
+        teams: state.teams.map(t => (t.name === action.teamName ? { ...t, password: action.password, mustChangePassword: action.by === 'reset' } : t)),
         // 비밀번호 주인 팀에게 알림 (관리자가 초기화한 경우도 해당 팀이 받음)
         notifications: notify(state, action.by === 'reset'
-          ? { type: 'setting', team: action.teamName, title: '비밀번호 초기화', desc: `관리자가 ${action.teamName} 계정의 비밀번호를 초기화했습니다. 초기 비밀번호로 로그인하면 새 비밀번호로 변경한 뒤 시작합니다.` }
+          ? { type: 'setting', team: action.teamName, title: '비밀번호 초기화', desc: `관리자가 ${action.teamName} 계정의 비밀번호를 초기화했습니다. 관리자에게 받은 임시 비밀번호로 로그인하면 새 비밀번호로 변경한 뒤 시작합니다.` }
           : { type: 'setting', team: action.teamName, title: '비밀번호 변경 완료', desc: `${action.teamName} 계정의 비밀번호가 성공적으로 변경되었습니다.` }),
       };
 
@@ -251,7 +255,12 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, projects: state.projects.map(p => (p.id === action.id ? { ...p, active: false, endDate: toEndDate(action.month) } : p)) };
 
     case 'TOGGLE_CHECK':
-      return { ...state, checklist: state.checklist.map(c => (c.id === action.id ? { ...c, checked: !c.checked } : c)) };
+      // 체크하면 집행 금액 = 예산 · 집행일 = 오늘로 시작, 체크 해제하면 둘 다 지움 (예정일로 돌아감)
+      return { ...state, checklist: state.checklist.map(c => (c.id === action.id
+        ? c.checked ? { ...c, checked: false, spent: undefined, spentDate: undefined } : { ...c, checked: true, spent: c.amount, spentDate: TODAY_ISO }
+        : c)) };
+    case 'SET_CHECK_EXEC':
+      return { ...state, checklist: state.checklist.map(c => (c.id === action.id && c.checked ? { ...c, ...action.patch } : c)) };
     case 'ADD_CHECK':
       return { ...state, checklist: [...state.checklist, { ...action.item, id: uid('c'), checked: false }] };
     case 'SET_CHECK_VISIBILITY':

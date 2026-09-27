@@ -122,3 +122,9 @@ export const IconDownload =(p: P) => (
 export const IconCheck = (p: P) => (
   <Svg strokeWidth={2.4} {...p}><path d="M5 12.5l4.5 4.5L19 7.5" /></Svg>
 );
+export const IconLock = (p: P) => (
+  <Svg strokeWidth={2} {...p}><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></Svg>
+);
+export const IconUnlock = (p: P) => (
+  <Svg strokeWidth={2} {...p}><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5" /><path d="M8 10.5V7.5a4 4 0 0 1 7.75-1.4" /></Svg>
+);

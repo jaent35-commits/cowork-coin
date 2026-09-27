@@ -1,19 +1,21 @@
 import { Fragment, useState, type FormEvent } from 'react';
 import type { Team } from '@/types';
 import { useAppState, useDispatch } from '@/store/StoreContext';
-import { DEFAULT_TEAM_PASSWORD } from '@/data/seed';
+import { makeTempPassword } from '@/lib/password';
 import { useToast } from '@/hooks/useToast';
 import { Badge, Btn, Card, ConfirmLayer, Input, PageHead, Segmented, Switch, TableWrap, Toast, cx } from '@/components/ui';
 import { IconEdit, IconPlus, IconTrash } from '@/components/icons';
 import './Pages.css';
 
 type Confirm = { kind: 'reset' | 'delete'; id: string } | null;
+/** 방금 만든 임시 비밀번호 — 이 창에서 한 번만 보여 줌 (닫으면 다시 볼 수 없음) */
+type Issued = { team: string; password: string; kind: 'add' | 'reset' } | null;
 /** 모바일 펼침 편집 초안 — 저장을 눌러야 반영 */
 type Draft = { id: string; name: string; active: boolean; isAdmin: boolean };
 
 /** 관리자 메뉴 — 팀(사용자) 관리 */
 export default function Admin() {
-  const { teams, session } = useAppState();
+  const { teams, session, records, allocs, projects } = useAppState();
   const dispatch = useDispatch();
   const [toast, showToast] = useToast();
   const [adding, setAdding] = useState(false);
@@ -22,6 +24,22 @@ export default function Admin() {
   const [editName, setEditName] = useState('');
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [issued, setIssued] = useState<Issued>(null);
+  const [copied, setCopied] = useState(false);
+  // 집행·배분·주관 프로젝트 이력이 있는 팀은 삭제 대신 휴면 (DB 에서도 외래키로 막힘 — db/ERD.md §5-6)
+  const hasHistory = (name: string) =>
+    records.some(r => r.team === name) || projects.some(p => p.ownerTeam === name)
+    || Object.values(allocs).some(rows => rows.some(a => a.teamName === name));
+  const issue = (team: string, kind: 'add' | 'reset') => {
+    const password = makeTempPassword();
+    setCopied(false);
+    setIssued({ team, password, kind });
+    return password;
+  };
+  const copyIssued = async () => {
+    if (!issued) return;
+    try { await navigator.clipboard.writeText(issued.password); setCopied(true); } catch { /* 복사 불가 — 화면에서 보고 전달 */ }
+  };
 
   const isSelf = (name: string) => session?.team === name;
   const nameError = (name: string, exceptId?: string) => {
@@ -35,8 +53,7 @@ export default function Admin() {
   const addTeam = (e?: FormEvent) => {
     e?.preventDefault();
     if (nameError(newName)) return;
-    dispatch({ type: 'ADD_TEAM', name: newName.trim(), password: DEFAULT_TEAM_PASSWORD });
-    showToast(`${newName.trim()}이(가) 추가되었습니다. 초기 비밀번호 ${DEFAULT_TEAM_PASSWORD}`);
+    dispatch({ type: 'ADD_TEAM', name: newName.trim(), password: issue(newName.trim(), 'add') });
     setNewName('');
     setAdding(false);
   };
@@ -62,8 +79,11 @@ export default function Admin() {
   const runConfirm = () => {
     if (!confirm || !target) return;
     if (confirm.kind === 'reset') {
-      dispatch({ type: 'SET_TEAM_PASSWORD', teamName: target.name, password: DEFAULT_TEAM_PASSWORD, by: 'reset' });
-      showToast(`${target.name} 비밀번호가 ${DEFAULT_TEAM_PASSWORD}(으)로 초기화되었습니다.`);
+      dispatch({ type: 'SET_TEAM_PASSWORD', teamName: target.name, password: issue(target.name, 'reset'), by: 'reset' });
+    } else if (hasHistory(target.name)) {
+      // 이력 있는 팀: 삭제 대신 휴면 (이미 휴면이면 안내만)
+      if (target.active) { dispatch({ type: 'TOGGLE_TEAM', id: target.id }); showToast(`${target.name}이(가) 휴면 처리되었습니다.`); }
+      if (draft?.id === target.id) setDraft(null);
     } else {
       dispatch({ type: 'DELETE_TEAM', id: target.id });
       showToast(`${target.name}이(가) 삭제되었습니다.`);
@@ -78,13 +98,32 @@ export default function Admin() {
       <PageHead title="관리자"
         actions={<Btn onClick={() => { setAdding(true); setEditId(null); }} disabled={adding}><IconPlus size={14} />사용자 추가</Btn>} />
 
-      {confirm && target && (
-        <ConfirmLayer tone={confirm.kind === 'delete' ? 'danger' : 'default'}
-          title={confirm.kind === 'reset' ? '비밀번호 초기화' : '팀 삭제'}
-          confirmLabel={confirm.kind === 'reset' ? '초기화' : '삭제'} onConfirm={runConfirm} onCancel={() => setConfirm(null)}>
-          {confirm.kind === 'reset'
-            ? <><b>{target.name}</b> 비밀번호를 <b>{DEFAULT_TEAM_PASSWORD}</b>(으)로 초기화할까요?</>
-            : <><b>{target.name}</b>을(를) 삭제할까요? 로그인 목록에서 사라집니다.</>}
+      {confirm && target && (() => {
+        const keep = confirm.kind === 'delete' && hasHistory(target.name);
+        return keep ? (
+          <ConfirmLayer title="삭제할 수 없는 팀" confirmLabel={target.active ? '휴면 처리' : '확인'}
+            cancelLabel={target.active ? '취소' : '닫기'} onConfirm={runConfirm} onCancel={() => setConfirm(null)}>
+            <b>{target.name}</b>은(는) 집행·배분 이력이 있어 삭제하면 기록이 끊깁니다.{' '}
+            {target.active ? '대신 휴면 처리하면 로그인 목록에서 빠지고 기록은 남습니다.' : '이미 휴면 상태라 로그인 목록에 보이지 않습니다.'}
+          </ConfirmLayer>
+        ) : (
+          <ConfirmLayer tone={confirm.kind === 'delete' ? 'danger' : 'default'}
+            title={confirm.kind === 'reset' ? '비밀번호 초기화' : '팀 삭제'}
+            confirmLabel={confirm.kind === 'reset' ? '초기화' : '삭제'} onConfirm={runConfirm} onCancel={() => setConfirm(null)}>
+            {confirm.kind === 'reset'
+              ? <><b>{target.name}</b> 비밀번호를 새 임시 비밀번호로 초기화할까요? 지금 비밀번호는 더 이상 쓸 수 없습니다.</>
+              : <><b>{target.name}</b>을(를) 삭제할까요? 로그인 목록에서 사라집니다.</>}
+          </ConfirmLayer>
+        );
+      })()}
+
+      {/* 임시 비밀번호: 한 번만 보여 줌 — 팀에 전달하면 첫 로그인 때 새 비밀번호로 바꿈 */}
+      {issued && (
+        <ConfirmLayer title={issued.kind === 'add' ? `${issued.team} 추가 완료` : `${issued.team} 비밀번호 초기화`}
+          confirmLabel={copied ? '닫기' : '복사하고 닫기'} cancelLabel="닫기"
+          onConfirm={async () => { if (!copied) await copyIssued(); setIssued(null); }} onCancel={() => setIssued(null)}>
+          임시 비밀번호 <code className="temp-pw">{issued.password}</code>
+          <span className="temp-pw__note">이 창을 닫으면 다시 볼 수 없어요. 팀에 전달하면 첫 로그인 때 새 비밀번호로 바꿉니다.</span>
         </ConfirmLayer>
       )}
 
@@ -205,7 +244,7 @@ export default function Admin() {
                       <Btn size="sm" type="submit" disabled={!!nameError(newName)}>추가</Btn>
                       <Btn size="sm" variant="secondary" onClick={() => { setAdding(false); setNewName(''); }}>취소</Btn>
                       <small className={cx('team-edit__hint', newName.trim() && nameError(newName) && 'is-err')}>
-                        {newName.trim() && nameError(newName) ? nameError(newName) : `초기 비밀번호 ${DEFAULT_TEAM_PASSWORD} · 활성 · 일반 권한으로 추가됩니다`}
+                        {newName.trim() && nameError(newName) ? nameError(newName) : '임시 비밀번호가 자동으로 만들어집니다 · 활성 · 일반 권한으로 추가'}
                       </small>
                     </form>
                   </td>

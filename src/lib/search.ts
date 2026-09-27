@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { AppState } from '@/store/reducer';
 import type { View } from '@/types';
-import { visibleChecklist } from '@/store/selectors';
+import { checkDateOf, visibleChecklist } from '@/store/selectors';
 import { fmt } from './format';
 import { CUR_YEAR, spentDateOf, ym } from './date';
 import { workBudgetOf, workUsedOf } from './budget';
@@ -102,12 +102,12 @@ export function searchAll(q: string, state: AppState, limit = 8): SearchResult {
   for (const c of visibleChecklist(state)) {
     const p = projById.get(c.projectId);
     if (!p?.active) continue;
-    if (!has(c.title) && !has(c.category) && !has(c.date)) continue;
+    if (!has(c.title) && !has(c.category) && !has(checkDateOf(c))) continue;
     const mine = p.isMine;
     out.check.push({
       key: `c-${c.id}`, kind: 'check', group: 'check', view: mine ? 'project' : 'cowork', id: c.id, tab: mine ? 'My 체크리스트' : undefined,
-      title: c.title, sub: [mine ? 'My 체크리스트' : '코웍 체크리스트', p.name, c.category, c.date ?? '예정일 없음'].filter(Boolean).join(' · '),
-      meta: `${c.checked ? '완료 · ' : ''}${fmt(c.amount)}`,
+      title: c.title, sub: [mine ? 'My 체크리스트' : '코웍 체크리스트', p.name, c.category, c.checked ? `집행 ${checkDateOf(c)}` : c.date ?? '예정일 없음'].filter(Boolean).join(' · '),
+      meta: c.checked ? `완료 · 집행 ${fmt(c.spent ?? c.amount)}` : fmt(c.amount),
     });
   }
 

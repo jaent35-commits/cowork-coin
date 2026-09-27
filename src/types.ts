@@ -26,6 +26,8 @@ export interface Team {
   active: boolean;
   /** 팀 로그인만으로 관리자 메뉴 접근 */
   isAdmin?: boolean;
+  /** 임시 비밀번호 상태 — 팀 추가·관리자 초기화 때 true, 팀이 직접 바꾸면 false (true 면 로그인 후 변경 필수) */
+  mustChangePassword?: boolean;
 }
 
 export interface Project {
@@ -72,6 +74,10 @@ export interface ChecklistItem {
   /** YYYY-MM-DD */
   date?: string;
   checked: boolean;
+  /** 집행 금액 — 체크할 때 입력 (기본 = 예산 amount), 미체크면 없음 */
+  spent?: number;
+  /** 집행일 YYYY-MM-DD — 체크할 때 그날로 시작 (수정 가능), 미체크면 없음. 예정일(date)은 그대로 둠 */
+  spentDate?: string;
   projectId: string;
   /** 없으면 공개 */
   visibility?: CheckVisibility;

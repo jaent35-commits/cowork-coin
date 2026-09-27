@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAppState, useDispatch } from './store/StoreContext';
 import { unreadCount } from './store/selectors';
-import { DEFAULT_TEAM_PASSWORD } from './data/seed';
 import { useHashView } from './hooks/useHashView';
 import Login from './views/Login';
 import Header from './components/layout/Header';
@@ -66,8 +65,8 @@ export default function App() {
   // 로그인(팀 전환)·프로젝트 변경 시 다음 달 종료 프로젝트 기한 임박 알림 확인 (중복은 key 로 방지)
   useEffect(() => { if (session?.team) dispatch({ type: 'CHECK_DEADLINES' }); }, [session?.team, state.projects]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 초기 비밀번호 그대로인 팀 세션(이전 로그인·관리자 초기화 후 새로고침 등)은 변경 단계부터 — 관리자 계정은 팀이 아니라 제외
-  const mustChangePw = !!session && state.teams.find(t => t.name === session.team)?.password === DEFAULT_TEAM_PASSWORD;
+  // 임시 비밀번호 상태인 팀 세션(이전 로그인·관리자 초기화 후 새로고침 등)은 변경 단계부터
+  const mustChangePw = !!session && !!state.teams.find(t => t.name === session.team)?.mustChangePassword;
   if (!session || mustChangePw) {
     return (
       <>
