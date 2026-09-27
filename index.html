@@ -11,7 +11,7 @@
         var t = localStorage.getItem('cowork-coin-theme');
         if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         // 로그인 전(세션 없음)이면 로그인 화면이 라이트 전용이라 라이트로 시작
-        var st = JSON.parse(localStorage.getItem('cowork-coin-v4') || 'null');
+        var st = JSON.parse(localStorage.getItem('cowork-coin-v5') || 'null');
         if (!st || !st.session) t = 'light';
         document.documentElement.dataset.theme = t;
       } catch (e) { /* 저장소 접근 불가 — 라이트로 시작 */ }

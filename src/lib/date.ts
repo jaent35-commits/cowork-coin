@@ -1,8 +1,5 @@
-/**
- * 데모 기준일. 시드 데이터(2026년 3분기)와 맞추기 위해 고정한다.
- * 실제 서비스 전환 시 new Date() 로 교체하면 된다.
- */
-export const TODAY = new Date(2026, 8, 24);
+/** 현재 기기의 날짜를 기준으로 연도·월·분기를 계산한다. */
+export const TODAY = new Date();
 
 export const CUR_YEAR = TODAY.getFullYear();
 /** 0 ~ 11 */
