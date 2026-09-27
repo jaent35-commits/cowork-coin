@@ -1,5 +1,7 @@
 # 코웍-코인 DB 설계 (PostgreSQL · Supabase)
 
+> **v2.4 (2026-09-28)** — 팀 로그인 **Edge Function 5개**([`supabase/functions`](../supabase/functions))와 **앱 로그인 연동**. `VITE_SUPABASE_URL` · `VITE_SUPABASE_ANON_KEY` 가 있으면 로그인·팀 계정을 Supabase 로 처리하고, 없으면 지금처럼 브라우저 저장본으로 로그인합니다. 프로젝트·집행 데이터는 아직 브라우저 저장본입니다(다음 단계 RLS 정책). [§2-1 Edge Function](#edge-function-supabasefunctions).
+>
 > **v2.3 (2026-09-28)** — 체크리스트 **집행일** `checklist_items.spent_date` 추가. 체크하면 예정일 자리에 집행일(기본 = 체크한 날, 수정 가능)을 보여 주고, 예정일(`due_date`)은 그대로 둬 체크를 풀면 돌아갑니다. 완료 항목의 체크 해제·금액·집행일 수정은 화면의 **잠금** 버튼을 풀어야 가능합니다(오클릭 방지 · 화면 기능이라 DB 에 저장 안 함). 이미 만든 DB 는 v2.2 다음에 [`migrations/20260928b_checklist_spent_date.sql`](migrations/20260928b_checklist_spent_date.sql) 을 실행합니다.
 >
 > **v2.2 (2026-09-28)** — 체크리스트 **집행 금액** `checklist_items.spent_amount` 추가. 체크할 때 입력하고 기본값은 예정 금액(예산), 체크한 항목에만 값이 있습니다. 화면은 집행 금액을 크게, 예산을 작게 보여 줍니다. 이미 만든 DB 는 [`migrations/20260928_checklist_spent_amount.sql`](migrations/20260928_checklist_spent_amount.sql) 을 실행합니다.
@@ -374,6 +376,21 @@ v2에서 비밀번호 관련 키(`admin_password_hash`, `reset_password_hash`)�
 | `admin_update_team()` | 관리자 메뉴 | 이름 · 휴면 · 관리자 권한 변경 |
 | `set_password_state()` | Edge Function 전용 | 초기 비밀번호 상태 기록 |
 
+### Edge Function (`supabase/functions`)
+
+모두 `verify_jwt = false` 로 배포하고(로그인 전 호출 + JWT 가 아닌 publishable 키), 로그인이 필요한 함수는 안에서 `Authorization` 의 세션을 직접 확인합니다(`_shared/mod.ts` `caller`). 관리자 함수는 **활성 · 비밀번호 변경 완료 · 관리자** 팀만 호출할 수 있습니다(`current_team_id()` 와 같은 조건). 오류는 `{ error: 코드, message }` 로 돌려주고, 비밀번호·임시 비밀번호·토큰은 로그에 남기지 않습니다.
+
+| 함수 | 호출 | 입력 → 응답 | 하는 일 |
+|---|---|---|---|
+| `bootstrap-admin` | 로그인 전 | `{ name, password }` → `{ team: { id, name, login_email } }` | 팀이 없을 때만 첫 관리자 팀(Auth 사용자 + teams, 변경 완료 상태). 동시에 두 번 눌리면 먼저 만든 팀만 남김 |
+| `change-password` | 팀 본인 | `{ current, next }` → `{ ok }` | 현재 비밀번호 확인 → 새 비밀번호(8자 이상, 현재와 다름) → `set_password_state(false)` → 다른 기기 세션 끊기 → '비밀번호 변경 완료' 알림 |
+| `admin-create-team` | 관리자 | `{ name }` → `{ team, tempPassword }` | 임시 비밀번호 8자 생성 → Auth 사용자(임의 내부 이메일) + teams(`must_change_password`) → 임시 비밀번호는 응답으로 한 번만 |
+| `admin-reset-password` | 관리자 | `{ teamId }` → `{ tempPassword }` | 새 임시 비밀번호 → `set_password_state(true)` → '비밀번호 초기화' 알림. 그 팀의 기존 기기 세션은 곧바로 데이터가 막히고(`current_team_id()` NULL), 변경하려면 새 임시 비밀번호가 필요 |
+| `admin-delete-team` | 관리자 | `{ teamId }` → `{ ok }` · 409 `has_history` | 로그인한 팀 자신은 불가. 집행 · 배분 · 주관 프로젝트 · 체크리스트(작성·체크) 이력이 있으면 `has_history` → 앱이 휴면 안내. 없으면 teams 행 → Auth 사용자 순서로 삭제 |
+
+- 로그인용 내부 이메일은 팀명과 무관한 임의 값(`team-<16자>@teams.cowork-coin.app`, 함수 환경변수 `LOGIN_EMAIL_DOMAIN` 으로 변경 가능) — 팀명을 바꿔도 로그인 계정은 그대로입니다.
+- 앱(`src/lib/authApi.ts`): 로그인 목록 `login_teams()` → `signInWithPassword` → 자기 팀 행 → 임시 비밀번호면 변경 단계 → 전체 팀 목록을 앱 팀 목록으로 맞춤(`SYNC_TEAMS`, 이름이 바뀐 팀은 배분·집행 팀 이름도 함께). 이름 · 휴면 · 관리자 권한은 `admin_update_team()`. 새로고침 때 Auth 세션이 없으면 로그아웃, 임시 비밀번호 상태면 변경 단계(그때는 임시 비밀번호 입력칸이 함께 나옴).
+
 ### RLS (이번 단계)
 - **모든 테이블에 RLS를 켭니다.** 정책이 없는 테이블은 브라우저(anon·authenticated)에서 읽기와 쓰기가 모두 막힙니다. 이번 단계에서 정책을 넣은 테이블은 `teams` 하나입니다.
 - `teams` 조회는 두 경우만 허용합니다: **자기 팀 행**, 또는 **데이터를 쓸 수 있는 팀이 다른 팀을 볼 때**(배분·집행 팀 이름 표시용). 쓰기 정책은 없습니다.
@@ -483,3 +500,4 @@ v2 팀·로그인 부분은 PGlite(브라우저·Node 용 PostgreSQL)에서 `sch
 | v2.1 `20260927152226 cowork_coin_function_grants_v2_1` (supabase.sql §7 끝) | schema.sql 함수 7개 · `rls_auto_enable` 권한 회수, `meeting_rate_of` · `work_budget_of` 는 authenticated 만, postgres 함수 기본 권한에서 PUBLIC(전체) · anon · authenticated(public) 제거 → anon 실행 가능 함수 = `needs_setup` · `login_teams` 뿐, Advisors anon SECURITY DEFINER 경고 2개(의도)만 남음 — 위 두 줄의 anon 관련 결과를 대체 |
 | v2.2 `20260927164727 cowork_coin_checklist_spent_v2_2` (migrations/20260928_checklist_spent_amount.sql) | `checklist_items.spent_amount` bigint 추가 · 제약 `checklist_items_spent_amount_check`(≥ 0) · `checklist_items_spent_check` 있음, 기존 완료 항목 2건은 예정 금액으로 채워짐 |
 | v2.3 `20260927164738 cowork_coin_checklist_spent_date_v2_3` (migrations/20260928b_checklist_spent_date.sql) | `checklist_items.spent_date` date 추가 · 제약 `checklist_items_spent_date_check` 있음, 기존 완료 항목 2건은 체크한 날(한국 시간)로 채워짐 · `v_team_checklist` 에 두 컬럼 포함, `security_invoker=true` 유지(뷰 9개 모두) · Advisors 보안: 마이그레이션으로 생긴 경고 없음 (새로 보인 `auth_leaked_password_protection` 은 Auth 설정 항목) |
+| v2.4 Edge Function 5개 (supabase/functions, 2026-09-28) | `bootstrap-admin` · `change-password` · `admin-create-team` · `admin-reset-password` · `admin-delete-team` 배포 — 각각 `index.ts` + `../_shared/mod.ts`, `verify_jwt=false`(인증은 함수 안 `caller()`), 5개 모두 ACTIVE v1 · 인증 없는 POST 로 확인: `bootstrap-admin` 409 `already_setup`(팀 있음), 나머지 401 `unauthorized`, 로그에 부팅·실행 오류 없음 · 앱 설정 `.env.local`(VITE_SUPABASE_URL · publishable 키, git 제외) · seed 테스트 데이터 삭제(팀 4 · Auth 사용자 4 · 프로젝트 · 배분 · 체크리스트 · 집행 · 인원 · 업무비 · 알림 · 과거 요약) → `needs_setup()` true, 기준 정보(경비 분류 5 · 회의비 단가 2)는 유지 · Advisors 보안: 새 경고 없음 |

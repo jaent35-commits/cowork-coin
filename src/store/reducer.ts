@@ -59,7 +59,10 @@ export type Action =
   | { type: 'DELETE_TEAM'; id: string }
   | { type: 'SET_TEAM_ADMIN'; id: string; isAdmin: boolean }
   /** by: self = 본인 변경, reset = 관리자 초기화 */
-  | { type: 'SET_TEAM_PASSWORD'; teamName: string; password: string; by: 'self' | 'reset' }
+  /** password: 브라우저 저장본 로그인일 때만 (Supabase 로그인은 비밀번호를 앱에 두지 않음 — 알림·상태만) */
+  | { type: 'SET_TEAM_PASSWORD'; teamName: string; password?: string; by: 'self' | 'reset' }
+  /** Supabase 팀 목록으로 교체 — 이름이 바뀐 팀은 배분·집행·주관 팀 이름도 함께 변경 */
+  | { type: 'SYNC_TEAMS'; teams: Team[] }
   | { type: 'SET_RATE'; rate: number }
   | { type: 'SAVE_HEADCOUNTS'; quarterIdx: number; headcounts: number[] }
   /** scope: after = 이후 달도 같은 금액(이후에 따로 입력한 달은 지움), only = 이 달만 (다음 달은 기존 금액 유지) */
@@ -182,6 +185,15 @@ export function reducer(state: AppState, action: Action): AppState {
         session: state.session && state.session.team === from ? { ...state.session, team: action.name } : state.session,
       };
     }
+    case 'SYNC_TEAMS': {
+      let s = state;
+      for (const t of action.teams) {
+        const prev = s.teams.find(x => x.id === t.id);
+        if (prev && prev.name !== t.name) s = reducer(s, { type: 'RENAME_TEAM', id: t.id, name: t.name });
+      }
+      const me = action.teams.find(t => t.name === s.session?.team);
+      return { ...s, teams: action.teams, session: s.session && me ? { ...s.session, isAdmin: !!me.isAdmin } : s.session };
+    }
     case 'DELETE_TEAM':
       return { ...state, teams: state.teams.filter(t => t.id !== action.id) };
     case 'SET_TEAM_ADMIN':
@@ -190,7 +202,7 @@ export function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         // 관리자 초기화 = 임시 비밀번호 → 다음 로그인 때 변경 필수 / 팀 본인 변경 = 해제
-        teams: state.teams.map(t => (t.name === action.teamName ? { ...t, password: action.password, mustChangePassword: action.by === 'reset' } : t)),
+        teams: state.teams.map(t => (t.name === action.teamName ? { ...t, password: action.password ?? t.password, mustChangePassword: action.by === 'reset' } : t)),
         // 비밀번호 주인 팀에게 알림 (관리자가 초기화한 경우도 해당 팀이 받음)
         notifications: notify(state, action.by === 'reset'
           ? { type: 'setting', team: action.teamName, title: '비밀번호 초기화', desc: `관리자가 ${action.teamName} 계정의 비밀번호를 초기화했습니다. 관리자에게 받은 임시 비밀번호로 로그인하면 새 비밀번호로 변경한 뒤 시작합니다.` }

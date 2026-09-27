@@ -2,6 +2,8 @@ import { Fragment, useState, type FormEvent } from 'react';
 import type { Team } from '@/types';
 import { useAppState, useDispatch } from '@/store/StoreContext';
 import { makeTempPassword } from '@/lib/password';
+import { REMOTE_AUTH } from '@/lib/supabase';
+import { AuthApiError, createTeam, deleteTeam, listTeams, resetPassword, updateTeam } from '@/lib/authApi';
 import { useToast } from '@/hooks/useToast';
 import { Badge, Btn, Card, ConfirmLayer, Input, PageHead, Segmented, Switch, TableWrap, Toast, cx } from '@/components/ui';
 import { IconEdit, IconPlus, IconTrash } from '@/components/icons';
@@ -26,6 +28,35 @@ export default function Admin() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [issued, setIssued] = useState<Issued>(null);
   const [copied, setCopied] = useState(false);
+  // Supabase 로그인: 변경은 서버(admin_update_team · Edge Function)에 하고 팀 목록을 다시 받음
+  const [busy, setBusy] = useState(false);
+  /** 서버가 이력 있음으로 삭제를 막은 팀 (앱 저장본에 없는 이력) */
+  const [serverKeep, setServerKeep] = useState<string | null>(null);
+  const run = async (fn: () => Promise<unknown>, ok?: string) => {
+    if (busy) return false;
+    setBusy(true);
+    try {
+      await fn();
+      dispatch({ type: 'SYNC_TEAMS', teams: await listTeams() });
+      if (ok) showToast(ok);
+      return true;
+    } catch (e) {
+      showToast(e instanceof AuthApiError ? e.message : '처리하지 못했습니다. 잠시 후 다시 시도하세요.');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  const setActive = async (t: Team, active: boolean) => {
+    const msg = `${t.name}이(가) ${active ? '활성' : '휴면'} 처리되었습니다.`;
+    if (REMOTE_AUTH) return run(() => updateTeam(t.id, { active }), msg);
+    dispatch({ type: 'TOGGLE_TEAM', id: t.id }); showToast(msg); return true;
+  };
+  const setAdmin = async (t: Team, isAdmin: boolean) => {
+    const msg = `${t.name} 관리자 권한 ${isAdmin ? '부여' : '해제'}`;
+    if (REMOTE_AUTH) return run(() => updateTeam(t.id, { isAdmin }), msg);
+    dispatch({ type: 'SET_TEAM_ADMIN', id: t.id, isAdmin }); showToast(msg); return true;
+  };
   // 집행·배분·주관 프로젝트 이력이 있는 팀은 삭제 대신 휴면 (DB 에서도 외래키로 막힘 — db/ERD.md §5-6)
   const hasHistory = (name: string) =>
     records.some(r => r.team === name) || projects.some(p => p.ownerTeam === name)
@@ -50,24 +81,47 @@ export default function Admin() {
   };
   const target = confirm && teams.find(t => t.id === confirm.id);
 
-  const addTeam = (e?: FormEvent) => {
+  const addTeam = async (e?: FormEvent) => {
     e?.preventDefault();
+    const name = newName.trim();
     if (nameError(newName)) return;
-    dispatch({ type: 'ADD_TEAM', name: newName.trim(), password: issue(newName.trim(), 'add') });
+    if (REMOTE_AUTH) {
+      const ok = await run(async () => {
+        const r = await createTeam(name); // 임시 비밀번호는 서버가 만들어 응답으로 한 번만
+        setCopied(false);
+        setIssued({ team: r.team.name, password: r.tempPassword, kind: 'add' });
+      });
+      if (!ok) return;
+    } else {
+      dispatch({ type: 'ADD_TEAM', name, password: issue(name, 'add') });
+    }
     setNewName('');
     setAdding(false);
   };
-  const saveEdit = (id: string) => {
+  const saveEdit = async (id: string) => {
     if (nameError(editName, id)) return;
-    dispatch({ type: 'RENAME_TEAM', id, name: editName.trim() });
-    showToast('팀명이 수정되었습니다.');
+    if (REMOTE_AUTH) {
+      if (!(await run(() => updateTeam(id, { name: editName.trim() }), '팀명이 수정되었습니다.'))) return;
+    } else {
+      dispatch({ type: 'RENAME_TEAM', id, name: editName.trim() });
+      showToast('팀명이 수정되었습니다.');
+    }
     setEditId(null);
   };
   // 모바일: [수정] → 아래로 펼쳐 팀명·상태·관리자 권한·삭제를 한 번에 편집
   const openDraft = (t: Team) => setDraft(d => (d?.id === t.id ? null : { id: t.id, name: t.name, active: t.active, isAdmin: !!t.isAdmin }));
-  const saveDraft = (t: Team) => {
+  const saveDraft = async (t: Team) => {
     if (!draft || nameError(draft.name, t.id)) return;
     const name = draft.name.trim();
+    if (REMOTE_AUTH) {
+      const patch = {
+        name: name !== t.name ? name : undefined,
+        active: draft.active !== t.active ? draft.active : undefined,
+        isAdmin: draft.isAdmin !== !!t.isAdmin ? draft.isAdmin : undefined,
+      };
+      if (await run(() => updateTeam(t.id, patch), `${name} 정보가 저장되었습니다.`)) setDraft(null);
+      return;
+    }
     if (name !== t.name) dispatch({ type: 'RENAME_TEAM', id: t.id, name });
     if (draft.active !== t.active) dispatch({ type: 'TOGGLE_TEAM', id: t.id });
     if (draft.isAdmin !== !!t.isAdmin) dispatch({ type: 'SET_TEAM_ADMIN', id: t.id, isAdmin: draft.isAdmin });
@@ -76,14 +130,39 @@ export default function Admin() {
   };
   const askReset = (id: string) => setConfirm({ kind: 'reset', id });
 
-  const runConfirm = () => {
-    if (!confirm || !target) return;
+  const keepTeam = (t: Team) => hasHistory(t.name) || serverKeep === t.id;
+  const runConfirm = async () => {
+    if (!confirm || !target || busy) return;
     if (confirm.kind === 'reset') {
-      dispatch({ type: 'SET_TEAM_PASSWORD', teamName: target.name, password: issue(target.name, 'reset'), by: 'reset' });
-    } else if (hasHistory(target.name)) {
+      if (REMOTE_AUTH) {
+        const ok = await run(async () => {
+          const r = await resetPassword(target.id);
+          setCopied(false);
+          setIssued({ team: target.name, password: r.tempPassword, kind: 'reset' });
+        });
+        if (!ok) return;
+        dispatch({ type: 'SET_TEAM_PASSWORD', teamName: target.name, by: 'reset' }); // 알림만
+      } else {
+        dispatch({ type: 'SET_TEAM_PASSWORD', teamName: target.name, password: issue(target.name, 'reset'), by: 'reset' });
+      }
+    } else if (keepTeam(target)) {
       // 이력 있는 팀: 삭제 대신 휴면 (이미 휴면이면 안내만)
-      if (target.active) { dispatch({ type: 'TOGGLE_TEAM', id: target.id }); showToast(`${target.name}이(가) 휴면 처리되었습니다.`); }
+      if (target.active && !(await setActive(target, false))) return;
       if (draft?.id === target.id) setDraft(null);
+    } else if (REMOTE_AUTH) {
+      setBusy(true);
+      try {
+        await deleteTeam(target.id);
+        dispatch({ type: 'SYNC_TEAMS', teams: await listTeams() });
+        showToast(`${target.name}이(가) 삭제되었습니다.`);
+        if (draft?.id === target.id) setDraft(null);
+      } catch (e) {
+        // 서버에 이력이 있으면 같은 창을 '삭제할 수 없는 팀' 안내로 바꿈
+        if (e instanceof AuthApiError && e.code === 'has_history') { setServerKeep(target.id); return; }
+        showToast(e instanceof AuthApiError ? e.message : '삭제하지 못했습니다.');
+      } finally {
+        setBusy(false);
+      }
     } else {
       dispatch({ type: 'DELETE_TEAM', id: target.id });
       showToast(`${target.name}이(가) 삭제되었습니다.`);
@@ -99,7 +178,7 @@ export default function Admin() {
         actions={<Btn onClick={() => { setAdding(true); setEditId(null); }} disabled={adding}><IconPlus size={14} />사용자 추가</Btn>} />
 
       {confirm && target && (() => {
-        const keep = confirm.kind === 'delete' && hasHistory(target.name);
+        const keep = confirm.kind === 'delete' && keepTeam(target);
         return keep ? (
           <ConfirmLayer title="삭제할 수 없는 팀" confirmLabel={target.active ? '휴면 처리' : '확인'}
             cancelLabel={target.active ? '취소' : '닫기'} onConfirm={runConfirm} onCancel={() => setConfirm(null)}>
@@ -149,7 +228,7 @@ export default function Admin() {
                     <td className="team-table__no t-muted">{i + 1}</td>
                     <td className="team-table__name">
                       {editing ? (
-                        <form className="team-edit" onSubmit={e => { e.preventDefault(); saveEdit(t.id); }}>
+                        <form className="team-edit" onSubmit={e => { e.preventDefault(); void saveEdit(t.id); }}>
                           <Input value={editName} onChange={e => setEditName(e.target.value)} aria-label="팀명" autoFocus
                             aria-invalid={!!err} onKeyDown={e => { if (e.key === 'Escape') setEditId(null); }} />
                           <Btn size="sm" type="submit" disabled={!!err}>저장</Btn>
@@ -164,14 +243,14 @@ export default function Admin() {
                       <Badge variant={t.active ? 'green' : 'gray'} size="lg" pressed={t.active}
                         title={isSelf(t.name) ? '로그인한 팀은 휴면 처리할 수 없습니다' : `${t.active ? '휴면' : '활성'}으로 변경`}
                         disabled={isSelf(t.name) && t.active}
-                        onClick={() => { dispatch({ type: 'TOGGLE_TEAM', id: t.id }); showToast(`${t.name}이(가) ${t.active ? '휴면' : '활성'} 처리되었습니다.`); }}>
+                        onClick={() => { void setActive(t, !t.active); }}>
                         ● {t.active ? '활성' : '휴면'}
                       </Badge>
                     </td>
                     <td data-label="관리자 권한">
                       <Switch checked={!!t.isAdmin} disabled={isSelf(t.name)} label={`${t.name} 관리자 권한`} text={t.isAdmin ? '관리자' : '일반'}
                         title={isSelf(t.name) ? '로그인한 팀의 권한은 변경할 수 없습니다' : undefined}
-                        onChange={v => { dispatch({ type: 'SET_TEAM_ADMIN', id: t.id, isAdmin: v }); showToast(`${t.name} 관리자 권한 ${v ? '부여' : '해제'}`); }} />
+                        onChange={v => { void setAdmin(t, v); }} />
                     </td>
                     <td data-label="비밀번호">
                       <Btn size="sm" variant="secondary" onClick={() => askReset(t.id)}>초기화</Btn>
@@ -223,7 +302,7 @@ export default function Admin() {
                             </Btn>
                             <div className="row">
                               <Btn size="sm" variant="secondary" onClick={() => setDraft(null)}>취소</Btn>
-                              <Btn size="sm" onClick={() => saveDraft(t)} disabled={!!dErr}>저장</Btn>
+                              <Btn size="sm" onClick={() => { void saveDraft(t); }} disabled={!!dErr || busy}>저장</Btn>
                             </div>
                           </div>
                         </div>
@@ -238,10 +317,10 @@ export default function Admin() {
                 <tr className="team-table__new">
                   <td className="team-table__no t-muted">{teams.length + 1}</td>
                   <td colSpan={6}>
-                    <form className="team-edit" onSubmit={addTeam}>
+                    <form className="team-edit" onSubmit={e => { void addTeam(e); }}>
                       <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="팀명 입력" aria-label="새 팀명" autoFocus
                         onKeyDown={e => { if (e.key === 'Escape') setAdding(false); }} />
-                      <Btn size="sm" type="submit" disabled={!!nameError(newName)}>추가</Btn>
+                      <Btn size="sm" type="submit" disabled={!!nameError(newName) || busy}>추가</Btn>
                       <Btn size="sm" variant="secondary" onClick={() => { setAdding(false); setNewName(''); }}>취소</Btn>
                       <small className={cx('team-edit__hint', newName.trim() && nameError(newName) && 'is-err')}>
                         {newName.trim() && nameError(newName) ? nameError(newName) : '임시 비밀번호가 자동으로 만들어집니다 · 활성 · 일반 권한으로 추가'}

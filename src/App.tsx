@@ -9,6 +9,8 @@ import BottomNav from './components/layout/BottomNav';
 import PwaPrompt from './components/PwaPrompt';
 import { usePushDelivery } from './lib/push';
 import { IconPlus } from './components/icons';
+import { REMOTE_AUTH, supabase } from './lib/supabase';
+import { hasSession, listTeams, myTeam, signOut } from './lib/authApi';
 import Home from './views/Home';
 import Meeting from './views/Meeting';
 import ProjectView, { readDetailId } from './views/Project';
@@ -60,6 +62,26 @@ export default function App() {
     if (session && view === 'admin' && !session.isAdmin) navigate('home');
   }, [session, view, navigate]);
 
+  // Supabase 로그인: 앱 세션과 Auth 세션을 맞춤 (시작할 때 한 번 + 다른 곳에서 로그아웃되면)
+  useEffect(() => {
+    if (!REMOTE_AUTH) return;
+    let alive = true;
+    (async () => {
+      const authed = await hasSession();
+      if (!alive) return;
+      if (!session) { if (authed) await signOut(); return; } // '로그인 정보 저장' 안 함 → 새로 열면 로그아웃
+      if (!authed) { dispatch({ type: 'LOGOUT' }); return; }
+      try {
+        const me = await myTeam();
+        if (!alive) return;
+        if (!me || !me.active) { await signOut(); dispatch({ type: 'LOGOUT' }); return; }
+        dispatch({ type: 'SYNC_TEAMS', teams: me.mustChangePassword ? [me] : await listTeams() });
+      } catch { /* 네트워크 오류 — 저장된 팀 목록으로 계속 */ }
+    })();
+    const { data } = supabase!.auth.onAuthStateChange(event => { if (event === 'SIGNED_OUT') dispatch({ type: 'LOGOUT' }); });
+    return () => { alive = false; data.subscription.unsubscribe(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 새 알림 → 설정에 따라 기기 푸시 (아래 기한 확인보다 먼저 등록해야 로그인 직후 알림도 푸시됨)
   usePushDelivery(state);
   // 로그인(팀 전환)·프로젝트 변경 시 다음 달 종료 프로젝트 기한 임박 알림 확인 (중복은 key 로 방지)
@@ -77,6 +99,7 @@ export default function App() {
   }
 
   const logout = () => {
+    if (REMOTE_AUTH) void signOut();
     dispatch({ type: 'LOGOUT' });
     navigate('home');
   };
