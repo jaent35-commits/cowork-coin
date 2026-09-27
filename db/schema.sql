@@ -1,13 +1,13 @@
 -- =====================================================================
 -- 코웍-코인 : 프로젝트 예산 관리 시스템 — PostgreSQL 스키마
---   대상: PostgreSQL 14+
+--   대상: PostgreSQL 14+ (Supabase 포함)
 --   원칙: 저장은 '입력값'만, 사용액·잔액·예산 합계 같은 계산값은 뷰(v_*)로 조회
 --   문서: db/ERD.md
+--   v2 (2026-09-27): 팀 로그인은 Supabase Auth 가 담당 — 비밀번호는 이 스키마에 저장하지 않음.
+--                    auth.users 연결 · RLS · 로그인용 함수는 db/supabase.sql (이 파일 다음에 실행)
 -- =====================================================================
 
 BEGIN;
-
-CREATE EXTENSION IF NOT EXISTS pgcrypto;   -- 비밀번호 해시 crypt() / gen_salt()
 
 -- ---------------------------------------------------------------------
 -- 열거형
@@ -24,7 +24,7 @@ CREATE TYPE notif_type AS ENUM ('exec', 'setting', 'alloc', 'deadline', 'budget'
 -- ---------------------------------------------------------------------
 -- 공통: updated_at 자동 갱신
 -- ---------------------------------------------------------------------
-CREATE FUNCTION touch_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION touch_updated_at() RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
   NEW.updated_at := now();
   RETURN NEW;
@@ -33,19 +33,36 @@ END $$;
 -- =====================================================================
 -- 1. 팀 · 시스템 설정
 -- =====================================================================
+-- 팀 = 로그인 단위. 팀 1개 = Supabase Auth 사용자 1명 (팀원이 같은 계정을 함께 씀)
+--   비밀번호는 Supabase Auth(auth.users)가 해시로 보관 — 여기에는 저장하지 않음
+--   별도 '관리자 전용 계정'은 없음: is_admin 팀이 관리자 메뉴를 씀 (첫 실행 때 만든 팀이 관리자)
 CREATE TABLE teams (
-  id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  code          varchar(30)  NOT NULL UNIQUE,              -- 로그인·연동용 코드 (예: dev)
-  name          varchar(50)  NOT NULL UNIQUE,              -- 팀 이름 (예: 개발팀)
-  password_hash text         NOT NULL,                     -- crypt(비밀번호, gen_salt('bf'))
-  is_active     boolean      NOT NULL DEFAULT true,        -- false = 휴면 (로그인 팀 선택에서 제외)
-  is_admin      boolean      NOT NULL DEFAULT false,       -- 팀 로그인만으로 관리자 메뉴 접근
-  created_at    timestamptz  NOT NULL DEFAULT now(),
-  updated_at    timestamptz  NOT NULL DEFAULT now()
+  id                   bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  auth_user_id         uuid         NOT NULL UNIQUE,         -- auth.users.id (FK 는 db/supabase.sql)
+  login_email          varchar(100) NOT NULL UNIQUE,         -- Auth 로그인용 내부 이메일 (예: team-3f9a2c1b@teams.cowork-coin.app) — 화면에는 안 보임
+  name                 varchar(50)  NOT NULL UNIQUE,         -- 팀 이름 (예: 개발팀) — 바꿔도 이력은 id 로 연결
+  is_active            boolean      NOT NULL DEFAULT true,   -- false = 휴면 (로그인 팀 선택에서 제외, 데이터 접근 차단)
+  is_admin             boolean      NOT NULL DEFAULT false,  -- 팀 로그인만으로 관리자 메뉴 접근
+  must_change_password boolean      NOT NULL DEFAULT true,   -- 초기 비밀번호 상태 — true 면 변경 전까지 앱 데이터 접근 차단
+  password_changed_at  timestamptz,                          -- 팀이 직접 마지막으로 바꾼 시각 (초기화하면 NULL)
+  created_at           timestamptz  NOT NULL DEFAULT now(),
+  updated_at           timestamptz  NOT NULL DEFAULT now(),
+  CHECK (btrim(name) <> '')
 );
 CREATE TRIGGER teams_touch BEFORE UPDATE ON teams FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
 
--- 키-값 시스템 설정 (관리자 전용 계정 비밀번호 해시, 비밀번호 초기화 값 해시 등)
+-- 관리자 팀이 최소 1개는 남도록 (마지막 관리자 팀의 권한 해제·휴면·삭제 방지 — 앱은 '로그인한 팀 자신'도 막음)
+CREATE FUNCTION check_last_admin() RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM teams) AND NOT EXISTS (SELECT 1 FROM teams WHERE is_admin AND is_active) THEN
+    RAISE EXCEPTION '활성 관리자 팀이 최소 1개 있어야 합니다';
+  END IF;
+  RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER teams_keep_admin AFTER UPDATE OF is_admin, is_active OR DELETE ON teams
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION check_last_admin();
+
+-- 키-값 시스템 설정 (v2: 비밀번호 관련 키 없음 — 초기 비밀번호 정책은 Edge Function 설정)
 CREATE TABLE app_settings (
   key        varchar(50) PRIMARY KEY,
   value      text        NOT NULL,
@@ -113,7 +130,7 @@ CREATE TABLE project_allocations (
 CREATE INDEX project_allocations_team_idx ON project_allocations (team_id);
 
 -- 팀 배분 합계는 프로젝트 배분 가능 금액을 넘을 수 없음 (트랜잭션 끝에 검사 → 여러 행 수정 중 일시 초과 허용)
-CREATE FUNCTION check_alloc_total() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION check_alloc_total() RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE
   pid bigint;
   pool bigint;
@@ -136,7 +153,7 @@ CREATE CONSTRAINT TRIGGER projects_alloc_pool
 
 -- 사용액(프로젝트 경비 집행 이력)이 있는 팀 배분은 삭제 불가
 --   앱: 삭제 대신 '배분액을 사용액으로 맞추기(잔액 0원)' 선택지를 안내
-CREATE FUNCTION check_alloc_delete() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION check_alloc_delete() RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE
   used bigint;
 BEGIN
@@ -176,12 +193,16 @@ CREATE TABLE checklist_items (
   checked_at         timestamptz,
   checked_by_team_id bigint       REFERENCES teams(id),                   -- 체크한 팀 (주관 또는 참여 팀)
   created_at         timestamptz  NOT NULL DEFAULT now(),
-  CHECK (is_checked OR (checked_at IS NULL AND checked_by_team_id IS NULL))
+  spent_amount       bigint       CHECK (spent_amount >= 0),              -- 집행 금액 (체크할 때 입력, 기본 = 예정 금액) · v2.2
+  spent_date         date,                                                -- 집행일 (체크할 때 = 그날, 수정 가능 · 예정일은 그대로) · v2.3
+  CHECK (is_checked OR (checked_at IS NULL AND checked_by_team_id IS NULL)),
+  CONSTRAINT checklist_items_spent_check CHECK ((spent_amount IS NOT NULL) = is_checked),  -- 체크한 항목만 집행 금액
+  CONSTRAINT checklist_items_spent_date_check CHECK ((spent_date IS NOT NULL) = is_checked)  -- 체크한 항목만 집행일
 );
 CREATE INDEX checklist_items_project_idx ON checklist_items (project_id, due_date);
 
 -- 체크리스트 작성 팀 = 프로젝트 주관 팀, 체크한 팀 = 주관 팀 또는 (공개 항목일 때) 배분받은 팀
-CREATE FUNCTION check_checklist_teams() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION check_checklist_teams() RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE
   owner bigint;
 BEGIN
@@ -277,12 +298,12 @@ CREATE TABLE legacy_yearly_totals (
 -- 조회 함수 · 뷰 (계산값)
 -- =====================================================================
 -- 그 달에 적용되는 회의비 단가
-CREATE FUNCTION meeting_rate_of(p_month date) RETURNS integer LANGUAGE sql STABLE AS $$
+CREATE FUNCTION meeting_rate_of(p_month date) RETURNS integer LANGUAGE sql STABLE SET search_path = public AS $$
   SELECT rate FROM meeting_rates WHERE effective_from <= p_month ORDER BY effective_from DESC LIMIT 1
 $$;
 
 -- 그 달의 팀 업무비 예산 (입력한 달이 없으면 가장 가까운 이전 입력값, 없으면 0)
-CREATE FUNCTION work_budget_of(p_team bigint, p_month date) RETURNS bigint LANGUAGE sql STABLE AS $$
+CREATE FUNCTION work_budget_of(p_team bigint, p_month date) RETURNS bigint LANGUAGE sql STABLE SET search_path = public AS $$
   SELECT COALESCE((SELECT amount FROM work_budgets
                    WHERE team_id = p_team AND effective_month <= p_month
                    ORDER BY effective_month DESC LIMIT 1), 0)
@@ -381,7 +402,8 @@ LEFT JOIN notification_reads r ON r.notification_id = n.id AND r.team_id = t.id;
 -- ---------------------------------------------------------------------
 -- 설명 (DB 도구에서 보이도록)
 -- ---------------------------------------------------------------------
-COMMENT ON TABLE teams                IS '팀 계정 — 로그인 단위';
+COMMENT ON TABLE teams                IS '팀 계정 — 로그인 단위 (Supabase Auth 사용자와 1:1)';
+COMMENT ON COLUMN teams.must_change_password IS '초기 비밀번호 상태 — 팀 추가·관리자 초기화 때 true, 팀이 직접 바꾸면 false';
 COMMENT ON TABLE app_settings         IS '시스템 설정 (키-값)';
 COMMENT ON TABLE meeting_rates        IS '팀 회의비 1인당 월 단가 이력';
 COMMENT ON TABLE team_headcounts      IS '팀 월별 인원 (회의비 예산 산정)';
