@@ -81,8 +81,7 @@ export type Action =
   | { type: 'READ_ALL_NOTIF' }
   | { type: 'CHECK_DEADLINES' }
   | { type: 'SET_PUSH'; team: string; push: boolean }
-  | { type: 'SET_PUSH_KIND'; team: string; kind: PushKind; on: boolean }
-  ;
+  | { type: 'SET_PUSH_KIND'; team: string; kind: PushKind; on: boolean };
 
 const sumItems = (r: Pick<ExecRecord, 'items'>) => r.items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
 

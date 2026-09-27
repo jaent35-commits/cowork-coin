@@ -69,7 +69,7 @@ src/
 
 ## 데이터 흐름 (백엔드 없음)
 
-모든 데이터는 `store/reducer.ts` 에서 관리하고 `localStorage['cowork-coin-v1']` 에 저장합니다.
+모든 데이터는 `store/reducer.ts` 에서 관리하고 `localStorage['cowork-coin-v5']` 에 저장합니다.
 
 - **집행 등록/수정/삭제** → 분기 회의비 사용액 · 프로젝트 사용액 · 월별 집계가 함께 증감하고 알림 생성.
   프로젝트 잔액이 15% 미만이 되면 예산 경고 알림.
