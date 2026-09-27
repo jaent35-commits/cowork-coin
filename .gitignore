@@ -21,3 +21,9 @@ Claude outputs/
 !.yarn/sdks
 !.yarn/versions
 .pnp.*
+
+# 개발 도구 설정 (Claude Code · Supabase MCP · 에이전트 스킬) — 개인 환경이라 공유하지 않음
+.claude/
+.agents/
+.mcp.json
+skills-lock.json
