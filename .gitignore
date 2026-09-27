@@ -1,0 +1,23 @@
+node_modules/
+dist/
+dev-dist/
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example
+backend/.venv/
+**/__pycache__/
+*.pyc
+backend/tests/samples/
+Claude outputs/
+*.pptx
+
+# Yarn Berry (node-modules linker, zero-install 미사용)
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*

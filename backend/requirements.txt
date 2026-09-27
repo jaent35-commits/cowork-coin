@@ -1,0 +1,10 @@
+# 영수증 OCR 백엔드 — Python 3.12 (paddlepaddle 3.3.1 Windows 휠: cp39~cp313)
+# 아래 세 개는 함께 고정 — 인식 모델만 oneDNN(ocr/paddle_ocr.py)이 PaddleX 내부 oneDNN 제외 목록에 의존하고,
+# 검증(12장 × 3회 결과·원문 동일)도 이 조합에서만 했다. 올릴 때는 같은 A/B 를 다시 돌릴 것
+paddlepaddle==3.3.1
+paddleocr==3.7.0
+paddlex==3.7.2
+fastapi==0.141.1
+uvicorn[standard]==0.54.0
+python-multipart==0.0.32
+pillow==12.3.0

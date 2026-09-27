@@ -1,0 +1,16 @@
+/* 집행률 원형 그래프 (공용) */
+.donut { position: relative; width: 42px; height: 42px; margin: 0 auto; }
+.donut svg { display: block; transform: rotate(-90deg); }
+.donut circle { fill: none; stroke-width: 5; }
+.donut__track { stroke: var(--track); }
+.donut__bar { stroke: var(--primary); stroke-linecap: round; transition: stroke-dashoffset 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
+.donut.is-over .donut__bar { stroke: var(--danger); }
+.donut__pct {
+  position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center;
+  text-shadow: 0 0 2px var(--surface), 0 0 2px var(--surface); /* 수치가 링 위에 겹쳐도 또렷하게 */
+  font-family: var(--font-display); font-size: calc(11px * var(--fs)); font-weight: 900; color: var(--text); letter-spacing: -0.02em;
+}
+.donut__pct small { font-size: calc(9px * var(--fs)); font-weight: 800; } /* 단위 기호 — 최소 크기 예외 */
+/* 큰 글씨: '100%' 까지 링 안쪽에 들어가도록 원을 키움 (안쪽 지름 ≈ 41px) */
+:root[data-font="lg"] .donut { width: 60px; height: 60px; }
+:root[data-font="lg"] .donut svg { width: 60px; height: 60px; }

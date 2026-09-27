@@ -1,0 +1,36 @@
+{
+  "name": "cowork-coin",
+  "private": true,
+  "version": "1.0.0",
+  "description": "코웍-코인 : 프로젝트 예산 관리 시스템 (PWA)",
+  "type": "module",
+  "packageManager": "yarn@4.12.0",
+  "engines": {
+    "node": ">=24.13.1"
+  },
+  "scripts": {
+    "dev": "node ./node_modules/vite/bin/vite.js --configLoader runner",
+    "build": "node ./node_modules/typescript/bin/tsc -b && node ./node_modules/vite/bin/vite.js build --configLoader runner",
+    "preview": "node ./node_modules/vite/bin/vite.js preview --configLoader runner",
+    "typecheck": "node ./node_modules/typescript/bin/tsc -b --noEmit",
+    "brand": "node scripts/make-brand-assets.mjs",
+    "lottie": "node scripts/make-loading-lottie.mjs"
+  },
+  "dependencies": {
+    "lottie-web": "^5.12.2",
+    "react": "~19.2.0",
+    "react-dom": "~19.2.0",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "~19.2.0",
+    "@types/react-dom": "~19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "sharp": "^0.35.4",
+    "typescript": "5.9.3",
+    "vite": "7.3.1",
+    "vite-plugin-pwa": "^1.2.0",
+    "workbox-window": "^7.3.0"
+  }
+}

@@ -1,0 +1,164 @@
+.q-now { padding: 2px 8px; border-radius: var(--r-pill); background: var(--grad-primary); color: var(--ink); font-size: calc(11px * var(--fs)); font-weight: 700; }
+.q-missing { color: var(--danger-600); font-size: calc(12px * var(--fs)); font-weight: 600; }
+.q-rate { min-width: 140px; }
+/* 표 정렬 규칙: 구분(월·분기·합계) 가운데 · 금액 오른쪽 — '현재' 배지 줄도 가운데 */
+.q-table td.t-center > .row { justify-content: center; }
+.q-rate__pct { min-width: 34px; text-align: right; font-size: calc(12px * var(--fs)); font-weight: 700; color: var(--muted); flex-shrink: 0; }
+
+.hc-label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.hc-label > span:first-child { white-space: nowrap; }
+.hc-auto { padding: 2px 8px; border-radius: var(--r-pill); background: var(--primary-50); color: var(--primary-700); font-size: calc(11px * var(--fs)); font-weight: 700; white-space: nowrap; }
+.hc-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+.hc-row { display: flex; align-items: center; gap: 14px; }
+.hc-row__month { width: 40px; flex-shrink: 0; font-size: calc(12.5px * var(--fs)); font-weight: 700; color: var(--muted); }
+.hc-row__unit { width: 24px; flex-shrink: 0; text-align: right; font-size: calc(12.5px * var(--fs)); color: var(--faint); }
+
+.stepper {
+  flex: 1; display: flex; align-items: stretch; height: 40px; overflow: hidden;
+  border: 1.5px solid var(--line-input); border-radius: var(--r-md); background: var(--surface);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.stepper:focus-within { border-color: var(--primary); box-shadow: var(--ring); }
+.stepper button { width: 44px; flex-shrink: 0; font-size: calc(18px * var(--fs)); color: var(--faint); transition: background 0.1s; }
+.stepper button:hover { background: var(--bg); color: var(--primary-600); }
+.stepper input {
+  flex: 1; min-width: 0; border: 0; outline: none; text-align: center;
+  border-left: 1px solid var(--line-input); border-right: 1px solid var(--line-input);
+  background: var(--surface-alt); font-size: calc(14px * var(--fs)); font-weight: 800;
+}
+
+.sim { margin-bottom: 16px; padding: 22px; border-radius: var(--r-lg); text-align: center; background: linear-gradient(135deg, var(--primary-25), var(--primary-50)); }
+.sim__label { margin-bottom: 8px; font-size: calc(11px * var(--fs)); font-weight: 700; letter-spacing: 0.06em; color: var(--primary-700); }
+.sim__value { font-size: calc(32px * var(--fs)); color: var(--primary-600); }
+.sim__sub { margin-top: 4px; font-size: calc(12px * var(--fs)); color: var(--primary-700); }
+.sim__formula { margin-bottom: 16px; padding: 12px 14px; border-radius: var(--r-md); background: var(--surface-muted); font-size: calc(13px * var(--fs)); line-height: 1.7; color: var(--text-3); }
+.sim__formula strong { color: var(--primary-600); }
+
+@media (max-width: 480px) {
+  .sim__value { font-size: calc(26px * var(--fs)); }
+  .hc-row { gap: 10px; }
+}
+
+@media (max-width: 640px) {
+  /* 기준 수량·집행액 숨김 후 4열이 가로 스크롤 없이 들어가도록 */
+  .q-rate { min-width: 52px; }
+  .q-table td { font-size: calc(12.5px * var(--fs)); }
+  .q-rate__pct { min-width: 28px; font-size: calc(11px * var(--fs)); }
+  .q-table th, .q-table td { padding-left: 8px; padding-right: 8px; }
+  .q-table th:first-child, .q-table td:first-child { padding-left: 14px; }
+  .q-table th:last-child, .q-table td:last-child { padding-right: 14px; }
+  .q-table td:first-child .row { flex-wrap: wrap; gap: 4px; }
+}
+
+/* 큰 글씨 + 좁은 화면: 분기표를 가로 스크롤 없이 2줄 [분기 ··· 집행률] / [예산 · 잔액] */
+@media (max-width: 640px) {
+  :root[data-font="lg"] .q-table thead { display: none; }
+  :root[data-font="lg"] .q-table tbody tr {
+    display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'q rate' 'budget remain';
+    align-items: center; gap: 6px 12px; padding: 12px 14px; border-bottom: 1px solid var(--line-soft);
+  }
+  :root[data-font="lg"] .q-table tbody tr:last-child { border-bottom: 0; }
+  @media (max-width: 350px) { :root[data-font="lg"] .q-table tbody tr { column-gap: 6px; padding-left: 12px; padding-right: 12px; } }
+  /* 2줄 카드형은 칸 위치(grid)로 정렬 — 표 정렬 클래스(t-center·t-right)는 풀어 줌 */
+  :root[data-font="lg"] .q-table :is(tbody, tfoot) td { padding: 0; border: 0; min-width: 0; text-align: left; }
+  :root[data-font="lg"] .q-table td.t-center > .row { justify-content: flex-start; }
+  :root[data-font="lg"] .q-table :is(tbody, tfoot) td:nth-child(1) { grid-area: q; }
+  :root[data-font="lg"] .q-table :is(tbody, tfoot) td:nth-child(3) { grid-area: budget; }
+  :root[data-font="lg"] .q-table :is(tbody, tfoot) td:nth-child(5) { grid-area: remain; justify-self: end; }
+  :root[data-font="lg"] .q-table :is(tbody, tfoot) td:nth-child(6) { grid-area: rate; justify-self: end; width: 130px; }
+  :root[data-font="lg"] .q-table :is(tbody, tfoot) td:nth-child(3)::before,
+  :root[data-font="lg"] .q-table :is(tbody, tfoot) td:nth-child(5)::before {
+    margin-right: 6px; font-size: calc(11px * var(--fs)); font-weight: 600; color: var(--faint);
+  }
+  :root[data-font="lg"] .q-table :is(tbody, tfoot) td:nth-child(3)::before { content: '예산'; }
+  :root[data-font="lg"] .q-table :is(tbody, tfoot) td:nth-child(5)::before { content: '잔액'; }
+}
+
+/* ── 팀 업무비 (팀 운영 탭) ── */
+
+/* 표 합계 줄 (팀 회의비·팀 업무비) */
+.q-table .q-total td { padding-top: 13px; padding-bottom: 13px; border-top: 1.5px solid var(--line); border-bottom: 0; background: var(--surface-alt); font-weight: 800; color: var(--text); }
+.q-total__pct { font-size: calc(12.5px * var(--fs)); font-weight: 800; color: var(--primary-700); }
+/* 큰 글씨 모바일: 합계 줄도 월·분기 줄과 같은 2줄 [합계 ··· 집행률] / [예산 · 잔액] (칸 배치는 위 tbody·tfoot 공통 규칙) */
+@media (max-width: 640px) {
+  :root[data-font="lg"] .q-table .q-total {
+    display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'q rate' 'budget remain';
+    align-items: center; gap: 6px 12px; padding: 12px 14px; background: var(--surface-alt); border-top: 1.5px solid var(--line);
+  }
+  :root[data-font="lg"] .q-table .q-total td { background: none; }
+  :root[data-font="lg"] .q-table .q-total td.q-rate { width: auto; }
+}
+
+/* 팀 업무비: 표 안 바로 수정 */
+.work-hint { margin: -6px 0 10px; font-size: calc(12px * var(--fs)); color: var(--faint); }
+.work-table tbody tr.is-selected td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+.work-table tbody tr.is-selected .work-table__budget > span { border-radius: var(--r-sm); outline: 1px dashed var(--primary-300); outline-offset: 3px; cursor: text; }
+.work-table__budget .amount-input { width: 160px; margin-left: auto; }
+.work-table__budget .amount-input .input { height: 34px; }
+
+
+/* 모바일: 팀 업무비 표를 팀 회의비 분기표와 같은 모양으로 (안내 문구는 하단 기준 안내로, 선택 행은 배경만, 첫 열 너비 통일) */
+.show-mobile-inline { display: none; }
+@media (max-width: 1024px) {
+  .work-hint { display: none; }
+  .show-mobile-inline { display: inline; }
+  .work-table tbody tr.is-selected td:first-child { box-shadow: none; }
+  .q-table { table-layout: fixed; width: 100%; }
+  .q-table th:first-child { width: 84px; }
+  .q-table th:last-child { width: 64px; }
+  /* 큰 글씨: 고정 열 너비도 글씨 배율만큼 — '3분기 현재' 배지가 예산 금액을 덮거나 '집행률'·'71%'가 잘리지 않도록 */
+  :root[data-font="lg"] .q-table th:first-child { width: calc(84px * var(--fs)); }
+  :root[data-font="lg"] .q-table th:last-child { width: calc(66px * var(--fs)); }
+}
+/* 태블릿: 셀 여백이 넓어 '3분기 현재'가 84px 첫 열을 넘치므로 첫 열만 넓힘 */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .q-table th:first-child,
+  :root[data-font="lg"] .q-table th:first-child { width: calc(112px * var(--fs)); }
+  /* 집행률 열도 막대가 0px로 사라지고 %가 넘치지 않도록 */
+  .q-table th:last-child,
+  :root[data-font="lg"] .q-table th:last-child { width: calc(150px * var(--fs)); }
+}
+/* 큰 글씨 모바일: 업무비 표(5열: 월·예산·집행액·잔액·집행률)도 분기표와 같은 2줄 카드형 [월 ··· 집행률] / [예산 · 잔액] */
+@media (max-width: 640px) {
+  :root[data-font="lg"] .work-table :is(tbody, tfoot) td:nth-child(2) { grid-area: budget; justify-self: start; width: auto; }
+  :root[data-font="lg"] .work-table :is(tbody, tfoot) td:nth-child(3) { display: none; }
+  :root[data-font="lg"] .work-table :is(tbody, tfoot) td:nth-child(4) { grid-area: remain; justify-self: end; }
+  :root[data-font="lg"] .work-table :is(tbody, tfoot) td:nth-child(5) { grid-area: rate; justify-self: end; width: 130px; }
+  :root[data-font="lg"] .work-table :is(tbody, tfoot) td:nth-child(2)::before { content: '예산'; margin-right: 6px; font-size: calc(11px * var(--fs)); font-weight: 600; color: var(--faint); }
+  :root[data-font="lg"] .work-table :is(tbody, tfoot) td:nth-child(3)::before { content: none; }
+  :root[data-font="lg"] .work-table :is(tbody, tfoot) td:nth-child(4)::before { content: '잔액'; margin-right: 6px; font-size: calc(11px * var(--fs)); font-weight: 600; color: var(--faint); }
+  :root[data-font="lg"] .work-table :is(tbody, tfoot) td:nth-child(5)::before { content: none; }
+}
+
+/* 아주 좁은 화면(≤360): 분기·업무비 표 금액('2,700,000원')이 옆 칸에 붙거나 넘치지 않도록 여백·첫 열만 줄임 */
+@media (max-width: 360px) {
+  :root:not([data-font="lg"]) .q-table th:first-child { width: 70px; }
+  :root:not([data-font="lg"]) .q-table th, :root:not([data-font="lg"]) .q-table td { padding-left: 5px; padding-right: 5px; }
+  :root:not([data-font="lg"]) .q-table th:first-child, :root:not([data-font="lg"]) .q-table td:first-child { padding-left: 12px; }
+  :root:not([data-font="lg"]) .q-table th:last-child, :root:not([data-font="lg"]) .q-table td:last-child { padding-right: 12px; }
+}
+
+/* 휴대폰: 좁은 집행률 칸의 막대가 6~11px로 의미가 없어 — 팀 회의비는 원형 그래프, 팀 업무비는 %만 */
+.q-rate__donut { display: none; }
+@media (max-width: 640px) {
+  .q-rate--donut .q-rate__bar { display: none; }
+  .q-rate--donut .q-rate__donut { display: block; }
+  .q-rate--pct .grow { display: none; }
+  /* 집행률 칸(원형·%·합계 %)은 가운데 제목 아래 가운데로 */
+  .q-rate--pct .row { justify-content: center; }
+  :root:not([data-font="lg"]) .q-table .q-rate { text-align: center; }
+  /* 큰 글씨 2줄 카드형: 집행률은 오른쪽 끝 정렬 */
+  :root[data-font="lg"] .q-rate--donut .donut { margin-right: 0; }
+  :root[data-font="lg"] .q-rate--pct .row { justify-content: flex-end; }
+}
+
+/* PC 큰 글씨: 분기표·업무비표를 고정 열 너비로 — 좁은 PC 에서도 가로 스크롤 없이 (금액 열은 남은 폭을 나눔) */
+@media (min-width: 1025px) {
+  :root[data-font="lg"] .q-table { table-layout: fixed; width: 100%; }
+  :root[data-font="lg"] .q-table th { white-space: normal; }
+  :root[data-font="lg"] .q-table th, :root[data-font="lg"] .q-table td { padding-left: 8px; padding-right: 8px; }
+  :root[data-font="lg"] .q-table th:first-child, :root[data-font="lg"] .q-table td:first-child { padding-left: 16px; }
+  :root[data-font="lg"] .q-table th:last-child, :root[data-font="lg"] .q-table td:last-child { padding-right: 16px; }
+  :root[data-font="lg"] .q-table th:first-child { width: 132px; }
+  :root[data-font="lg"] .q-table th:last-child { width: 128px; }
+}

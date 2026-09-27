@@ -1,0 +1,279 @@
+/* ─────────────────────────────────────────────
+   Design tokens — 색상·그라데이션·모서리·그림자·레이어·레이아웃 값은 이 파일에서만 정의
+   컴포넌트/뷰 CSS 는 원시 값(#hex, rgba, px 반경, 그림자) 대신 아래 토큰을 사용한다.
+   가이드 문서: /DESIGN.md
+   ───────────────────────────────────────────── */
+:root {
+  /* ── Brand — 웜 크림 · 다크브라운 · 앰버 ── */
+  --ink: #3b241a;           /* 다크 브라운 — 주 텍스트 버튼·강조 */
+  --ink-hover: #4e3226;
+  --primary: #e8a23a;       /* 앰버 — 막대·아이콘·포커스 */
+  --primary-25: #fef8ee;
+  --primary-50: #fdf0d6;    /* 활성 GNB·선택 배경 */
+  --primary-200: #f5dcae;
+  --primary-300: #eec27a;
+  --primary-600: #945a0b;   /* 앰버 텍스트(링크·강조 수치) — 흰 배경 대비 5.6 (연한 배경 4.7+) */
+  --primary-700: #7a4c10;   /* 연한 앰버 배경 위 텍스트 */
+  --accent: var(--primary); /* 통계 카드 등에서 요소별로 덮어쓰는 강조색 */
+
+  /* ── Sub palette ── */
+  --coral: #e5896f;         /* 코랄 — 팀 회의비 강조 */
+  --coral-50: #fdf0ec;
+  --sage: #7fa99a;          /* 세이지 */
+  --sage-50: #edf4f1;
+  --violet: #a58fcb;        /* 라벤더 */
+  --violet-50: #f2eef8;
+  --violet-700: #6f5a96;
+  --sand: #c9a77a;          /* 샌드 — 추가 집행 구간 */
+  --clay: #d98c6a;          /* 클레이 — 숙박비 분류 */
+
+  /* ── Data — 차트·운영일지 ── */
+  --budget: #f5c53a;        /* 예산(노랑) */
+  --budget-50: #fff9e3;
+  --budget-200: #f7e3a0;
+  --budget-700: #7a5a06;
+  --track: #f1ebe3;         /* 진행 바 트랙 */
+  --log-plus: #e5484d;      /* 운영일지 회의비(+) — 붉은색 */
+  --log-minus: #3b6fe0;     /* 운영일지 프로젝트(−) — 파란색 */
+  --log-plus-text: #c02f35; /* 운영일지 금액 글자 — 연한 배경 대비 5.2+ */
+  --log-minus-text: #2f5fc9;
+
+  /* ── Coin brand (앱 아이콘: 노랑 그라데이션 + 다크브라운 라인) ── */
+  --coin-yellow: #ffd35e;
+  --coin-amber: #ffb133;
+  --coin-brown: #33201a;
+
+  /* ── Status ── */
+  --success: #5f9b78;
+  --success-50: #eef6f1;
+  --success-100: #e1efe6;
+  --success-200: #cce2d4;
+  --success-600: #3f7355;   /* 초록 텍스트 — 흰 배경 대비 5.5 */
+  --warning: #e39a2e;
+  --warning-50: #fdf6e7;
+  --warning-200: #f4ddae;
+  --warning-600: #9c600c;   /* 주황 텍스트 — 흰 배경 대비 5.1 */
+  --warning-800: #7a4b0c;
+  --danger: #e2705a;
+  --danger-50: #fdf2ef;
+  --danger-100: #fbe4df;
+  --danger-200: #f3c8bf;
+  --danger-600: #b84a35;    /* 빨강 텍스트 — 흰 배경 대비 5.2 */
+  --danger-700: #a3372a;
+  --danger-solid: #b84a35; /* 흰 글자를 얹는 빨간 배지 — 다크에서도 그대로 (흰 글자 대비 5.2) */
+
+  /* ── Neutral ── */
+  --white: #ffffff;         /* 색 배경 위 글자·스위치 노브·테두리 */
+  --bg: #faf7f2;            /* 앱 바탕 */
+  --surface: #ffffff;       /* 카드·입력·표 */
+  --surface-cream: var(--surface); /* GNB */
+  --surface-alt: #fdfaf6;
+  --surface-muted: #faf6f0;
+  --surface-raised: var(--surface); /* 떠 있는 면: 팝오버·토스트·확인 레이어·시트 (다크에서 한 단계 밝게) */
+  --line: #efe7dd;
+  --line-soft: #f4eee7;
+  --line-input: #e6dcd0;
+  --text: #33201a;
+  --text-2: #4a362c;
+  --text-3: #5f4c41;
+  --muted: #6a5c50;         /* 보조 텍스트 — 대비 6.5 */
+  --faint: #766759;         /* 설명·라벨 — 대비 5.5 */
+  --faint-2: #7c6d61;       /* 힌트·시간 — 대비 5.0 */
+  --faint-3: #cdc2b8;       /* 장식·구분점·비활성 (본문 텍스트 금지) */
+  --scroll-thumb: #e3d8cb;
+  --scroll-thumb-hover: #c7b6a4;
+
+  /* ── Gradient ── */
+  --grad-primary: linear-gradient(135deg, #ffc65c 0%, #f5a83e 100%); /* 주 버튼·선택 — 앰버 + 브라운 글자 */
+  --grad-hero: linear-gradient(135deg, #fff6e6 0%, #ffe7bd 100%);
+  /* 모바일 다크 홈 히어로(잔여 금액) 강조 — 라이트는 기본 히어로와 같음 */
+  --hero-m-bg: var(--grad-hero);
+  --hero-m-line: var(--primary-200);
+  --hero-m-amount: var(--text);
+  --grad-bar: linear-gradient(90deg, #f5b544 0%, #ee8f55 100%);
+  --grad-success: linear-gradient(90deg, #5f9b78, #86b99a);
+  --grad-warning: linear-gradient(90deg, #e39a2e, #f2c46b);
+  --grad-danger: linear-gradient(90deg, #df5a48, #ec8a7c);
+
+  /* ── Type — 글씨 크기 배율: 작은 글씨 1 / 큰 글씨 1.4 (모든 font-size 가 calc(Npx * var(--fs))) ── */
+  --fs: 1;
+  --font-body: 'Inter', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  --font-display: 'Nunito', 'Pretendard', 'Malgun Gothic', sans-serif;
+
+  /* ── Radius — 6 · 8 · 10 · 12 · 16 · 20 · 24 · pill ── */
+  --r-xs: 6px;              /* 태그·칩·작은 아이콘 버튼 */
+  --r-sm: 8px;              /* 메뉴 항목·작은 버튼 */
+  --r-md: 10px;             /* 버튼·입력 */
+  --r-lg: 12px;             /* 카드 안 블록·팝오버·알림 */
+  --r-xl: 16px;             /* 카드 */
+  --r-2xl: 20px;            /* 히어로 */
+  --r-3xl: 24px;            /* 시트(모바일 로그인) */
+  --r-pill: 999px;
+
+  /* ── Shadow — 그림자 색은 브라운(59,36,26) 또는 앰버 계열 ── */
+  --shadow-xs: 0 1px 3px rgba(59, 36, 26, 0.08);           /* 보조 버튼·세그먼트·스위치 노브 */
+  --shadow-card: 0 1px 4px rgba(59, 36, 26, 0.04);
+  --shadow-card-hover: 0 8px 24px rgba(120, 80, 40, 0.10);
+  --shadow-drop: 0 8px 20px rgba(59, 36, 26, 0.08);        /* 헤더 아래로 펼쳐지는 영역 */
+  --shadow-pop: 0 10px 36px rgba(59, 36, 26, 0.14);        /* 팝오버·토스트 */
+  --shadow-header: 0 1px 8px rgba(59, 36, 26, 0.04);
+  --shadow-sidebar: 2px 0 12px rgba(59, 36, 26, 0.03);
+  --shadow-bottom-nav: 0 -4px 20px rgba(59, 36, 26, 0.07);
+  --shadow-btn: 0 4px 12px rgba(240, 160, 50, 0.32);        /* 주 버튼 */
+  --shadow-fab: 0 8px 20px rgba(240, 160, 50, 0.4), 0 2px 6px rgba(59, 36, 26, 0.12);
+  --shadow-hero: 0 10px 30px rgba(240, 160, 50, 0.12);
+  --shadow-brand: 0 8px 18px rgba(168, 98, 36, 0.19);       /* 로고 타일 */
+  --shadow-brand-sm: 0 4px 10px rgba(168, 98, 36, 0.2);
+  --shadow-float: 0 12px 40px rgba(59, 36, 26, 0.18);       /* 토스트·확인 레이어 */
+  --shadow-sheet: 0 -12px 40px rgba(59, 36, 26, 0.18);      /* 바텀 시트 */
+  --shadow-bar: 0 8px 24px rgba(59, 36, 26, 0.22);          /* 선택 모드 바 */
+  --shadow-soft: 0 1px 2px rgba(51, 32, 26, 0.04), 0 4px 14px -8px rgba(51, 32, 26, 0.12);
+  --ring: 0 0 0 3px rgba(232, 162, 58, 0.22);               /* 입력 포커스 */
+  --focus: rgba(232, 162, 58, 0.5);                         /* 키보드 포커스 아웃라인 */
+
+  /* ── Overlay — 어둡게 가리기 · 색 배경 위 반투명 면 ── */
+  --dim: rgba(59, 36, 26, 0.38);
+  --glass: rgba(255, 255, 255, 0.75);       /* 히어로 위 알림 줄 */
+  --glass-2: rgba(255, 255, 255, 0.7);      /* 히어로 위 월 선택 */
+  --glass-3: rgba(255, 255, 255, 0.6);      /* 달력 연도 배지 */
+  --glass-on-ink: rgba(255, 255, 255, 0.12); /* 잉크 바 위 보조 버튼 */
+  --deco-1: rgba(255, 255, 255, 0.35);      /* 히어로 장식 원 */
+  --deco-2: rgba(255, 255, 255, 0.2);
+
+  /* ── 상태별 버튼·바 (다크에서 뒤집힘) ── */
+  --btn-danger-bg: var(--danger-50);
+  --btn-danger-text: var(--danger-600);
+  --btn-danger-line: var(--danger-200);
+  --bar-bg: var(--ink);                 /* 선택 모드 바 */
+  --bar-line: transparent;
+  --inverse-bg: var(--white);           /* 진한 바 위의 밝은 버튼 */
+  --hover-dim: brightness(0.95);        /* 버튼 마우스 오버 */
+
+  /* ── Layer (z-index) ── */
+  --z-egg: 49;
+  --z-header: 50;
+  --z-sidebar: 55;
+  --z-fab: 58;
+  --z-bottom-nav: 60;
+  --z-drop: 65;
+  --z-pop: 70;
+  --z-picker: 200;
+  --z-prompt: 250;
+  --z-toast: 300;
+  --z-splash: 500;
+
+  /* ── Layout ── */
+  --header-h: 56px;
+  --sidebar-w: 220px;
+  --sidebar-w-collapsed: 68px;
+  --bottom-nav-h: 64px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+:root[data-font="lg"] { --fs: 1.4; }
+
+:root { color-scheme: light; }
+
+/* ─────────────────────────────────────────────
+   Dark — 웜 다크브라운 바탕. data-theme 은 lib/theme.ts (라이트/다크/시스템) 가 설정
+   - 앰버·코랄·세이지 등 '채움' 색과 --ink(앰버 위 글자)·--white(색 배경 위 글자)는 그대로
+   - 연한 배경(*-25/50/100/200)은 어둡게, 텍스트용(*-600/700·text/*)은 밝게 뒤집는다
+   ───────────────────────────────────────────── */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* 앰버는 버튼 채움·강조 글자에만 — 선택 배경·테두리는 채도 낮은 웜 그레이 (노란 빛 방지) */
+  --primary-25: #1f1b17;
+  --primary-50: #262019;    /* 선택·활성 배경 */
+  --primary-200: #3a322a;   /* 테두리 */
+  --primary-300: #5c4c36;
+  --primary-600: #e6b66c;   /* 앰버 텍스트 — 면 대비 9.5 */
+  --primary-700: #eec58a;
+
+  --coral-50: #271d1a;
+  --sage-50: #1a211e;
+  --violet-50: #211d28;
+  --violet-700: #c3b2e6;
+
+  --budget-50: #221f15;
+  --budget-200: #3d3624;
+  --budget-700: #f0d17a;
+  --track: #2a2522;
+  --log-minus: #5b8af0;
+  --log-plus-text: #ff8a8e;
+  --log-minus-text: #93b3ff;
+
+  --success-50: #18201c;
+  --success-100: #1d2621;
+  --success-200: #2a3a31;
+  --success-600: #93c7a8;
+  --warning-50: #221d16;
+  --warning-200: #3d3325;
+  --warning-600: #e8b870;
+  --warning-800: #eec98f;
+  --danger-50: #261a18;
+  --danger-100: #2e1e1b;
+  --danger-200: #45302b;
+  --danger-600: #f39683;
+  --danger-700: #f7a898;
+
+  /* 웜 차콜 바탕 · 면 · 선 */
+  --bg: #131110;
+  --surface: #1b1816;
+  --surface-alt: #201c1a;
+  --surface-muted: #25201d;
+  --surface-raised: #25211e;
+  --line: #2f2926;
+  --line-soft: #272220;
+  --line-input: #3b3430;
+  --text: #f1ebe5;          /* 면 대비 14.9 */
+  --text-2: #ddd4cc;
+  --text-3: #c7bdb4;
+  --muted: #ada299;         /* 면 대비 7.1 */
+  --faint: #9d9289;         /* 면 대비 5.8 */
+  --faint-2: #948980;       /* 면 대비 5.2 · surface-muted 4.7 */
+  --faint-3: #4a433e;
+  --scroll-thumb: #3b3430;
+  --scroll-thumb-hover: #564c46;
+
+  --grad-hero: linear-gradient(135deg, #1e1a17 0%, #1e1a17 100%); /* 평면 — 누런 그라데이션 없음 */
+  /* 모바일 홈 히어로: 웜 틴트 면 + 은은한 앰버 선 + 앰버 금액 (그림자·빛 번짐 없음) */
+  --hero-m-bg: #221c16;
+  --hero-m-line: var(--primary-300);
+  --hero-m-amount: var(--primary-700);
+
+  /* 그림자 — 노란 빛(앰버) 그림자는 끄고, 떠 있는 요소만 무채색 검정. 카드는 1px 선으로 구분 */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-card: none;
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-drop: 0 8px 20px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 10px 32px rgba(0, 0, 0, 0.5);
+  --shadow-header: 0 1px 0 var(--line);
+  --shadow-sidebar: 1px 0 0 var(--line);
+  --shadow-bottom-nav: 0 -1px 0 var(--line);
+  --shadow-btn: none;
+  --shadow-fab: 0 6px 16px rgba(0, 0, 0, 0.45);
+  --shadow-hero: none;
+  --shadow-brand: none;
+  --shadow-brand-sm: none;
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-sheet: 0 -12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-bar: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-soft: 0 0 0 1px var(--line);
+  --ring: 0 0 0 2px rgba(232, 162, 58, 0.5); /* 번지지 않는 2px 포커스 */
+
+  --dim: rgba(0, 0, 0, 0.6);
+  --glass: rgba(34, 30, 27, 0.92);
+  --glass-2: rgba(34, 30, 27, 0.85);
+  --glass-3: rgba(34, 30, 27, 0.8);
+  --deco-1: transparent;   /* 히어로 장식 원 — 다크에서는 얼룩처럼 보여 숨김 */
+  --deco-2: transparent;
+
+  --btn-danger-bg: var(--danger-solid);  /* 연한 빨강은 다크에서 비활성처럼 보여 진한 빨강 + 흰 글자 */
+  --btn-danger-text: var(--white);
+  --btn-danger-line: transparent;
+  --bar-bg: #2c2724;
+  --bar-line: var(--line-input);
+  --inverse-bg: var(--text);             /* 새하얀 대신 따뜻한 밝은 색 */
+  --hover-dim: brightness(1.12);         /* 어두운 바탕에서는 밝아지게 */
+}

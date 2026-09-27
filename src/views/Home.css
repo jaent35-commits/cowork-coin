@@ -1,0 +1,92 @@
+.home-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+.home-head__title { font-size: calc(24px * var(--fs)); }
+
+.home-notice { margin-bottom: 14px; }
+.home-notice .btn.btn--link { color: inherit; font-size: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Hero */
+.hero {
+  position: relative; overflow: hidden;
+  margin-bottom: 20px; padding: 26px 28px; border-radius: var(--r-2xl);
+  background: var(--grad-hero); color: var(--text);
+  border: 1px solid var(--primary-200);
+  box-shadow: var(--shadow-hero);
+}
+.hero::before, .hero::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+.hero::before { top: -40px; right: -30px; width: 200px; height: 200px; background: var(--deco-1); }
+.hero::after { bottom: -50px; right: 80px; width: 100px; height: 100px; background: var(--deco-2); }
+/* 장식 원(::before/::after)은 맨 아래 — 금액·문구는 항상 그 위에 */
+.hero > * { position: relative; z-index: 1; }
+.hero__label { font-size: calc(11.5px * var(--fs)); font-weight: 600; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 10px; }
+.hero__row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 6px; }
+/* 큰 금액: .num 기본 자간(-0.02em)은 숫자가 붙어 보여 홈 카드 대표 숫자만 넓힘 */
+.hero__amount { font-size: calc(34px * var(--fs)); line-height: 1; }
+.hero__amount.num, .stat__value.num { letter-spacing: 0.02em; }
+/* 기준 월 = StepNav 알약형, 히어로 배경 위라 반투명 흰 바탕 */
+.hero__month.step-nav--pill { border-color: transparent; background: var(--glass-2); }
+.hero__month .step-nav__value { min-width: 92px; }
+.hero__sub { font-size: calc(13px * var(--fs)); color: var(--text-3); margin-bottom: 16px; }
+.hero__bar { height: 8px; border-radius: var(--r-pill); background: var(--surface); overflow: hidden; }
+.hero__bar > div { height: 100%; border-radius: var(--r-pill); background: var(--grad-bar); transition: width 0.8s ease; }
+.hero__legend { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--text-3); }
+.hero__expire {
+  position: relative; z-index: 1;
+  display: flex; gap: 10px; align-items: flex-start;
+  margin-top: 16px; padding: 12px 14px; border-radius: var(--r-lg);
+  background: var(--glass); box-shadow: inset 3px 0 0 var(--danger);
+  font-size: calc(13px * var(--fs)); font-weight: 700; color: var(--text);
+}
+.hero__expire b { font-size: calc(14px * var(--fs)); }
+
+/* Stat cards */
+.stat { position: relative; overflow: hidden; padding: 24px 20px 20px; }
+.stat::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--accent); }
+/* 가이드: 카드별 강조색으로 집행 막대 표시 */
+.stat .progress__bar { background: var(--accent); }
+.stat__label { font-size: calc(12.5px * var(--fs)); font-weight: 600; color: var(--faint); margin-bottom: 10px; }
+.stat__value { font-size: calc(22px * var(--fs)); margin-bottom: 3px; }
+.stat__sub { font-size: calc(12px * var(--fs)); color: var(--faint-2); margin-bottom: 14px; }
+.stat__foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: calc(12px * var(--fs)); color: var(--faint-2); }
+.stat__foot b { color: var(--faint); }
+.stat__expire {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 7px 10px; border-radius: var(--r-sm);
+  background: var(--coral-50); font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--danger-600);
+}
+/* 안내(녹색) — 팀 업무비 이번 달 사용 가능 금액 */
+.stat__avail {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 7px 10px; border-radius: var(--r-sm);
+  background: var(--success-50); font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--success-600);
+}
+.stat__avail b { color: var(--success-600); font-weight: 900; }
+.stat__action { margin-top: 10px; }
+
+/* 모바일: 잔여 금액 강조 (라이트는 토큰이 기본 히어로와 같아 변화 없음 · 다크만 웜 틴트) */
+@media (max-width: 1024px) {
+  .hero { background: var(--hero-m-bg); border-color: var(--hero-m-line); }
+  .hero__amount { color: var(--hero-m-amount); }
+}
+
+@media (max-width: 768px) {
+  .hero { padding: 22px 20px; }
+  .hero__row { flex-direction: column; align-items: flex-start; }
+  .hero__amount { font-size: calc(30px * var(--fs)); }
+}
+
+@media (max-width: 480px) {
+  .home-head__title { font-size: calc(20px * var(--fs)); }
+  .home-head .btn { width: 100%; }
+  .hero__amount { font-size: calc(27px * var(--fs)); }
+}
+
+
+/* 홈 체크리스트: 구분(My·코웍)은 제목 오른쪽 작은 칩, 상태는 글자 탭 */
+.home-check__scope { flex-shrink: 0; flex-wrap: nowrap; gap: 4px; }
+.home-check__scope .chip { padding: 3px 10px; font-size: calc(11.5px * var(--fs)); }
+.home-check__filter { display: flex; align-items: center; gap: 4px 18px; flex-wrap: wrap; margin-bottom: 4px; border-bottom: 1px solid var(--line-soft); }
+.home-check__tab {
+  margin-bottom: -1px; padding: 2px 0 9px; border-bottom: 2px solid transparent;
+  font-size: calc(12.5px * var(--fs)); font-weight: 700; color: var(--faint); font-variant-numeric: tabular-nums;
+  transition: color 0.15s, border-color 0.15s;
+}
+.home-check__tab:hover { color: var(--text-3); }
+.home-check__tab.is-active { border-bottom-color: var(--primary); color: var(--text); }

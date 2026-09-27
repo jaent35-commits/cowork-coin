@@ -1,0 +1,37 @@
+/* 경비 집행 체크리스트 줄 (홈 · 프로젝트 운영 > 체크리스트) — 카드 안 구분선 목록 */
+.check-list { list-style: none; margin: 0; padding: 0; }
+.check-row { display: flex; align-items: flex-start; gap: 12px; padding: 13px 2px; }
+.check-row + .check-row { border-top: 1px solid var(--line-soft); }
+/* 검색 결과로 이동한 항목 강조 */
+@keyframes check-flash { 0%, 35% { background: var(--primary-50); box-shadow: 0 0 0 2px var(--primary); } 100% { background: transparent; box-shadow: 0 0 0 2px transparent; } }
+.check-row.is-flash { border-radius: var(--r-sm); animation: check-flash 1.8s ease both; }
+.check-row > .checkbox { margin-top: 2px; }
+/* 줄 선택 (My·코웍 체크리스트) — 표 선택 색과 같음: 배경 --primary-50 + 왼쪽 3px 앰버 막대.
+   배경이 글자에 붙지 않도록 좌우 여백을 넓히고 같은 만큼 바깥으로 빼서 글자 위치는 그대로 */
+.check-list.is-selectable .check-row { margin: 0 -10px; padding-left: 12px; padding-right: 12px; cursor: pointer; transition: background 0.15s; }
+.check-list.is-selectable .check-row:hover { background: var(--surface-alt); }
+.check-list.is-selectable .check-row.is-selected { background: var(--primary-50); box-shadow: inset 3px 0 0 var(--primary); }
+.check-row__body { flex: 1; min-width: 0; }
+.check-row__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.check-row__title { min-width: 0; font-size: calc(14px * var(--fs)); font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.check-row__amt { flex-shrink: 0; font-size: calc(14px * var(--fs)); font-weight: 800; color: var(--text); }
+.check-row__meta {
+  display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; margin-top: 4px;
+  font-size: calc(12px * var(--fs)); color: var(--faint);
+}
+.check-row__proj { min-width: 0; color: var(--muted); }
+.check-row__date { display: inline-flex; align-items: center; gap: 6px; color: var(--faint); }
+.check-row__date.is-none { font-weight: 700; }
+.check-row__dday { font-weight: 800; color: var(--primary-600); }
+.check-row__dday.is-late { color: var(--danger-600); }
+/* 완료: 체크 + 취소선 + 흐린 글씨 (배경·배지 없이) */
+.check-row.is-done .check-row__title { color: var(--faint); font-weight: 600; text-decoration: line-through; }
+.check-row.is-done .check-row__amt { color: var(--faint); font-weight: 700; }
+/* 편집 버튼(공개 전환·삭제): 줄 오른쪽 끝 */
+.check-row__actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; align-self: center; }
+/* 폰: 편집 버튼이 항목명을 좁히지 않도록 둘째 줄 오른쪽으로 */
+@media (max-width: 640px) {
+  .check-row.has-actions { flex-wrap: wrap; row-gap: 8px; }
+  .check-row.has-actions .check-row__body { flex-basis: calc(100% - 30px); }
+  .check-row.has-actions .check-row__actions { margin-left: auto; }
+}

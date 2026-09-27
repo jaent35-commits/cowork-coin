@@ -1,0 +1,498 @@
+/* ── 집행 현황 ── */
+.exec-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+
+
+.exec-table__month { font-family: var(--font-display); font-weight: 800; letter-spacing: 0.01em; }
+.exec-table__amt { font-size: calc(15px * var(--fs)); }
+.type-ico {
+  width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--sage-50); font-size: calc(14px * var(--fs));
+}
+.type-ico.is-project { background: var(--primary-50); }
+.type-ico.is-work { background: var(--coral-50); }
+
+/* ── 집행 등록 ── */
+.exec-form { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start; }
+
+.exec-summary { position: sticky; top: calc(var(--header-h) + 20px); }
+.exec-summary__actions { margin-top: 16px; }
+
+@media (max-width: 1024px) {
+  .exec-summary { position: static; }
+}
+
+@media (max-width: 900px) {
+  .exec-form { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .exec-table__date { display: none; }
+}
+
+/* ── 영수증 찍어서 올리기 (모바일 전용) ── */
+.receipt-scan { display: none; }
+.receipt-scan__btn {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; text-align: left;
+  border-radius: var(--r-xl); border: 1.5px dashed var(--primary-300); background: var(--primary-25);
+  transition: background 0.15s, transform 0.1s;
+}
+.receipt-scan__btn:active:not(:disabled) { transform: scale(0.98); background: var(--primary-50); }
+.receipt-scan__btn.is-reading { border-style: solid; cursor: progress; }
+.receipt-scan__icon {
+  display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: var(--r-lg);
+  background: var(--grad-primary); font-size: calc(22px * min(var(--fs), 1.15));
+}
+.receipt-scan__thumb { flex-shrink: 0; width: 44px; height: 44px; border-radius: var(--r-lg); object-fit: cover; }
+.receipt-scan__text { min-width: 0; }
+.receipt-scan__text strong { display: block; font-size: calc(15px * var(--fs)); font-weight: 800; color: var(--text); }
+.receipt-scan__text small { display: block; margin-top: 2px; font-size: calc(12px * var(--fs)); color: var(--muted); }
+.receipt-scan__bar { height: 6px; margin-top: 8px; border-radius: var(--r-pill); overflow: hidden; background: var(--track); }
+.receipt-scan__bar i { display: block; height: 100%; background: var(--grad-bar); transition: width 0.3s ease; }
+.receipt-scan__err { margin-top: 8px; padding: 10px 12px; border-radius: var(--r-md); background: var(--danger-50); font-size: calc(12.5px * var(--fs)); color: var(--danger-700); }
+
+/* ── 하단 고정 저장 바 (모바일 전용): 집행 후 잔액 + 취소/저장 ── */
+.exec-bar { display: none; }
+
+@media (max-width: 1024px) {
+  .page-head.hide-mobile, .exec-summary.hide-mobile { display: none; }
+  .receipt-scan { display: block; margin-bottom: 20px; }
+
+  .exec-bar {
+    display: flex; flex-direction: column; gap: 10px;
+    position: fixed; left: 0; right: 0; bottom: var(--kb-offset, 0px); z-index: var(--z-fab); /* 키보드 위 (ExecRegister) */
+    min-width: 340px; padding: 12px 16px calc(12px + var(--safe-bottom));
+    background: var(--surface); border-top: 1px solid var(--line); box-shadow: var(--shadow-bottom-nav);
+  }
+  .exec-bar__btns { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+  /* 마지막 입력칸이 고정 바에 가리지 않도록 */
+  .exec-form { padding-bottom: 84px; }
+  :root[data-font="lg"] .exec-form { padding-bottom: 96px; }
+  /* 예산 유형 칸: '팀 운영 ›' 같은 묶음 이름은 숨기고 예산 이름만 */
+  .reg-row__type .sbox__group { display: none; }
+}
+
+/* ── 집행 현황 상단 요약: 한 줄 [팀 운영 소계][프로젝트 운영 소계][조회 합계][상세] → 펼치면 아래로 상세 ── */
+.exec-sum { margin-bottom: 16px; overflow: hidden; }
+.exec-sum__cards, .exec-sum__detail { display: grid; grid-template-columns: 3.5fr 3.5fr 3fr; }
+.exec-sum__card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 20px 16px; }
+.exec-sum__card + .exec-sum__card { border-left: 1px solid var(--line-soft); }
+.exec-sum__card-name { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-size: calc(13.5px * var(--fs)); font-weight: 800; color: var(--text); }
+.exec-sum__card-name small { margin-left: 2px; font-size: calc(11.5px * var(--fs)); font-weight: 600; color: var(--faint); }
+.exec-sum__card-ico { display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--r-sm); background: var(--sage-50); font-size: calc(12px * var(--fs)); }
+.exec-sum__card--project .exec-sum__card-ico { background: var(--primary-50); }
+.exec-sum__card--total { background: var(--primary-25); }
+.exec-sum__card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* 접힘: 금액 한 줄 [집행 등록 · 잔여 예산] */
+.exec-sum__line { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 16px; margin: 0; }
+.exec-sum__line > div { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.exec-sum__line dt { font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--muted); }
+.exec-sum__line dd { margin: 0; font-size: calc(13.5px * var(--fs)); font-weight: 700; color: var(--text-2); }
+.exec-sum__line-remain dt { font-weight: 800; color: var(--text); }
+.exec-sum__line-remain dd { font-size: calc(15.5px * var(--fs)); font-weight: 900; color: var(--primary-600); }
+.exec-sum:not(.is-open) .exec-sum__card { gap: 6px; padding-top: 12px; padding-bottom: 12px; }
+/* 펼침: 금액 3줄: 집행 가능 · 집행 등록 · 잔여 예산 */
+.exec-sum__fig { display: flex; flex-direction: column; gap: 5px; margin: 0; }
+.exec-sum__fig > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.exec-sum__fig dt { font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--muted); white-space: nowrap; }
+.exec-sum__fig dd { margin: 0; font-size: calc(13.5px * var(--fs)); font-weight: 700; color: var(--text-2); white-space: nowrap; }
+.exec-sum__fig-remain { margin-top: 2px; padding-top: 7px; border-top: 1px dashed var(--line); }
+.exec-sum__fig-remain dt { font-weight: 800; color: var(--text); }
+.exec-sum__fig-remain dd { font-size: calc(16px * var(--fs)); font-weight: 900; color: var(--primary-600); }
+.exec-sum__toggle {
+  display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 12px; border-radius: var(--r-pill);
+  border: 1px solid var(--primary-200); background: var(--surface); font-size: calc(12.5px * var(--fs)); font-weight: 700; color: var(--text-2);
+  transition: background 0.15s, border-color 0.15s;
+}
+.exec-sum__toggle:hover { background: var(--primary-50); border-color: var(--primary-300); }
+.exec-sum__toggle svg { transition: transform 0.2s; }
+.exec-sum.is-open .exec-sum__toggle svg { transform: rotate(180deg); }
+.exec-sum__detail {
+  align-items: start;
+  border-top: 1px solid var(--line-soft); background: var(--surface-alt); animation: fade-in 0.18s ease both;
+}
+/* 합계 칸 아래는 비움 — 항목 목록이 위 소계 카드와 같은 칸에 오도록 */
+.exec-sum__detail::after { content: ''; }
+.exec-sum__list { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-content: start; column-gap: 12px; margin: 0; padding: 10px 20px 12px; list-style: none; min-width: 0; }
+.exec-sum__list > .exec-sum__li { grid-column: 1 / -1; grid-template-columns: subgrid; }
+.exec-sum__list + .exec-sum__list { border-left: 1px solid var(--line-soft); }
+.exec-sum__li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; gap: 10px; padding: 6px 0; font-size: calc(12.5px * var(--fs)); }
+.exec-sum__li + .exec-sum__li:not(.exec-sum__li--head) { border-top: 1px dashed var(--line-soft); }
+.exec-sum__li--head { padding: 0 0 4px; font-size: calc(11px * var(--fs)); font-weight: 700; color: var(--faint); }
+.exec-sum__li--head span { color: var(--faint) !important; font-weight: 700 !important; text-align: center; justify-content: center; }
+.exec-sum__li-name { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: var(--text); }
+.exec-sum__li-name > span { flex-shrink: 0; }
+.exec-sum__li-name > .exec-sum__li-text { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.exec-sum__li-spent { min-width: 0; text-align: right; color: var(--muted); font-weight: 600; }
+.exec-sum__li-remain { min-width: 0; text-align: right; font-weight: 800; color: var(--primary-600); }
+.exec-sum__li.is-ended .exec-sum__li-name, .exec-sum__li.is-ended .exec-sum__li-remain { color: var(--faint); }
+.exec-sum__empty { padding: 14px 4px; font-size: calc(13px * var(--fs)); color: var(--faint); }
+
+@media (max-width: 1024px) {
+  .exec-sum__list { padding: 10px 14px 12px; }
+}
+/* 폰: 소계 2칸 + 합계 1칸(가로 전체) */
+@media (max-width: 640px) {
+  .exec-sum__cards { grid-template-columns: 1fr 1fr; }
+  .exec-sum__card { padding: 12px 14px; gap: 8px; }
+  .exec-sum__card--total { grid-column: 1 / -1; border-left: 0 !important; border-top: 1px solid var(--line-soft); }
+  .exec-sum__fig dd { font-size: calc(12.5px * var(--fs)); }
+  .exec-sum__fig-remain dd { font-size: calc(14px * var(--fs)); }
+  .exec-sum__fig > div { gap: 6px; }
+  /* 폰 소계 칸(좁음): 두 금액을 위아래로 */
+  .exec-sum__card:not(.exec-sum__card--total) .exec-sum__line { flex-direction: column; gap: 2px; }
+  .exec-sum__card:not(.exec-sum__card--total) .exec-sum__line > div { justify-content: space-between; width: 100%; }
+  .exec-sum__line dd { font-size: calc(12.5px * var(--fs)); }
+  .exec-sum__line-remain dd { font-size: calc(14px * var(--fs)); }
+}
+/* 큰 글씨 + 좁은 화면: 소계도 1칸씩 */
+@media (max-width: 480px) {
+  :root[data-font="lg"] .exec-sum__cards { grid-template-columns: 1fr; }
+  :root[data-font="lg"] .exec-sum__card + .exec-sum__card { border-left: 0; border-top: 1px solid var(--line-soft); }
+}
+/* 폰: 상세 목록은 세로로 쌓기 */
+@media (max-width: 640px) {
+  .exec-sum__detail { grid-template-columns: 1fr; }
+  .exec-sum__detail::after { display: none; }
+  .exec-sum__list + .exec-sum__list { border-left: 0; border-top: 1px solid var(--line-soft); }
+  .exec-sum__li-spent { min-width: 0; }
+  .exec-sum__li-remain { min-width: 0; }
+}
+
+/* 표 제목행 정렬 버튼 */
+.exec-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; background: none; border: 0; font: inherit; color: inherit; cursor: pointer; }
+.exec-sort:hover { color: var(--text); }
+.exec-sort.is-on { color: var(--primary-700); }
+.exec-sort__ico { font-size: 0.85em; opacity: 0.45; }
+.exec-sort.is-on .exec-sort__ico { opacity: 1; }
+.t-right > .exec-sort { flex-direction: row; }
+
+/* ── 조회 기간 ‹ 시작월 › ~ ‹ 종료월 › ── */
+.month-range { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.month-range__sep { font-weight: 800; color: var(--faint); }
+.month-range__reset {
+  height: 30px; padding: 0 10px; border-radius: var(--r-pill); border: 1px solid var(--primary-200); background: var(--primary-25);
+  font-size: calc(12px * var(--fs)); font-weight: 700; color: var(--primary-700);
+}
+.month-range__reset:hover { background: var(--primary-50); }
+.exec-period-m { display: none; }
+.page-head__actions > .exec-cowork-m { display: none; }
+
+
+/* ── 집행 등록: 항목 입력 (사용일자 · 예산 유형 · 항목명 · 금액) ── */
+.reg-rows { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 12px; }
+.reg-row {
+  display: grid; gap: 10px 10px;
+  grid-template-columns: 160px minmax(0, 1fr) 170px;
+  grid-template-areas: 'top top top' 'date type type' 'name name amt' 'bal bal bal';
+  padding: 12px 14px 14px; border-radius: var(--r-lg); background: var(--surface-alt); border: 1px solid transparent;
+  transition: border-color 0.15s, background 0.15s;
+}
+.reg-row:focus-within { border-color: var(--primary-200); background: var(--primary-25); }
+.reg-row.is-over { border-color: var(--danger-200); background: var(--danger-50); }
+.reg-row--head { display: none; }
+.reg-row__top { grid-area: top; display: flex; align-items: center; justify-content: space-between; min-height: 24px; }
+.reg-row__no {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: var(--r-pill);
+  background: var(--surface); font-size: calc(11.5px * var(--fs)); font-weight: 800; color: var(--text-2);
+}
+.reg-row__no-label { margin-right: 4px; }
+.reg-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.reg-field__label { font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--muted); }
+.reg-field > :not(.reg-field__label) { width: 100%; min-width: 0; }
+.reg-row__date { grid-area: date; }
+.reg-row__type { grid-area: type; }
+.reg-row__name { grid-area: name; }
+.reg-row__amt { grid-area: amt; }
+/* 모바일: 금액 아래 이 예산의 집행 후 잔액 (PC 는 오른쪽 집행 요약) */
+.reg-row__bal { grid-area: bal; justify-self: end; margin: -2px 0 0; font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--muted); text-align: right; overflow-wrap: anywhere; }
+.reg-row__bal b { margin-left: 4px; font-size: calc(13px * var(--fs)); font-weight: 900; color: var(--primary-600); font-variant-numeric: tabular-nums; }
+.reg-row__bal.is-over, .reg-row__bal.is-over b { color: var(--danger-600); }
+@media (min-width: 1025px) { .reg-row__bal { display: none; } }
+.reg-add { margin: 0 0 10px; }
+.reg-note { margin-top: 8px; font-size: calc(12px * var(--fs)); color: var(--danger-700); }
+
+/* 넓은 화면: 머리글 한 줄 + 항목도 한 줄 (칸 이름은 머리글로) */
+@media (min-width: 1440px) {
+  .reg-row, .reg-row--head {
+    grid-template-columns: 40px 150px minmax(150px, 1fr) minmax(140px, 1.3fr) 150px 64px;
+    grid-template-areas: 'no date type name amt del';
+    align-items: center; padding: 10px 12px;
+  }
+  .reg-row__top { display: contents; }
+  .reg-row__no { grid-area: no; justify-self: center; }
+  .reg-row__no-label { display: none; }
+  .reg-row__del { grid-area: del; justify-self: end; }
+  .reg-field__label { display: none; }
+  .reg-row--head {
+    display: grid; padding-top: 0; padding-bottom: 0; border: 0; background: none;
+    font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--faint);
+  }
+  .reg-row--head .reg-row__no { height: auto; padding: 0; background: none; color: var(--faint); }
+  .reg-row--head span:nth-child(2) { grid-area: date; }
+  .reg-row--head span:nth-child(3) { grid-area: type; }
+  .reg-row--head span:nth-child(4) { grid-area: name; }
+  .reg-row--head span:nth-child(5) { grid-area: amt; }
+  .reg-row--head > span { text-align: center; }
+}
+
+/* 집행 요약(PC): 예산 항목별 현재 잔액 → 이번 입력 → 집행 후 잔액 */
+.reg-sum { display: flex; flex-direction: column; gap: 10px; }
+.reg-sum__item { padding: 12px 14px; border-radius: var(--r-lg); background: var(--surface-alt); }
+.reg-sum__item.is-over { background: var(--danger-50); }
+.reg-sum__name { display: flex; flex-direction: column; margin-bottom: 8px; }
+.reg-sum__name b { font-size: calc(13.5px * var(--fs)); overflow-wrap: anywhere; }
+.reg-sum__name small { font-size: calc(11.5px * var(--fs)); color: var(--faint); }
+.reg-sum dl { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.reg-sum dl > div { display: flex; justify-content: space-between; gap: 10px; font-size: calc(12.5px * var(--fs)); color: var(--muted); }
+.reg-sum dd { margin: 0; font-weight: 700; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.reg-sum__after { margin-top: 2px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.reg-sum__after dt { font-weight: 800; color: var(--text); }
+.reg-sum__after dd { font-size: calc(15px * var(--fs)); font-weight: 900; color: var(--primary-600); }
+.reg-sum__warn { margin-top: 6px; font-size: calc(12px * var(--fs)); font-weight: 700; color: var(--danger-700); }
+.reg-sum__empty { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: var(--r-lg); background: var(--surface-alt); font-size: calc(12.5px * var(--fs)); color: var(--faint); }
+.reg-sum__empty b { color: var(--primary-600); }
+
+@media (max-width: 1024px) {
+  /* 모바일: 기간 선택은 화면 맨 위 (PC 는 제목 옆) */
+  .exec-period-m { display: block; margin-bottom: 14px; }
+  .page-head__actions > .exec-cowork-m { display: inline-flex; }
+
+}
+
+@media (max-width: 640px) {
+  /* 모바일 집행 등록: 바깥 카드는 걷어내고 항목마다 흰 카드 — [항목 n ··· 삭제] 머리 / [칸 이름 | 입력란] 한 줄씩 */
+  .reg-card.card { padding: 0; background: none; border: 0; box-shadow: none; }
+  .reg-head .section-head { margin-bottom: 10px; }
+  .reg-head .section-head__sub { display: none; }
+  .reg-rows { gap: 12px; margin-top: 0; }
+  .reg-row {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'top' 'date' 'type' 'name' 'amt' 'bal';
+    gap: 8px; padding: 0 14px 14px;
+    background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-xs);
+    scroll-margin: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 12px) 0 calc(76px + var(--safe-bottom)); /* 아래는 하단 버튼 바 높이만큼 */
+  }
+  .reg-row:focus-within { background: var(--surface); border-color: var(--primary-300); box-shadow: var(--ring); }
+  .reg-row.is-over { background: var(--surface); border-color: var(--danger-200); box-shadow: inset 0 0 0 1px var(--danger-200); }
+  .reg-row__top {
+    min-height: 0; margin: 0 -14px 2px; padding: 9px 10px 9px 14px;
+    border-bottom: 1px solid var(--line-soft); background: var(--surface-alt); border-radius: var(--r-lg) var(--r-lg) 0 0;
+  }
+  .reg-row.is-over .reg-row__top { background: var(--danger-50); }
+  .reg-row__no { height: 24px; padding: 0 10px; background: var(--primary-50); color: var(--primary-700); font-size: calc(12px * var(--fs)); }
+  .reg-field { flex-direction: row; align-items: center; gap: 10px; }
+  .reg-field__label { flex: 0 0 calc(58px * var(--fs)); font-size: calc(12.5px * var(--fs)); color: var(--text-2); white-space: nowrap; }
+  .reg-field > :not(.reg-field__label) { flex: 1 1 auto; width: auto; }
+
+  /* 기간 선택 두 칸이 좁은 화면에서도 한 줄 */
+  .month-range { gap: 4px; }
+  .month-range .month-step .step-nav__value { padding: 0 2px; font-size: calc(13px * var(--fs)); }
+}
+/* 아주 좁은 화면: ‹ 시작월 › ~ ‹ 종료월 › 이 한 줄에 들어가도록 */
+@media (max-width: 400px) {
+  .month-range .month-step { padding: 0 2px; }
+  .month-range .month-step .step-nav__btn { width: 22px; }
+  .month-range .month-step .step-nav__value { font-size: calc(12.5px * var(--fs)); }
+}
+
+/* ── 집행 이력 표: 1줄 = 1건 · 행 선택 후 칸을 한 번 더 눌러 수정 · 체크 삭제 ── */
+.exec-filter__del { margin-left: auto; gap: 4px; }
+.exec-hint { margin: -6px 0 10px; font-size: calc(12px * var(--fs)); color: var(--faint); }
+.exec-table td { vertical-align: middle; }
+.exec-table__check { text-align: center; }
+.exec-table tbody tr.is-clickable { cursor: pointer; }
+.exec-table tbody tr.is-clickable:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.exec-table tbody tr.is-checked td { background: var(--primary-25); }
+.exec-table tbody tr.is-selected td { background: var(--primary-50); }
+.exec-table tbody tr.is-selected td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+/* 선택된 행: 수정할 수 있는 칸에 점선 힌트 */
+.exec-table tbody tr.is-selected td:is(.exec-table__use, .exec-table__typecol, .exec-table__name, .exec-table__amtcol) > :first-child {
+  border-radius: var(--r-sm); outline: 1px dashed transparent; outline-offset: 3px; transition: outline-color 0.15s;
+}
+.exec-table tbody tr.is-selected td:is(.exec-table__use, .exec-table__typecol, .exec-table__name, .exec-table__amtcol):hover > :first-child { outline-color: var(--primary-300); }
+.exec-table__name { font-size: calc(13.5px * var(--fs)); font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.exec-table__amtcol .amount-input { width: 100%; }
+.exec-table__use .month-field { width: 100%; }
+
+/* 예산 유형: 긴 사업명은 표에서만 … (전체 이름은 목록·툴팁에서) */
+.exec-table__type-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.exec-table__type-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(13px * var(--fs)); font-weight: 600; color: var(--text); }
+.exec-type-pick {
+  display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; height: 32px; padding: 0 8px;
+  border-radius: var(--r-sm); border: 1px solid var(--primary-300); background: var(--surface);
+  font-size: calc(13px * var(--fs)); font-weight: 600; color: var(--text);
+}
+.exec-type-pick .sbox__value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exec-type-pick.is-open { box-shadow: var(--ring); }
+.exec-type-pop { max-width: min(420px, calc(100vw - 16px)); }
+.exec-type-pop .sbox__opt { white-space: normal; overflow-wrap: anywhere; }
+
+/* PC: 열 너비 고정 — 사업명이 길어도 표 좌우 간격 그대로 */
+@media (min-width: 1025px) {
+  .exec-table { table-layout: fixed; width: 100%; }
+  .exec-col--check { width: 44px; }
+  .exec-col--date { width: 112px; }
+  .exec-col--type { width: 220px; } /* 긴 사업명은 … — 남는 폭은 항목명 */
+  .exec-col--amt { width: 128px; }
+  .exec-col--reg { width: 112px; }
+  /* 큰 글씨: 날짜는 짧은 형식(26/9/5 · 9/5)이라 열을 줄이고, 예산 유형 열도 줄여 항목명 칸 확보 — 가로 스크롤 없음 */
+  :root[data-font="lg"] .exec-col--date { width: 108px; }
+  :root[data-font="lg"] .exec-col--reg { width: 92px; }
+  :root[data-font="lg"] .exec-col--type { width: 200px; }
+  :root[data-font="lg"] .exec-col--amt { width: 156px; }
+  :root[data-font="lg"] .exec-table thead th { white-space: normal; }
+  .exec-table th, .exec-table td { padding-left: 12px; padding-right: 12px; }
+  .exec-table td { padding-top: 11px; padding-bottom: 11px; }
+  .exec-table .exec-table__check { padding-left: 16px; padding-right: 4px; }
+  .exec-table tr > :last-child { padding-right: 18px; }
+  /* 항목명: 예산 유형·금액과 떨어지도록 좌우 여백을 넓게 */
+  .exec-table tr > :nth-child(4) { padding-left: 24px; padding-right: 24px; } /* 4번째 열 = 항목명 (colgroup 순서) */
+  /* 표 정렬 규칙: 날짜(사용일자·등록일) 가운데 · 금액 오른쪽 · 예산 유형·항목명(입력 값) 왼쪽 — 모바일 카드형은 제외 */
+  .exec-table td.exec-table__use, .exec-table td.exec-table__date { text-align: center; }
+  .exec-table tr > :last-child { padding-left: 15px; padding-right: 15px; } /* 등록일 가운데가 쏠리지 않도록 좌우 같게 */
+}
+/* 합계 줄 */
+.exec-table__total td { padding-top: 13px; padding-bottom: 13px; border-top: 1.5px solid var(--line); border-bottom: 0; background: var(--surface-alt); font-weight: 800; color: var(--text); }
+.exec-table__total small { margin-left: 4px; font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--faint); }
+.exec-table__total .num { font-size: calc(16px * var(--fs)); font-weight: 900; color: var(--primary-600); }
+@media (max-width: 1024px) {
+  .exec-table__total { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--surface-alt); border-top: 1.5px solid var(--line); }
+  .exec-table__total td { padding: 0; border: 0; background: none; }
+  .exec-table__total td:first-child, .exec-table__total td.exec-table__date { display: none; }
+}
+/* 등록일: 보조 정보라 작게 */
+.exec-table td.exec-table__date { font-size: calc(12px * var(--fs)); color: var(--faint); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1024px) {
+  /* 표 → 2줄 [집행일자 · 항목명 ··· 금액] / [　 · 예산 항목(항목명 아래)] (체크박스·등록일 없음, 꾹 눌러 선택) */
+  /* 날짜 칸: 올해 기록은 'MM-DD' 만 표시하므로 좁게 (지난해 기록 줄만 'YYYY-MM-DD' 폭) */
+  .exec-table { --m-date: calc(40px * var(--fs)); }
+  .exec-table tbody tr.is-past-year { --m-date: calc(76px * var(--fs)); }
+  /* 큰 글씨: 한 줄에 날짜·항목·금액이 함께 있으므로 날짜는 1.2배까지만 (항목명 자리 확보) */
+  :root[data-font="lg"] .exec-table { --m-date: calc(40px * 1.2); }
+  :root[data-font="lg"] .exec-table tbody tr.is-past-year { --m-date: calc(76px * 1.2); }
+  :root[data-font="lg"] .exec-table tbody .exec-table__month { font-size: calc(12.5px * 1.2); }
+  .exec-table colgroup { display: none; }
+  .exec-table thead tr {
+    display: grid; grid-template-columns: var(--m-date) minmax(0, 1fr) auto; align-items: center; gap: 0 10px;
+    grid-template-areas: 'use name amt' '. type type'; padding: 4px 16px; background: var(--surface-alt); border-bottom: 1px solid var(--line);
+  }
+  .exec-table thead th { padding: 3px 0; border: 0; background: none; }
+  .exec-table thead th:nth-child(1), .exec-table thead th.exec-table__date { display: none; }
+  .exec-table thead th:nth-child(2) { grid-area: use; }
+  .exec-table thead th:nth-child(3) { grid-area: type; }
+  .exec-table thead th:nth-child(4) { grid-area: name; }
+  .exec-table thead th:nth-child(5) { grid-area: amt; }
+  /* 예외: 모바일 2줄 제목은 아래 값과 같은 쪽으로 (날짜·항목·예산 항목 왼쪽, 금액 오른쪽) */
+  .table.exec-table thead tr th { text-align: left; }
+  .table.exec-table thead tr th:nth-child(5) { text-align: right; }
+  .exec-table tbody tr[data-rec] {
+    display: grid; grid-template-columns: var(--m-date) minmax(0, 1fr) auto; align-items: center; gap: 6px 10px;
+    grid-template-areas: 'use name amt' '. type type';
+    padding: 12px 16px; border-bottom: 1px solid var(--line-soft);
+    -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+  .exec-table tbody tr[data-rec] td { padding: 0; border: 0; min-width: 0; background: none; box-shadow: none; }
+  .exec-table tbody tr[data-rec] .exec-table__check { display: none; }
+  /* 꾹 눌러 삭제 선택된 행 / 수정하려고 선택한 행 */
+  .exec-table tbody tr.is-checked { background: var(--danger-50); box-shadow: inset 4px 0 0 var(--danger); }
+  .exec-table tbody tr.is-checked .exec-table__name > span::before { content: '✓ '; color: var(--danger-600); font-weight: 900; }
+  .exec-table tbody tr.is-selected { background: var(--primary-50); box-shadow: inset 4px 0 0 var(--primary); }
+  .exec-table tbody tr.is-selected td:first-child { box-shadow: none; }
+  .exec-table__name { grid-area: name; font-size: calc(14px * var(--fs)); font-weight: 700; line-height: 1.35; }
+  .exec-table__amtcol { grid-area: amt; justify-self: end; align-self: baseline; }
+  .exec-table__amtcol .exec-table__amt { font-size: calc(15px * var(--fs)); font-weight: 900; }
+  .exec-table__use { grid-area: use; align-self: baseline; }
+  .exec-table__name { align-self: baseline; }
+  .exec-table__month { font-size: calc(12.5px * var(--fs)); font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .exec-table__typecol { grid-area: type; }
+  .exec-table__typecol .type-ico { width: 18px; height: 18px; font-size: calc(10.5px * var(--fs)); }
+  .exec-table__typecol .exec-table__type-cell { gap: 5px; }
+  .exec-table__type-name { font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--text-2); }
+  /* 모바일은 등록일 숨김 */
+  .exec-table tbody tr[data-rec] .exec-table__date { display: none; }
+  .exec-table__amtcol .amount-input { width: 140px; }
+  /* 수정 중인 칸은 줄 전체 폭 */
+  .exec-table tbody tr[data-rec]:has(.exec-table__amtcol .amount-input) { grid-template-areas: 'use name name' '. type type' 'amt amt amt'; }
+  .exec-table tbody tr[data-rec]:has(.exec-table__amtcol .amount-input) .exec-table__amtcol { justify-self: stretch; }
+  .exec-table tbody tr[data-rec]:has(.exec-table__amtcol .amount-input) .amount-input { width: 100%; }
+  .exec-table tbody tr[data-rec]:has(.exec-table__use .month-field) { grid-template-areas: 'use use use' 'name name amt' 'type type type'; }
+  .exec-table tbody tr[data-rec]:has(.exec-type-pick) { grid-template-areas: 'use name amt' 'type type type'; }
+  .exec-hint { margin-top: -4px; }
+  /* 합계 줄 */
+  .exec-table__total { padding: 13px 16px; }
+}
+/* 폰: 선택 삭제 버튼은 줄이 바뀌어도 오른쪽 */
+@media (max-width: 480px) {
+  .exec-filter__del { margin-left: auto; }
+}
+/* 폰 + 큰 글씨: 전체/팀 운영/프로젝트 필터를 한 줄로 (360px 기준 — 좌우 여백만 줄임) */
+@media (max-width: 640px) {
+  :root[data-font="lg"] .exec-filter .chip-row { flex-wrap: nowrap; }
+  :root[data-font="lg"] .exec-filter .chip { padding-left: 10px; padding-right: 10px; white-space: nowrap; }
+}
+
+/* 모바일 요약: 접힌 상태는 잔여 예산만 / 펼친 상세는 제목행 한 번만 (팀·프로젝트는 아이콘으로 구분) */
+@media (max-width: 1024px) {
+  .exec-sum:not(.is-open) .exec-sum__line > div:not(.exec-sum__line-remain) { display: none; }
+  .exec-sum:not(.is-open) .exec-sum__card:not(.exec-sum__card--total) .exec-sum__line { flex-direction: row; }
+}
+@media (max-width: 640px) {
+  .exec-sum__list + .exec-sum__list { border-top: 1px dashed var(--line-soft); padding-top: 4px; }
+  .exec-sum__list + .exec-sum__list .exec-sum__li--head { display: none; }
+}
+
+/* ── 모바일 요약: 모두 한 줄씩 ── */
+.exec-sum-m__top { display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
+.exec-sum-m__label { display: flex; flex-direction: row; align-items: baseline; gap: 6px; min-width: 0; font-size: calc(13px * var(--fs)); font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.exec-sum-m__label small { font-size: calc(11px * var(--fs)); font-weight: 600; color: var(--faint); }
+/* 자리가 모자라면(큰 글씨·긴 조회 기간) 조회 기간·건수는 잘리지 않고 아래 줄로 */
+.exec-sum-m__label { flex-wrap: wrap; row-gap: 0; white-space: normal; overflow: visible; line-height: 1.35; }
+.exec-sum-m__label small { overflow-wrap: anywhere; }
+/* 큰 글씨: [잔여 예산 · 기간 · 건수] 윗줄 / [금액 ··· 상세] 아랫줄 */
+:root[data-font="lg"] .exec-sum-m__top { flex-wrap: wrap; row-gap: 4px; }
+:root[data-font="lg"] .exec-sum-m__label { flex: 1 0 100%; }
+:root[data-font="lg"] .exec-sum-m__total { margin-left: 0; }
+:root[data-font="lg"] .exec-sum-m__top .exec-sum__toggle { margin-left: auto; }
+.exec-sum-m__total { margin-left: auto; font-size: calc(17px * var(--fs)); font-weight: 900; color: var(--primary-600); white-space: nowrap; }
+.exec-sum-m__top .exec-sum__toggle { flex-shrink: 0; height: 30px; padding: 0 10px; }
+.exec-sum-m__list { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; margin: 0; padding: 4px 14px 10px; list-style: none; border-top: 1px solid var(--line-soft); background: var(--surface-alt); }
+.exec-sum-m__list.is-open { grid-template-columns: minmax(0, 1fr) auto auto; }
+.exec-sum-m__li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; padding: 6px 0; font-size: calc(12.5px * var(--fs)); }
+.exec-sum-m__li + .exec-sum-m__li:not(.exec-sum-m__li--head) { border-top: 1px dashed var(--line-soft); }
+.exec-sum-m__li--head { padding: 4px 0 2px; font-size: calc(11px * var(--fs)); font-weight: 700; color: var(--faint); }
+.exec-sum-m__li--head span { text-align: center; }
+.exec-sum-m__name { display: flex; align-items: center; gap: 5px; min-width: 0; white-space: nowrap; font-weight: 700; color: var(--text); }
+.exec-sum-m__name > span { flex-shrink: 0; }
+.exec-sum-m__name > .exec-sum-m__text { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.exec-sum-m__spent { text-align: right; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.exec-sum-m__remain { text-align: right; font-weight: 800; color: var(--primary-600); white-space: nowrap; }
+.exec-sum-m__li.is-ended .exec-sum-m__name, .exec-sum-m__li.is-ended .exec-sum-m__remain { color: var(--faint); }
+.exec-sum-m__foot { display: flex; justify-content: space-between; gap: 12px; padding: 9px 14px 11px; border-top: 1px solid var(--line-soft); font-size: calc(12px * var(--fs)); color: var(--muted); white-space: nowrap; }
+.exec-sum-m__foot b { margin-left: 4px; font-weight: 800; color: var(--text-2); }
+/* 모바일 요약: 소계 줄(팀 운영 / 프로젝트 운영) + 펼침 시 항목 줄 들여쓰기 */
+.exec-sum-m__li--group .exec-sum-m__name { font-weight: 800; }
+.exec-sum-m__li--group .exec-sum-m__remain { font-weight: 900; }
+.exec-sum-m__list.is-open .exec-sum-m__li--group:not(:nth-child(2)) { margin-top: 4px; border-top: 1px solid var(--line); }
+.exec-sum-m__li--item { font-size: calc(12px * var(--fs)); }
+.exec-sum-m__li--item .exec-sum-m__name { padding-left: 14px; font-weight: 600; color: var(--text-2); }
+.exec-sum-m__li--item .exec-sum-m__remain { font-weight: 700; color: var(--primary-700); }
+
+/* ── 모바일 선택 모드 바 ── */
+.exec-selbar {
+  position: sticky; top: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 6px); z-index: var(--z-drop);
+  display: flex; align-items: center; gap: 6px; margin-bottom: 10px; padding: 8px 8px 8px 14px; border-radius: var(--r-lg);
+  background: var(--bar-bg); border: 1px solid var(--bar-line); color: var(--white); box-shadow: var(--shadow-bar);
+  animation: fade-in 0.18s ease both;
+}
+.exec-selbar__count { flex: 1; min-width: 0; font-size: calc(12.5px * var(--fs)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.exec-selbar__count b { font-weight: 900; }
+.exec-selbar .btn { flex-shrink: 0; }
+/* 진한 바 위: 글자 버튼은 흰 글자 + 옅은 바탕 */
+.exec-selbar .btn--ghost { background: var(--glass-on-ink); color: var(--white); }
+/* 선택 모드: 선택 안 된 행은 살짝 흐리게 → 선택된 행이 눈에 띄게 */
+@media (max-width: 1024px) {
+  .is-select-mode .exec-table tbody tr[data-rec]:not(.is-checked) { opacity: 0.72; }
+}

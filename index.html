@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="코웍-코인 : 프로젝트 예산 관리 시스템 — 프로젝트는 함께일 때 더 맛있으니까!" />
+    <meta name="theme-color" content="#FFFFFF" />
+    <!-- 화면 모드를 첫 페인트 전에 적용 (src/lib/theme.ts 와 같은 키·규칙) -->
+    <script>
+      try {
+        var t = localStorage.getItem('cowork-coin-theme');
+        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        // 로그인 전(세션 없음)이면 로그인 화면이 라이트 전용이라 라이트로 시작
+        var st = JSON.parse(localStorage.getItem('cowork-coin-v4') || 'null');
+        if (!st || !st.session) t = 'light';
+        document.documentElement.dataset.theme = t;
+      } catch (e) { /* 저장소 접근 불가 — 라이트로 시작 */ }
+    </script>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="코웍-코인" />
+
+    <!-- Open Graph / Twitter — __SITE_URL__ 은 빌드 시 VITE_SITE_URL(.env)로 치환 -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="코웍-코인" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:url" content="__SITE_URL__/" />
+    <meta property="og:title" content="코웍-코인 : 함께 하는 프로젝트, 맛있게 일해요!" />
+    <meta property="og:description" content="함께 계획하고, 함께 성장하는 프로젝트 예산 관리 앱. 팀 회의비와 프로젝트 경비를 한곳에서 관리하세요." />
+    <meta property="og:image" content="__SITE_URL__/og-image.jpg?v=2" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="코웍-코인 앱 아이콘과 문구 — 함께 하는 프로젝트, 맛있게 일해요! 프로젝트 예산을 함께 계획하고 기록해요." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="코웍-코인 : 함께 하는 프로젝트, 맛있게 일해요!" />
+    <meta name="twitter:description" content="함께 계획하고, 함께 성장하는 프로젝트 예산 관리 앱" />
+    <meta name="twitter:image" content="__SITE_URL__/og-image.jpg?v=2" />
+
+    <link rel="icon" type="image/png" href="/icons/favicon-64.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;600;700;800;900&display=swap"
+    />
+    <title>코웍-코인 : 프로젝트 예산 관리 시스템</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
