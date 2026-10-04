@@ -18,13 +18,26 @@ REVIEW_BELOW = 0.6  # 이 confidence 미만이면 needsReview
 
 STORE_KEYS = re.compile(r"(상호명|상호|가맹점명|가맹점|매장명|점포명|업체명)\s*[:：]?\s*")
 NOT_STORE = re.compile(
-    r"[영엄염]수\s?[증중]|감사|이용해|전표|고객용|카드|사업자|등록번호|대표|전화|TEL|주소|일시|번호|승인|결제|합계|금액|단가|수량|품명|POS|No\.|교환|환불|반품|상품",
+    r"[영엄염]수\s?[증중]|감사|이용해|전표|고객용|카드|사업자|등록번호|대표|전화|TEL|주소|일시|번호|승인|결제|합계|금액|단가|수량|품명|POS|No\.|교환|환불|반품|상품"
+    # 카드 전표 머리글 — 오인식 형태 포함 (신용승인 → 신용승민 · 고객/가맹점용 → 고액/가점용)
+    r"|신용|체크|승[인민님]|[고교][객액갱]|가[맹뱅]?[점섬]용|[객맹]용",
     re.I,
 )
+# 사업자등록번호 (오인식 허용: 첫 자리 영문 G·O 등) — 상호는 보통 이 번호와 같은 줄 왼쪽 또는 바로 윗줄
+BIZ_NO = re.compile(r"[\dA-Z]{3}\s?-\s?\d{2}\s?-\s?\d{4,5}")
+# 자주 틀리는 체인 이름 보정 (롯데 → 못데·옷네·롯네 · 마트 → 바트 · 쇼핑 → 쇼핀)
+CHAIN_FIX = [
+    (re.compile(r"[롯못옷론][데네][\s]?[마바]트"), "롯데마트"),
+    (re.compile(r"[롯못옷론][데네][\s]?쇼[핑핀]"), "롯데쇼핑"),
+    (re.compile(r"[롯못옷론][데네][\s]?[슈수]퍼"), "롯데슈퍼"),
+    (re.compile(r"[이아][마바]트"), "이마트"),
+    (re.compile(r"홈[플풀][러라]스"), "홈플러스"),
+]
 TAIL = re.compile(r"\s*(?:T\s?[:.]|TEL|☎|전화|대표|사업자|\(?\d{2,4}[-)]\d{3,4}|\d{3}-\d{2}-\d{5}).*$", re.I)
-CHAIN_BRANCH = re.compile(
-    r"(이마트24|이마트|홈플러스|롯데마트|트레이더스|노브랜드|코스트코|하나로마트|GS25|CU|세븐일레븐|다이소|올리브영|스타벅스|투썸플레이스|이디야|파리바게뜨|뚜레쥬르)\s?([가-힣]{1,6}점)?"
-)
+CHAINS = "이마트24|이마트|홈플러스|롯데마트|롯데슈퍼|트레이더스|노브랜드|코스트코|하나로마트|GS25|CU|세븐일레븐|다이소|올리브영|스타벅스|투썸플레이스|이디야|파리바게뜨|뚜레쥬르"
+CHAIN_BRANCH = re.compile(rf"({CHAINS})\s?([가-힣]{{1,6}}점)?")
+# 체인 이름 바로 뒤 지점명 끝 '섬' = '점' 오인식 (부평섬 → 부평점)
+CHAIN_SEOM = re.compile(rf"({CHAINS})\s?([가-힣]{{1,5}})섬")
 
 
 def _clean_store(s: str) -> str:
@@ -34,21 +47,53 @@ def _clean_store(s: str) -> str:
     return re.sub(r"\s{2,}", " ", s).strip()[:24]
 
 
+def _fix_chain(s: str) -> str:
+    """법인명((주) 앞)은 버리고 매장명만 · 체인 이름 오인식 보정 · 체인 뒤 지점명 끝 '섬' → '점'."""
+    parts = re.split(r"\(주\)|㈜|\(유\)", s)
+    if len(parts) > 1 and re.search(r"[가-힣]{2,}", parts[-1]):
+        s = parts[-1]
+    for pat, rep in CHAIN_FIX:
+        s = pat.sub(rep, s)
+    # 체인 이름 바로 뒤 지점명만 (부평섬 → 부평점) — 원래 '섬'으로 끝나는 가게 이름은 건드리지 않음
+    return CHAIN_SEOM.sub(r"\1 \2점", s)
+
+
+def _store_like(s: str) -> bool:
+    return bool(re.search(r"[가-힣]{2,}|[A-Za-z]{3,}", s)) and not NOT_STORE.search(s.replace(" ", "")) and not re.search(r"\d{3,}", s)
+
+
+def _chain(s: str) -> str | None:
+    m = CHAIN_BRANCH.search(s)
+    return (f"{m[1]} {m[2]}".strip() if m[2] else m[1]) if m else None
+
+
 def find_merchant(rows: list[Row]) -> str | None:
-    """① '상호:' 표기 ② 윗부분 체인·지점명 ③ 윗부분 첫 한글 줄 (내부 추출 — 화면 반영 여부는 프론트가 결정)."""
+    """
+    ① '상호:' 표기 ② 사업자등록번호 줄의 왼쪽(없으면 바로 윗줄) ③ 윗부분 체인·지점명 ④ 윗부분 첫 한글 줄
+    (내부 추출 — 화면 반영 여부는 프론트가 결정). 카드 전표 머리글(신용승인·고객/가맹점용)은 건너뜀.
+    """
     for r in rows:
         m = STORE_KEYS.search(r.text)
         if m:
-            rest = _clean_store(r.text[m.end():])
+            rest = _clean_store(_fix_chain(r.text[m.end():]))
             if re.search(r"[가-힣A-Za-z]{2,}", rest):
                 return rest
-    top = [_clean_store(r.text) for r in rows[:12]]
-    for s in top:
-        m = CHAIN_BRANCH.search(s)
-        if m:
-            return f"{m[1]} {m[2]}".strip() if m[2] else m[1]
-    for s in top:
-        if re.search(r"[가-힣]{3,}", s) and not NOT_STORE.search(s.replace(" ", "")) and not re.search(r"\d{3,}", s):
+    top = rows[:12]
+    for i, r in enumerate(top):
+        biz = next((t for t in r.tokens if BIZ_NO.search(t.text)), None)
+        if not biz:
+            continue
+        left = " ".join(t.text for t in r.tokens if t.cx < biz.cx) or BIZ_NO.split(r.text)[0]
+        for s in [_clean_store(_fix_chain(left))] + ([_clean_store(_fix_chain(top[i - 1].text))] if i > 0 else []):
+            if _store_like(s):
+                return _chain(s) or s
+    fixed = [_clean_store(_fix_chain(r.text)) for r in top]
+    for s in fixed:
+        c = _chain(s)
+        if c:
+            return c
+    for s in fixed:
+        if re.search(r"[가-힣]{3,}", s) and _store_like(s):
             return s
     return None
 

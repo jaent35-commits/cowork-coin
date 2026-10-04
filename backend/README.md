@@ -58,6 +58,7 @@ uvicorn main:app \
 | 이름 | 기본 | 설명 |
 |---|---|---|
 | `APP_ENV` | production | `development` 면 추출 필드·점수 로그 (원문·이미지는 어느 환경에서도 저장·로그 안 함) |
+| `PADDLE_PDX_CACHE_HOME` | `~/.paddlex` | 모델 저장 위치. **Windows 사용자 폴더 이름에 한글이 있으면 반드시 영문 경로로 지정** (예: `C:\Users\Public\paddlex`) — Paddle 추론 엔진이 한글 경로의 모델 파일을 읽지 못해 서버 시작 시 `json.exception.parse_error.101 … empty input` 으로 실패함 |
 | `OCR_DET_MODEL` | PP-OCRv5_mobile_det | `PP-OCRv5_server_det` 는 더 정확할 수 있으나 CPU 에서 수십 배 느림 |
 | `OCR_DET_SIDE` | 1600 | 검출 입력 긴 변 상한 |
 | `OCR_TEXTLINE_ORI` | 0 | 1 = 뒤집힌 글줄 방향 보정 (약 20% 느림) |

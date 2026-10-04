@@ -1,14 +1,16 @@
 /**
  * 영수증 인식 파이프라인 — Primary: PaddleOCR(백엔드 API) · Secondary 검증: Tesseract.js v7 한국어(브라우저, receiptOcr.ts)
  *
- * 1. 같은 이미지를 PaddleOCR API 와 Tesseract 에 동시에 보냄
+ * 1. 서버(PaddleOCR)로 먼저 읽음 — 날짜·금액이 확실하면 그대로 끝 (휴대폰 인식 생략)
+ * 1-1. 서버가 없거나(60초간 건너뜀) 결과가 애매하면 휴대폰(Tesseract)으로 읽어 비교
  * 2. 각 엔진 결과에서 날짜·결제금액을 뽑음 (전체 텍스트가 아니라 최종 필드 단위로 비교)
  * 3. 같으면 confidence 를 높이고, 다르면 PaddleOCR 후보 점수(키워드·bbox 위치·OCR 신뢰도·부가세 검산·금액 형식)로 결정
  * 4. 그래도 판단이 어려우면 needsReview = true
  * - 백엔드가 없거나 실패하면 Tesseract 결과만 사용 (기존 동작과 같음)
  * - 운영 환경에서는 이미지·OCR 텍스트를 저장하거나 로그로 남기지 않음. 개발 환경에서만 엔진 통계(필드 결과 개수)를 저장
  */
-import { readReceipt, releaseReceiptOcr, uploadImage, type ReceiptResult } from './receiptOcr';
+import { deviceImage, readReceipt, releaseReceiptOcr, uploadImage, type ReceiptResult } from './receiptOcr';
+import { isMobileDevice } from './install';
 
 export type Engine = 'paddleocr' | 'tesseract';
 type Field = 'date' | 'amount';
@@ -41,7 +43,12 @@ const REVIEW_BELOW = 0.6;
 /** 진행 중인 PaddleOCR 요청 — 집행 등록 화면을 벗어나면 연결까지 끊어 서버 대기열에서도 빠지게 함 */
 const inflight = new Set<AbortController>();
 
+/** 서버가 꺼져 있으면 잠시 서버 요청을 건너뜀 (매번 실패를 기다리지 않게) */
+const SERVER_RETRY_MS = 60_000;
+let serverDownUntil = 0;
+
 async function paddleOcr(file: File): Promise<PaddleResponse | null> {
+  if (Date.now() < serverDownUntil) return null;
   const ctrl = new AbortController();
   inflight.add(ctrl);
   try {
@@ -51,12 +58,14 @@ async function paddleOcr(file: File): Promise<PaddleResponse | null> {
     const t = setTimeout(() => ctrl.abort(), TIMEOUT);
     try {
       const body = new FormData();
-      body.append('file', img, img === file ? (file.name || 'receipt.jpg') : 'receipt.jpg');
+      body.append('file', img, img.name || 'receipt.jpg');
       const res = await fetch(API, { method: 'POST', body, signal: ctrl.signal });
-      if (!res.ok) return null; // 서버 대기 초과(503) 등 → Tesseract 만 사용
+      // 503 = 서버는 살아 있고 붐빔 → 이번만 휴대폰 인식 / 그 밖의 오류(프록시 연결 실패 등) = 서버 없음
+      if (!res.ok) { if (res.status !== 503) serverDownUntil = Date.now() + SERVER_RETRY_MS; return null; }
       return (await res.json()) as PaddleResponse;
     } catch {
-      return null; // 백엔드 미실행·네트워크 오류·취소 → Tesseract 만 사용
+      if (!ctrl.signal.aborted) serverDownUntil = Date.now() + SERVER_RETRY_MS;
+      return null; // 백엔드 미실행·네트워크 오류·취소 → 휴대폰 인식
     } finally {
       clearTimeout(t);
     }
@@ -107,11 +116,38 @@ function decide<T extends string | number>(p: PaddleResponse | null, t: ReceiptR
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
-/** 영수증 이미지 → 최종 결과 (UI 는 ReceiptResult 형태 그대로 받음 — 기존 화면·동작 유지) */
-export async function scanReceipt(file: File, onProgress?: (p: number) => void): Promise<ReceiptResult & { final: FinalReceipt }> {
-  const [ps, ts] = await Promise.allSettled([paddleOcr(file), readReceipt(file, onProgress)]);
-  const p = ps.status === 'fulfilled' ? ps.value : null;
-  const t = ts.status === 'fulfilled' ? ts.value : null;
+/** 휴대폰 안 인식 상한 — 넘으면 중단하고(작업자 해제) 읽은 만큼만 사용 */
+const DEVICE_TIMEOUT = 30_000;
+function withTimeout<T>(task: Promise<T>, ms: number): Promise<T> {
+  if (!ms) return task;
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => { releaseReceiptOcr(); reject(new Error('device timeout')); }, ms);
+    task.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+  });
+}
+
+/** 인식 단계 — 화면 안내용 (server: 서버에서 읽는 중 · device: 휴대폰에서 읽는 중) */
+export type ScanStage = 'server' | 'device';
+
+/** 서버 결과만으로 끝내도 되는지 — 날짜·금액을 모두 읽었고 서버가 확인 필요로 표시하지 않음 */
+const paddleSure = (p: PaddleResponse | null) =>
+  !!p && !p.needsReview && !!p.receipt.date && p.receipt.amount != null && p.confidence.date >= REVIEW_BELOW && p.confidence.amount >= REVIEW_BELOW;
+
+/**
+ * 영수증 이미지 → 최종 결과 (UI 는 ReceiptResult 형태 그대로 받음 — 기존 화면·동작 유지)
+ * 순서: ① 서버(PaddleOCR) → 확실하면 바로 끝 ② 서버가 없거나 애매하면 휴대폰(Tesseract)으로 읽어 필드별 비교
+ * (예전: 두 엔진을 항상 함께 돌리고 둘 다 끝날 때까지 기다림 → 서버가 1~2초에 끝나도 휴대폰 인식(수십 초)을 기다렸음)
+ */
+export async function scanReceipt(file: File, onProgress?: (p: number) => void, onStage?: (s: ScanStage) => void): Promise<ReceiptResult & { final: FinalReceipt }> {
+  onStage?.('server');
+  const p = await paddleOcr(file);
+  let t: ReceiptResult | null = null;
+  // 휴대폰: 서버가 날짜·금액 중 하나라도 읽었으면 그 결과로 끝 (휴대폰 안 인식은 카메라 사진에서 수십 초~멈춤 → 못 읽은 칸만 직접 입력)
+  const serverRead = !!p && (!!p.receipt.date || p.receipt.amount != null);
+  if (!paddleSure(p) && !(isMobileDevice && serverRead)) {
+    onStage?.('device');
+    t = await withTimeout(readReceipt(await deviceImage(file), onProgress), isMobileDevice ? DEVICE_TIMEOUT : 0).catch(() => null);
+  }
   if (!p && !t) throw new Error('ocr failed');
 
   const date = decide<string>(p, t, 'date');

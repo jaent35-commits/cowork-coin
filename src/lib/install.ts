@@ -34,8 +34,24 @@ export function initInstall() {
   window.addEventListener('appinstalled', () => { deferred = null; installed = true; emit(); });
 }
 
-/** 설치 창 띄우기 — 'unavailable' 이면 브라우저가 설치 창을 지원하지 않음(수동 안내 필요) */
+/** 설치 이벤트가 아직 안 왔으면 잠깐(ms) 기다림 — 화면을 연 직후 바로 눌러도 안내 대신 설치 창이 뜨도록 */
+function waitForPrompt(ms: number): Promise<void> {
+  if (deferred) return Promise.resolve();
+  return new Promise(resolve => {
+    const done = () => { clearTimeout(t); subs.delete(check); resolve(); };
+    const check = () => { if (deferred) done(); };
+    const t = setTimeout(done, ms);
+    subs.add(check);
+  });
+}
+
+/**
+ * 설치 창 바로 띄우기 — 누르면 안내 없이 브라우저 설치 창(= 바로 설치)
+ * 'unavailable' 이면 이 브라우저는 설치 창을 열어 주지 않음(아이폰 사파리 등) → 수동 안내
+ */
 export async function promptInstall(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
+  // 아이폰은 설치 창이 없어 기다려도 오지 않음 (버튼을 누른 직후여야 설치 창을 열 수 있어 짧게만)
+  if (!deferred && !isIOS) await waitForPrompt(1500);
   if (!deferred) return 'unavailable';
   const e = deferred;
   await e.prompt();

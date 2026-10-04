@@ -4,6 +4,9 @@
  *   (receiptPrep.worker.ts 가 기본, 지원하지 않는 브라우저는 receiptOcr.ts 에서 메인 스레드로)
  */
 
+/** 전처리 이미지 최대 화소 — 휴대폰은 메모리가 작아 낮춤 (확대·이진화에 화소당 약 20바이트: 9백만 화소 ≈ 180MB) */
+const MAX_PIXELS = typeof navigator !== 'undefined' && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? 6_000_000 : 9_000_000;
+
 export interface Box { x: number; y: number; w: number; h: number }
 export type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
 export type MakeCanvas = (w: number, h: number) => AnyCanvas;
@@ -99,7 +102,7 @@ export function findPaper(img: Src, W: number, H: number, make: MakeCanvas): Box
  * — 그림자·구김으로 밝기가 고르지 않은 사진에서 단순 흑백 변환보다 훨씬 정확
  */
 export function prepare(img: Src, box: Box, targetW: number, C: number, make: MakeCanvas): AnyCanvas {
-  const scale = Math.min(3, Math.max(targetW / box.w, Math.min(1, 2400 / box.w)), Math.sqrt(9_000_000 / (box.w * box.h)));
+  const scale = Math.min(3, Math.max(targetW / box.w, Math.min(1, 2400 / box.w)), Math.sqrt(MAX_PIXELS / (box.w * box.h)));
   const W = Math.round(box.w * scale), H = Math.round(box.h * scale);
   const c = make(W, H);
   const ctx = ctx2d(c);

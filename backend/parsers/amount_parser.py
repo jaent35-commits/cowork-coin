@@ -97,6 +97,12 @@ def amount_candidates(rows: list[Row], width: float, height: float) -> list[Amou
 
     supply = row_amount(SUPPLY)
     vat = row_amount(VAT, re.compile(r"과세물품|공급가|면세"))
+    # 공급가 표기가 '판매금액'·'물품가액' 등으로 다른 양식 → 부가세의 10배인 금액(부가세 줄 제외)을 공급가로 봄
+    # 예: 판매금액 60,000 · 부가가치세 6,000 · 합계 66,000
+    if supply is None and vat:
+        tens = [h.value for h in hits if abs(h.value - vat * 10) <= 10 and not NOT_TOTAL.search(norm(rows[h.row_idx].text))]
+        if tens:
+            supply = tens[0]
     vat_sum = supply + vat if supply is not None and vat is not None and abs(supply / 10 - vat) <= 2 else None
     # 할인 줄 (공급가액 + 부가세 − 할인 = 결제금액)
     # '-1,000' 처럼 앞에 '-' 가 붙어 일반 금액 후보에서는 빠지므로 따로 읽음

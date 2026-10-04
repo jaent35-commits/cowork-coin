@@ -34,7 +34,8 @@ export default function InstallCard() {
           ? <InstallGuide />
           : <span>바탕화면·작업 표시줄에서 바로 열고, 알림도 받을 수 있어요</span>}
       </div>
-      {!guide && <Btn size="sm" onClick={() => { void install(); }}><IconDownload size={13} />{canPrompt ? '앱 설치' : '설치 방법'}</Btn>}
+      {/* 누르면 바로 설치 창 — 설치 창을 못 여는 브라우저에서만 방법 안내로 바뀜 */}
+      {!guide && <Btn size="sm" onClick={() => { void install(); }} title={canPrompt ? undefined : '이 브라우저에서 설치 창을 열 수 없으면 설치 방법을 보여 드려요'}><IconDownload size={13} />앱 설치</Btn>}
       <IconBtn className="icon-btn--sm install-card__close" aria-label="설치 안내 닫기" title="닫기" onClick={close}><IconClose size={14} /></IconBtn>
     </section>
   );

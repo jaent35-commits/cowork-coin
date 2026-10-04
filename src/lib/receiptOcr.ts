@@ -99,20 +99,30 @@ async function openPrep(file: File): Promise<Prep> {
  * 서버는 긴 변을 1600~2200px 로 맞춘 뒤 인식하므로(backend image_preprocess LONG_MAX) 그보다 큰 원본은 전송만 낭비.
  * 후보 테스트(원본 · 2560/2200/2048/1920/1600 × JPEG 0.95/0.9/0.85) 결과 2200px · 0.9 가 날짜·금액·상호명·숫자 줄을
  * 원본과 같게 유지하면서 용량이 가장 작았음 (2048 이하는 작은 글씨 상호명 띄어쓰기·숫자 줄 보존이 흔들림).
- * Tesseract 는 이 축소본이 아니라 원본을 그대로 읽음(1단계와 같은 입력). */
+ * Tesseract 는 이 축소본이 아니라 긴 변 3000px 본을 읽음 (DEVICE_MAX_EDGE). */
 const UPLOAD_MAX_EDGE = 2200;
 const UPLOAD_QUALITY = 0.9;
+/**
+ * 휴대폰 안 인식(Tesseract)용 — 카메라 원본(1,200만~5,000만 화소)을 그대로 여러 번 디코딩하면
+ * 사진 1장에 수백 MB 를 써서 모바일 브라우저가 탭을 닫거나 멈춤 → 인식에 필요한 크기(전처리 목표 1600~2200px)보다 넉넉한 3000px 로 한 번만 줄임
+ */
+const DEVICE_MAX_EDGE = 3000;
+const DEVICE_QUALITY = 0.92;
 
-/** 긴 변 2200px 초과 사진만 줄여 JPEG 로 — 작거나, 줄여도 더 크거나, 줄일 수 없으면(미지원 브라우저·디코딩 실패) 원본 그대로 */
-export async function uploadImage(file: File): Promise<Blob> {
+/** 긴 변 maxEdge 초과 사진만 줄여 JPEG 로 — 작거나, 줄여도 더 크거나, 줄일 수 없으면(미지원 브라우저·디코딩 실패) 원본 그대로 */
+async function shrinkImage(file: File, maxEdge: number, quality: number): Promise<File> {
   if (!prepInWorker()) return file;
   try {
-    const { blob } = await ask({ type: 'upload', file, maxEdge: UPLOAD_MAX_EDGE, quality: UPLOAD_QUALITY });
-    return blob && blob.size < file.size ? blob : file;
+    const { blob } = await ask({ type: 'upload', file, maxEdge, quality });
+    return blob && blob.size < file.size ? new File([blob], 'receipt.jpg', { type: 'image/jpeg' }) : file;
   } catch {
     return file;
   }
 }
+/** PaddleOCR 서버로 보낼 사진 (긴 변 2200px) */
+export const uploadImage = (file: File) => shrinkImage(file, UPLOAD_MAX_EDGE, UPLOAD_QUALITY);
+/** 휴대폰 안 인식용 사진 (긴 변 3000px) */
+export const deviceImage = (file: File) => shrinkImage(file, DEVICE_MAX_EDGE, DEVICE_QUALITY);
 
 /* ── Tesseract worker — 집행 등록 화면 안에서 재사용 (언어 모델 로딩은 첫 스캔 때만)
  *    마지막 스캔 후 1분간 추가 스캔이 없거나 화면을 벗어나면(releaseReceiptOcr) 해제, 오류 시 다음 스캔에서 새로 ── */
