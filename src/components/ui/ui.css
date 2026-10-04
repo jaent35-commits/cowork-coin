@@ -253,6 +253,11 @@
   .toast { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 12px); }
   body:has(.fab) .toast { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 84px); }
   body:has(.exec-bar) .toast { bottom: calc(var(--kb-offset, 0px) + 76px + var(--safe-bottom) + 12px); }
+  /* 모바일: 밝은 카드·바탕 위에서 묻히지 않게 반전 색 (라이트 = 진한 갈색 면 · 다크 = 밝은 면) */
+  .toast { background: var(--text); border-color: transparent; color: var(--surface); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28); }
+  .toast__icon { background: var(--success); color: #fff; }
+  .toast--warn { border-color: transparent; box-shadow: inset 3px 0 0 var(--warning), 0 8px 24px rgba(0, 0, 0, 0.28); }
+  .toast--warn .toast__icon { background: var(--warning); color: #fff; }
 }
 
 /* 확인 레이어 (ConfirmLayer) — 뷰포트 아래쪽 가운데, 토스트와 같은 위치·모양 */
