@@ -456,6 +456,7 @@
 .date-picker .is-sun { color: var(--log-plus); }
 .date-picker .is-sat { color: var(--log-minus); }
 .date-picker__day:hover { background: var(--primary-50); }
+.date-picker__day.is-off { color: var(--faint-3); text-decoration: line-through; cursor: not-allowed; background: none; }
 .date-picker__day.is-today { border-color: var(--primary-300); font-weight: 800; }
 .date-picker__day.is-selected { background: var(--grad-primary); border-color: var(--primary); color: var(--ink); font-weight: 800; }
 .date-picker__foot { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-soft); }

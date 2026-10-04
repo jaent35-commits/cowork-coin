@@ -17,8 +17,8 @@ import './Home.css';
 type Status = 'all' | 'todo' | 'done';
 const STATUS: { value: Status; label: string }[] = [{ value: 'all', label: '전체' }, { value: 'todo', label: '잔여' }, { value: 'done', label: '완료' }];
 const Q_START = CUR_QUARTER * 3;
-/** 월 인덱스(0~11) → 'YYYY-MM' (올해) */
-const ymOf = (i: number) => `${CUR_YEAR}-${String(i + 1).padStart(2, '0')}`;
+/** (연도, 월 인덱스 0~11) → 'YYYY-MM' */
+const ymOf = (y: number, i: number) => `${y}-${String(i + 1).padStart(2, '0')}`;
 /** 체크리스트 구분 태그 — My = 우리 팀 주관 프로젝트, 코웍 = 배분받아 참여하는 프로젝트의 공개 항목 */
 type Scope = 'my' | 'cowork';
 const SCOPES: { value: Scope; label: string }[] = [{ value: 'my', label: 'My' }, { value: 'cowork', label: '코웍' }];
@@ -26,7 +26,8 @@ const SCOPES: { value: Scope; label: string }[] = [{ value: 'my', label: 'My' },
 export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) {
   const state = useAppState();
   const dispatch = useDispatch();
-  const [monthIdx, setMonthIdx] = useState(CUR_MONTH);
+  // 잔여 금액 카드 기준 월 (YYYY-MM)
+  const [month, setMonth] = useState(CUR_YYYYMM);
   const [status, setStatus] = useState<Status>('all');
   const [scopes, setScopes] = useState<Set<Scope>>(() => new Set(['my', 'cowork']));
   // 태그는 각각 켜고 끄되, 마지막 하나는 끌 수 없음 (목록이 비지 않도록)
@@ -49,13 +50,38 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
   // 알림 카드: 이번 분기 팀 인원(회의비 산정 기준)이 비어 있을 때만
   const curQMissing = q.headcounts.some(h => h === 0);
 
-  // 선택 월 말 기준 집행액 = 현재 집행액 − 선택 월 이후(이번 분기 내) 월별 집행액
-  const laterExec = state.monthly
-    .filter(m => m.month > monthIdx && m.month <= CUR_MONTH)
-    .reduce((s, m) => s + m.meeting + m.project, 0);
-  // 이번 달 업무비는 이번 달에만 쓰이므로 지난 달 기준으로 보면 이번 달 업무비 집행도 뺌
-  const heroUsed = Math.max(0, used - laterExec - (monthIdx < CUR_MONTH ? workUsed : 0));
-  const heroPct = pct(heroUsed, total);
+  /**
+   * 잔여 금액 카드 — 고른 달 말 기준 (지난달·다음 달·다른 해 어디로든 이동)
+   * · 팀 회의비: 그 달이 속한 분기 예산 − 그 분기에서 그 달까지 집행 (올해·미리 입력한 다음 해만 예산 있음)
+   * · 팀 업무비: 그 달 예산 − 그 달 집행
+   * · 프로젝트: 그 달에 진행 중인 내 프로젝트 배분 경비 − 그 달까지 집행
+   */
+  const heroOf = (m: string) => {
+    const y = Number(m.slice(0, 4)), mi = Number(m.slice(5, 7)) - 1, qi = Math.floor(mi / 3);
+    const qStart = ymOf(y, qi * 3);
+    const qd = y === CUR_YEAR ? state.quarters[qi] : state.plannedQuarters[String(y)]?.[qi];
+    const sumRec = (pred: (r: (typeof state.records)[number]) => boolean) => state.records.filter(pred).reduce((s, r) => s + r.total, 0);
+    const meetBudget = qd?.budget ?? 0;
+    const meetUsed = sumRec(r => r.type === 'meeting' && r.month >= qStart && r.month <= m);
+    const wb = workBudgetOf(state, m).amount, wu = workUsedOf(state, m);
+    const live = state.projects.filter(p => p.isMine && p.startDate.slice(0, 7) <= m && (p.endDate || p.startDate).slice(0, 7) >= m);
+    const projBudget = live.reduce((s, p) => s + p.allocPool, 0);
+    const projUsed = sumRec(r => r.type === 'project' && r.month <= m && live.some(p => p.id === r.projectId));
+    return { total: meetBudget + wb + projBudget, used: meetUsed + wu + projUsed };
+  };
+  const isCurMonth = month === CUR_YYYYMM;
+  // 이번 달은 지금까지 쓰던 계산(카드 아래 통계와 같은 값), 다른 달은 그 달 기준으로 다시 계산
+  const hero = isCurMonth ? { total, used } : heroOf(month);
+  const heroUsed = hero.used;
+  const heroPct = pct(heroUsed, hero.total);
+  /** 이동 범위 — 집행·프로젝트가 있는 가장 이른 달 ~ 다음 해 12월 */
+  const firstMonth = [CUR_YYYYMM, ...state.records.map(r => r.month), ...state.projects.map(p => p.startDate.slice(0, 7))].filter(Boolean).sort()[0];
+  const lastMonth = `${CUR_YEAR + 1}-12`;
+  const shiftMonth = (d: number) => setMonth(m => {
+    const t = new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1 + d, 1);
+    const v = ymOf(t.getFullYear(), t.getMonth());
+    return v < firstMonth || v > lastMonth ? m : v;
+  });
 
   const projects = myActiveProjects(state);
   // 홈: 이번 달 예정 · 미체크 · 예정일 없는 항목만 (전체 목록은 프로젝트 운영 > 체크리스트)
@@ -97,21 +123,21 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
       <section className="hero" aria-label="예산 현황">
         <div className="hero__label">예산 현황 · 잔여 금액</div>
         <div className="hero__row">
-          <div className="hero__amount num">{fmt(total - heroUsed)}</div>
+          <div className="hero__amount num">{fmt(hero.total - heroUsed)}</div>
           <StepNav label="기준 월" className="hero__month" prevLabel="이전 달" nextLabel="다음 달"
-            onPrev={() => setMonthIdx(i => Math.max(Q_START, i - 1))} onNext={() => setMonthIdx(i => Math.min(CUR_MONTH, i + 1))}
-            prevDisabled={monthIdx === Q_START} nextDisabled={monthIdx === CUR_MONTH}
-            picker={close => <MonthGrid value={ymOf(monthIdx)} min={ymOf(Q_START)} max={ymOf(CUR_MONTH)} onPick={v => { setMonthIdx(Number(v.slice(5, 7)) - 1); close(); }} />}>
-            {CUR_YEAR}년 {monthIdx + 1}월
+            onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)}
+            prevDisabled={month <= firstMonth} nextDisabled={month >= lastMonth}
+            picker={close => <MonthGrid value={month} min={firstMonth} max={lastMonth} onPick={v => { setMonth(v); close(); }} />}>
+            {month.slice(0, 4)}년 {Number(month.slice(5, 7))}월{isCurMonth && <Badge variant="amber" size="sm">이번 달</Badge>}
           </StepNav>
         </div>
-        <div className="hero__sub">전체 {fmt(total)} 중 {fmt(heroUsed)} 집행</div>
+        <div className="hero__sub">전체 {fmt(hero.total)} 중 {fmt(heroUsed)} 집행</div>
         <div className="hero__bar"><div style={{ width: `${Math.min(100, heroPct)}%` }} /></div>
         <div className="hero__legend">
           <span>집행률 {Math.round(heroPct)}%</span>
           <Badge variant="green">잔여 {Math.max(0, Math.round(100 - heroPct))}%</Badge>
         </div>
-        {exp.total > 0 && (
+        {isCurMonth && exp.total > 0 && (
           <div className="hero__expire">
             <span aria-hidden="true">🔔</span>
             <div>다음 달에 <b className="num">{fmt(exp.total)}</b>의 예산이 사라질 것 같아요!</div>

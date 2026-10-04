@@ -28,8 +28,10 @@ const isValidDate = (v: string) => {
  * YYYY-MM-DD 날짜 입력 — 숫자로 바로 입력(20260930 → 2026-09-30) + 달력 버튼
  * 8자리가 맞는 날짜가 되면 바로 반영, 잘못된 값은 칸을 벗어날 때 원래 값으로 되돌림
  */
-export function DateField({ value, onChange, id, placeholder = 'YYYY-MM-DD', defaultOpen, onClose, ...rest }: {
+export function DateField({ value, onChange, id, placeholder = 'YYYY-MM-DD', defaultOpen, onClose, min, ...rest }: {
   value: string; onChange: (v: string) => void; id?: string; placeholder?: string; 'aria-label'?: string;
+  /** 고를 수 있는 가장 이른 날 (YYYY-MM-DD) — 달력에서 이전 날은 막고, 직접 입력한 이전 날은 반영하지 않음 */
+  min?: string;
   /** 표 안 바로 수정: 나타나자마자 달력 열기 */
   defaultOpen?: boolean;
   /** 달력이 닫힐 때 (선택·바깥 클릭·Esc) */
@@ -53,12 +55,12 @@ export function DateField({ value, onChange, id, placeholder = 'YYYY-MM-DD', def
   const type = (raw: string) => {
     const v = typed(raw);
     setText(v);
-    if (isValidDate(v) && v !== value) onChange(v);
+    if (isValidDate(v) && v !== value && !(min && v < min)) onChange(v);
   };
   // 칸을 벗어날 때: 비우면 지우기, 덜 입력했거나 없는 날짜면 원래 값으로
   const settle = () => {
     if (!text) { if (value) onChange(''); return; }
-    if (!isValidDate(text)) setText(value);
+    if (!isValidDate(text) || (min && text < min)) setText(value);
   };
   useEffect(() => { if (defaultOpen) caret.ref.current?.focus(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -70,7 +72,7 @@ export function DateField({ value, onChange, id, placeholder = 'YYYY-MM-DD', def
 
   return (
     <div className="month-field">
-      <div ref={box} className={cx('month-field__btn month-field__box', !text && 'is-empty', open && 'is-open', text && !isValidDate(text) && 'is-partial')}>
+      <div ref={box} className={cx('month-field__btn month-field__box', !text && 'is-empty', open && 'is-open', text && (!isValidDate(text) || (!!min && text < min)) && 'is-partial')}>
         <input ref={caret.ref} id={id} className="month-field__input" inputMode="numeric" autoComplete="off" maxLength={10}
           placeholder={placeholder} value={text} aria-label={rest['aria-label']}
           onChange={e => { caret.mark(e.target); type(e.target.value); }}
@@ -96,8 +98,8 @@ export function DateField({ value, onChange, id, placeholder = 'YYYY-MM-DD', def
             if (!d) return <span key={`e${i}`} />;
             const k = toKey(view.y, view.m, d);
             return (
-              <button key={k} type="button" onClick={() => pick(k)} aria-label={`${view.m + 1}월 ${d}일`} aria-pressed={k === value}
-                className={cx('date-picker__day', i % 7 === 0 && 'is-sun', i % 7 === 6 && 'is-sat', k === today && 'is-today', k === value && 'is-selected')}>
+              <button key={k} type="button" disabled={!!min && k < min} onClick={() => pick(k)} aria-label={`${view.m + 1}월 ${d}일`} aria-pressed={k === value}
+                className={cx('date-picker__day', !!min && k < min && 'is-off', i % 7 === 0 && 'is-sun', i % 7 === 6 && 'is-sat', k === today && 'is-today', k === value && 'is-selected')}>
                 {d}
               </button>
             );

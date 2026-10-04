@@ -2,7 +2,7 @@ import { useEffect, useState, type FocusEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppState, useDispatch } from '@/store/StoreContext';
 import { execProjects } from '@/store/selectors';
-import { TODAY_ISO } from '@/lib/date';
+import { PREV_MONTH_DEADLINE, TODAY_ISO, execMinDate } from '@/lib/date';
 import { fmt, uid } from '@/lib/format';
 import { bucketOf, parseTypeKey, type Bucket } from '@/lib/budget';
 import { useToast } from '@/hooks/useToast';
@@ -55,7 +55,10 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
   const sum = rows.reduce((s, r) => s + r.amount, 0);
   const anyOver = impacts.some(i => i.over);
   const noProject = rows.some(r => r.amount > 0 && !allowed(r));
-  const canSave = sum > 0 && !anyOver && !noProject;
+  // 사용일자: 1~15일은 지난달부터, 16일부터는 이번 달부터 (영수증 인식으로 들어온 이전 날짜도 막음)
+  const minDate = execMinDate();
+  const tooOld = rows.some(r => r.amount > 0 && (r.useDate || TODAY_ISO) < minDate);
+  const canSave = sum > 0 && !anyOver && !noProject && !tooOld;
 
   // 입력 전 요약(PC): 첫 줄 예산의 현재 잔액
   const firstBucket = bucketOf(state, rows[0]?.typeKey ?? 'meeting', monthOf(rows[0] ?? newRow()));
@@ -154,7 +157,7 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
                   </div>
                   <div className="reg-field reg-row__date">
                     <span className="reg-field__label" aria-hidden="true">사용일자</span>
-                    <DateField value={row.useDate} onChange={v => update(row.id, { useDate: v })} aria-label={`${idx + 1}번 사용일자`} />
+                    <DateField value={row.useDate} min={minDate} onChange={v => update(row.id, { useDate: v })} aria-label={`${idx + 1}번 사용일자`} />
                   </div>
                   <div className="reg-field reg-row__type">
                     <span className="reg-field__label" aria-hidden="true">예산 유형</span>
@@ -182,6 +185,7 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
             })}
           </div>
           {noProject && <p className="reg-note">사용일자가 사용 종료일 이내인 프로젝트만 선택할 수 있습니다.</p>}
+          {tooOld && <p className="reg-note">사용일자는 {minDate.slice(0, 4)}년 {Number(minDate.slice(5, 7))}월 1일부터 등록할 수 있습니다 (지난달 사용 건은 매월 {PREV_MONTH_DEADLINE}일까지).</p>}
         </Card>
 
         {/* PC 전용 — 모바일은 하단 고정 바 */}

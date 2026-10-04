@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent as Rea
 import type { ExecRecord, View } from '@/types';
 import { useAppState, useDispatch } from '@/store/StoreContext';
 import { fmt } from '@/lib/format';
-import { CUR_YEAR, CUR_YYYYMM, parseYm, quarterOf, spentDateOf, shortMd, shortYmd } from '@/lib/date';
+import { CUR_YEAR, CUR_YYYYMM, PREV_MONTH_DEADLINE, execMinDate, parseYm, quarterOf, spentDateOf, shortMd, shortYmd } from '@/lib/date';
 import {
   PROJECT_GROUP, TEAM_GROUP, bucketOf, budgetName, groupOf, parseTypeKey, recordTypeKey, typeIcon, workBudgetOf, workUsedOf,
 } from '@/lib/budget';
@@ -304,6 +304,8 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
     if (field === 'useDate') {
       const v = String(value);
       if (!v || v === spentDateOf(r)) return;
+      // 지난달 사용 건은 이번 달 15일까지만 (집행 등록과 같은 규칙)
+      if (v < execMinDate()) { showToast(`사용일자는 ${execMinDate()}부터 고를 수 있습니다 (지난달 사용 건은 매월 ${PREV_MONTH_DEADLINE}일까지).`, 'warn'); return; }
       next = { ...r, useDate: v, month: v.slice(0, 7) };
       // 프로젝트 경비는 사용 종료일이 지난 날짜로 옮길 수 없음
       if (r.type === 'project' && r.projectId && !execProjects(state, v).some(p => p.id === r.projectId)) {
@@ -527,7 +529,7 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
                     </td>
                     <td className="exec-table__use t-nowrap" onClick={e => { e.stopPropagation(); onCell(r, 'useDate'); }}>
                       {on('useDate')
-                        ? <DateField defaultOpen value={String(cell!.value)} aria-label="사용일자"
+                        ? <DateField defaultOpen min={execMinDate()} value={String(cell!.value)} aria-label="사용일자"
                             onChange={v => commit(r, 'useDate', v)} onClose={() => setEdit(null)} />
                         : <span className="exec-table__month">
                             {/* 모바일: 올해 기록은 월-일만 (조회 기간이 화면 위에 있어 연도 생략) */}

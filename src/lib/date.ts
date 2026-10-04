@@ -39,6 +39,18 @@ export function todayLabel(): string {
   return `${CUR_YEAR}년 ${CUR_MONTH + 1}월 ${TODAY.getDate()}일`;
 }
 
+/** 전월 비용 등록 마감일 — 매월 이 날까지는 지난달 사용 건도 등록할 수 있음 */
+export const PREV_MONTH_DEADLINE = 15;
+/**
+ * 집행 등록·수정에서 고를 수 있는 가장 이른 사용일자 (YYYY-MM-DD)
+ * 1~15일: 지난달 1일부터 · 16일~: 이번 달 1일부터
+ */
+export function execMinDate(today = TODAY): string {
+  const prev = today.getDate() <= PREV_MONTH_DEADLINE;
+  const d = new Date(today.getFullYear(), today.getMonth() - (prev ? 1 : 0), 1);
+  return `${ym(d.getFullYear(), d.getMonth())}-01`;
+}
+
 /** 집행 사용일자 — 저장된 값, 없으면(예전 기록) 같은 달 등록일, 그것도 아니면 사용월 1일 */
 export function spentDateOf(r: { month: string; date: string; useDate?: string }): string {
   return r.useDate ?? (r.date.startsWith(r.month) ? r.date : `${r.month}-01`);

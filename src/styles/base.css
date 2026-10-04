@@ -113,3 +113,13 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   :root[data-font="lg"] .dt-full { display: none; }
   :root[data-font="lg"] .dt-short { display: inline; }
 }
+
+/* 화면 모드(라이트 ↔ 다크) 전환 디졸브 — src/lib/theme.ts crossfade */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.45s; animation-timing-function: ease; }
+/* View Transitions 미지원 브라우저: 전환하는 동안만 색을 천천히 */
+.theme-fading, .theme-fading *, .theme-fading *::before, .theme-fading *::after {
+  transition: background-color 0.45s ease, color 0.45s ease, border-color 0.45s ease, fill 0.45s ease, stroke 0.45s ease, box-shadow 0.45s ease !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}
