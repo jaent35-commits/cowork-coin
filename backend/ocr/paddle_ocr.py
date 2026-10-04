@@ -91,6 +91,9 @@ class PaddleEngine:
             # 검출 입력 긴 변 상한 (전처리 이미지는 1600~2200) — 1600 이면 속도·정확도 균형
             text_det_limit_type="max",
             text_det_limit_side_len=int(os.getenv("OCR_DET_SIDE", "1600")),
+            # 검출 상자 확장 비율 (기본 1.5) — 줄 간격이 좁은 감열지에서 위아래 줄이 한 상자로 붙지 않게 1.2
+            #   실사진 9장 비교: 배달 주문서 날짜 줄 복구, 카드 영수증 합계(60,000 → 66,000) 개선, 나머지 동일
+            text_det_unclip_ratio=float(os.getenv("OCR_DET_UNCLIP", "1.2")),
             # True 여도 검출 모델은 위 제외 목록 때문에 oneDNN 없이 실행 (인식만 oneDNN)
             enable_mkldnn=self._full_mkldnn or self._rec_onednn,
         )

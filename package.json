@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "node ./node_modules/vite/bin/vite.js --configLoader runner",
+    "dev:https": "node ./node_modules/vite/bin/vite.js --configLoader runner --mode https",
     "build": "node ./node_modules/typescript/bin/tsc -b && node ./node_modules/vite/bin/vite.js build --configLoader runner",
     "preview": "node ./node_modules/vite/bin/vite.js preview --configLoader runner",
     "typecheck": "node ./node_modules/typescript/bin/tsc -b --noEmit",
@@ -27,6 +28,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "~19.2.0",
     "@types/react-dom": "~19.2.0",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-react": "^5.1.0",
     "sharp": "^0.35.4",
     "typescript": "5.9.3",

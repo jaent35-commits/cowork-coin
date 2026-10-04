@@ -31,3 +31,4 @@ skills-lock.json
 # 오픈 전 검증용 테스트 계정 비밀번호 (로컬에만 보관)
 *.local.md
 *.local.sql
+backend/.ocr-debug/

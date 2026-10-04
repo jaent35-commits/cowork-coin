@@ -231,15 +231,19 @@ async function scan(file: File, onProgress?: (p: number) => void): Promise<Recei
 const pad = (n: number) => String(n).padStart(2, '0');
 
 function findDate(text: string): string | null {
-  const t = text.replace(/\s+/g, ' ');
+  // 숫자 4개 이상 덩어리 안의 글자 오인식 0 ← O·o·D, 1 ← I·l·| (2O26-1O-O4) — 서버 date_parser._fix_digits 와 같음
+  const t = text.replace(/\s+/g, ' ').replace(/[0-9OoDIl|.\-/:~_=‐-―−]{6,}/g, run =>
+    (run.match(/\d/g)?.length ?? 0) >= 4 ? run.replace(/[OoD]/g, '0').replace(/[Il|]/g, '1') : run);
   const now = new Date().getFullYear();
   const ok = (m: number, d: number) => m >= 1 && m <= 12 && d >= 1 && d <= 31;
   // 미래 연도는 오인식(2026 → 2028) → 올해로
-  const year = (y: number) => (y > now ? now : y);
+  // 연도 셋째 자리 오인식(2026 → 2006 · 2016) — 끝자리가 올해·작년과 같으면 그 해로 (서버 date_parser 와 같음)
+  const year = (y: number) => (y > now ? now : y < now - 2 && y % 10 === now % 10 ? now : y < now - 2 && y % 10 === (now - 1) % 10 ? now - 1 : y);
   const found: string[] = [];
   const add = (y: number, m: number, d: number) => { if (y >= 2000 && ok(m, d)) found.push(`${year(y)}-${pad(m)}-${pad(d)}`); };
   // 2026-09-24 · 2026.09.24 · 2026/9/24 · 2026년 9월 24일 · 2018넌01월18일(오인식) · 2026:09-19
-  for (const m of t.matchAll(/(20\d{2})\s*(?:[.\-/:]|[가-힣])\s*(\d{1,2})\s*(?:[.\-/]|[가-힣])\s*(\d{1,2})(?!\d)/g)) add(+m[1], +m[2], +m[3]);
+  // 감열지 긴 하이픈 오인식: 2026--10-04 · 2026–10–04 · 2026~10~04 · 2026_10_04
+  for (const m of t.matchAll(/(20\d{2})\s*(?:[.\-/:~_=‐-―−]{1,2}|[가-힣])\s*(\d{1,2})\s*(?:[.\-/~_=‐-―−]{1,2}|[가-힣])\s*(\d{1,2})(?!\d)/g)) add(+m[1], +m[2], +m[3]);
   // 점 하나가 공백으로 읽힌 경우 (2018.12 19 · 2018 12.19)
   for (const m of t.matchAll(/(?<!\d)(20\d{2})(?:\.\s?|\s)(\d{1,2})(?:\.\s?|\s)(\d{1,2})(?=\s+\d{1,2}\s*[:.;]+\s*\d{2})/g)) add(+m[1], +m[2], +m[3]);
   // 승인일자: 2501010000000 (YYMMDD + 시각) — '승인·거래·결제 일자/일시' 표기 뒤에서만

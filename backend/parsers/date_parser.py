@@ -14,10 +14,12 @@ from ocr.result_normalizer import Row
 
 DATE_KEY = re.compile(r"일시|일자|거래일|판매일|승인일|결제일|매출일|발행일|날짜|DATE", re.I)
 
-# 2026-09-24 · 2026.09.24 · 2026/9/24 · 2026년 9월 24일 · 2026:09-19 (한글 한 글자 구분자 = 오인식 허용)
-P_FULL = re.compile(r"(20\d{2})\s*(?:[.\-/:]|[가-힣])\s*(\d{1,2})\s*(?:[.\-/]|[가-힣])\s*(\d{1,2})(?!\d)")
+# 구분자 오인식: 감열지 글꼴의 긴 하이픈이 -- · – · — · ~ · _ · = 로 읽히는 경우
+_SEP = r"[.\-/~_=‐-―−]"
+# 2026-09-24 · 2026.09.24 · 2026/9/24 · 2026년 9월 24일 · 2026:09-19 · 2026--10-04 · 2026–10–04 (한글 한 글자 구분자 = 오인식 허용)
+P_FULL = re.compile(r"(20\d{2})\s*(?:(?:" + _SEP + r"|:){1,2}|[가-힣])\s*(\d{1,2})\s*(?:" + _SEP + r"{1,2}|[가-힣])\s*(\d{1,2})(?!\d)")
 # 날짜와 시각 사이 공백이 사라진 경우 (2026.09.1819:42 → 2026-09-18)
-P_GLUED_TIME = re.compile(r"(20\d{2})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{2})(?=\d{1,2}:\d{2})")
+P_GLUED_TIME = re.compile(r"(20\d{2})\s*" + _SEP + r"{1,2}\s*(\d{1,2})\s*" + _SEP + r"{1,2}\s*(\d{2})(?=\d{1,2}:\d{2})")
 # 승인일자 뒤 YYMMDD + 시각
 P_APPROVAL = re.compile(r"(?:승인|거래|결제|매출)\s?일[자시][^\d]{0,4}(\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{0,7}(?!\d)")
 # 구분자 없는 8자리 (바코드 아래 20260919/…)
@@ -26,6 +28,14 @@ P_COMPACT = re.compile(r"(?<!\d)(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?!
 P_SHORT = re.compile(r"(?<!\d)(\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})(?!\d)")
 # 날짜 뒤 시각 (공백·괄호 사이 허용): 2026-07-28 20:10 · 26-08-15 16:39:15
 TIME_AFTER = re.compile(r"\s*[(\[]?\s*\d{1,2}\s*[:;]\s*\d{2}")
+# 숫자 덩어리 안의 글자 오인식: 0 → O·o·D, 1 → I·l·| (2O26-1O-O4 → 2026-10-04)
+_NUM_RUN = re.compile(r"[0-9OoDIl|.\-/:~_=‐-―−]{6,}")
+_DIGIT_FIX = str.maketrans({"O": "0", "o": "0", "D": "0", "I": "1", "l": "1", "|": "1"})
+
+
+def _fix_digits(text: str) -> str:
+    """숫자가 4개 이상인 덩어리에서만 글자를 숫자로 (일반 단어는 그대로)."""
+    return _NUM_RUN.sub(lambda m: m[0].translate(_DIGIT_FIX) if sum(c.isdigit() for c in m[0]) >= 4 else m[0], text)
 
 
 @dataclass
@@ -51,6 +61,9 @@ def date_candidates(rows: list[Row], today: date | None = None) -> list[DateCand
     def add(y: int, m: int, d: int, row: Row, after: str = "") -> None:
         if y > today.year:  # 미래 연도 = 오인식(2026 → 2028) → 올해
             y = today.year
+        elif y < today.year - 2 and y % 10 in (today.year % 10, (today.year - 1) % 10):
+            # 연도 셋째 자리 오인식(2026 → 2006 · 2016) — 끝자리가 올해·작년과 같으면 그 해로 (3년 넘은 영수증은 집행 대상 아님)
+            y = today.year if y % 10 == today.year % 10 else today.year - 1
         if not _valid(y, m, d):
             return
         v = f"{y:04d}-{m:02d}-{d:02d}"
@@ -62,7 +75,7 @@ def date_candidates(rows: list[Row], today: date | None = None) -> list[DateCand
         h["time"] = h["time"] or bool(TIME_AFTER.match(after))
 
     for row in rows:
-        t = re.sub(r"\s+", " ", row.text)
+        t = _fix_digits(re.sub(r"\s+", " ", row.text))
         for m in P_FULL.finditer(t):
             add(int(m[1]), int(m[2]), int(m[3]), row, t[m.end():])
         for m in P_GLUED_TIME.finditer(t):

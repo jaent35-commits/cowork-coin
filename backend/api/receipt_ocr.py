@@ -9,9 +9,11 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
+from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
@@ -20,6 +22,7 @@ from starlette.concurrency import run_in_threadpool
 from ocr.image_preprocess import prepare_variants
 from ocr.ocr_queue import OcrQueue, Skipped
 from ocr.paddle_ocr import PaddleEngine, get_engine
+from ocr.result_normalizer import group_rows
 from parsers.receipt_parser import ParsedReceipt, parse_receipt
 
 router = APIRouter()
@@ -37,6 +40,8 @@ QUEUE_TIMEOUT_S = float(os.getenv("OCR_QUEUE_TIMEOUT", "20"))
 #   대기 k번째 시작 ≈ 진행 중 잔여(최대 7.5초) + (k−1)×5초 → k=3 이면 17.5초 < QUEUE_TIMEOUT 20초, k=4 는 22.5초로 어차피 시간 초과
 #   → floor((20 − 7.5) / 5) + 1 = 3. 서버가 느리거나 빠르면(운영 사양) 이 식으로 다시 계산해 OCR_QUEUE_MAX 로 조정
 QUEUE_MAX = int(os.getenv("OCR_QUEUE_MAX", "3"))
+# 개발 전용 인식 실패 분석: 받은 사진 · 인식한 줄 · 결과를 이 폴더에 저장 (APP_ENV=development 일 때만, 운영에서는 무시)
+DEBUG_DIR = Path(os.environ["OCR_DEBUG_DIR"]) if IS_DEV and os.getenv("OCR_DEBUG_DIR") else None
 
 ocr_queue = OcrQueue(QUEUE_MAX)
 
@@ -47,15 +52,55 @@ def _better(a: ParsedReceipt, b: ParsedReceipt) -> ParsedReceipt:
     return a if key(a) >= key(b) else b
 
 
-def _ocr(engine: PaddleEngine, variants: dict) -> ParsedReceipt:
+def _ocr(engine: PaddleEngine, variants: dict, debug: dict | None = None) -> ParsedReceipt:
     best: ParsedReceipt | None = None
     for name, img in variants.items():
-        parsed = parse_receipt(engine.read(img))
+        tokens = engine.read(img)
+        parsed = parse_receipt(tokens)
         best = parsed if best is None else _better(best, parsed)
         if IS_DEV:
             log.info("variant=%s date=%s amount=%s conf=%s", name, parsed.date, parsed.amount, parsed.confidence)
+        if debug is not None:
+            debug[name] = {
+                "size": [int(img.shape[1]), int(img.shape[0])],
+                "rows": [" | ".join(f"{t.text}({t.confidence:.2f})" for t in r.tokens) for r in group_rows(tokens)],
+                "date": parsed.date, "amount": parsed.amount, "merchant": parsed.merchant, "candidates": parsed.candidates,
+            }
     assert best is not None
+    if best.date is None:
+        _retry_date(engine, best, next(iter(variants.values())), debug)
     return best
+
+
+def _retry_date(engine: PaddleEngine, best: ParsedReceipt, img, debug: dict | None) -> None:
+    """날짜를 못 찾았을 때만 — 글자 영역을 위·아래로 나눠 다시 읽음.
+
+    줄 간격이 좁은 감열지(배달 주문서 등)는 전체 사진에서 날짜 줄이 윗줄과 한 덩어리로 묶이거나 검출에서 빠짐.
+    절반씩 잘라 읽으면 검출기가 글자를 약 2배 크게 보게 되어 날짜 줄이 따로 잡힘 (+2~4초, 날짜 실패 때만).
+    """
+    h = img.shape[0]
+    for name, (a, b) in (("top", (0.0, 0.55)), ("bottom", (0.45, 1.0))):
+        part = img[int(h * a):int(h * b)]
+        tokens = engine.read(part)
+        parsed = parse_receipt(tokens)
+        if debug is not None:
+            debug[f"retry-{name}"] = {"rows": [r.text for r in group_rows(tokens)], "date": parsed.date}
+        if parsed.date:
+            best.date = parsed.date
+            best.confidence = {**best.confidence, "date": parsed.confidence["date"]}
+            best.candidates = {**best.candidates, "date": parsed.candidates["date"]}
+            return
+
+
+def _save_debug(raw: bytes, content_type: str | None, debug: dict) -> None:
+    try:
+        DEBUG_DIR.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
+        stem = time.strftime("%Y%m%d-%H%M%S")
+        ext = ".png" if content_type == "image/png" else ".jpg"
+        (DEBUG_DIR / f"{stem}{ext}").write_bytes(raw)  # type: ignore[operator]
+        (DEBUG_DIR / f"{stem}.json").write_text(json.dumps(debug, ensure_ascii=False, indent=1), encoding="utf-8")  # type: ignore[operator]
+    except Exception:
+        log.exception("debug save failed")
 
 
 @router.post("/api/receipt/ocr")
@@ -69,12 +114,13 @@ async def receipt_ocr(request: Request, file: UploadFile = File(...)):
     if not data:
         raise HTTPException(status_code=400, detail="빈 파일입니다")
 
+    raw = data if DEBUG_DIR else None
     try:
         variants = await run_in_threadpool(prepare_variants, data, DUAL_PASS)
     except Exception:  # 손상·미지원 이미지
         raise HTTPException(status_code=400, detail="이미지를 열 수 없어요")
     finally:
-        del data  # 원본 바이트는 요청이 끝나면 버림 (저장하지 않음)
+        del data  # 원본 바이트는 요청이 끝나면 버림 (저장하지 않음 — 개발 분석 폴더를 켠 경우만 예외)
 
     async def skip_reason() -> str | None:
         if await request.is_disconnected():
@@ -93,9 +139,13 @@ async def receipt_ocr(request: Request, file: UploadFile = File(...)):
         if reason:
             return _skipped(reason, started)
         waited = round((time.perf_counter() - started) * 1000)
-        best = await run_in_threadpool(_ocr, get_engine(), variants)
+        debug: dict | None = {} if raw else None
+        best = await run_in_threadpool(_ocr, get_engine(), variants, debug)
     finally:
         ocr_queue.release()
+    if raw and debug is not None:
+        debug["result"] = {"date": best.date, "amount": best.amount, "merchant": best.merchant, "confidence": best.confidence}
+        await run_in_threadpool(_save_debug, raw, file.content_type, debug)
 
     ms = round((time.perf_counter() - started) * 1000)
     log.info("receipt ocr done in %dms (wait=%dms, fields=%d, review=%s)", ms, waited, best.valid_fields, best.needs_review)

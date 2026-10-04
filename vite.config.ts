@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
 
@@ -20,6 +21,8 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     siteUrl(loadEnv(mode, process.cwd(), 'VITE_').VITE_SITE_URL ?? ''),
     react(),
+    // npm run dev:https — 휴대폰에서 https 로 시험 (앱 안 카메라는 https 에서만 열림, 자체 서명 인증서라 경고 후 진행)
+    mode === 'https' ? basicSsl() : null,
     VitePWA({
       registerType: 'prompt',
       injectRegister: false, // src/components/PwaPrompt.tsx 에서 직접 등록
