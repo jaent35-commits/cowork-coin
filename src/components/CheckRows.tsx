@@ -27,27 +27,36 @@ function dday(date: string): { text: string; late: boolean } {
  * 완료 항목의 집행 금액 입력 — 처음 값은 예산. 누르면 값이 비고 지금 금액이 placeholder 로 남아
  * 새로 입력 (비운 채 나가면 지금 금액 유지 · Enter 저장 · Esc 취소)
  */
-function SpentInput({ item, onSpend }: { item: ChecklistItem; onSpend: (spent: number) => void }) {
-  const value = item.spent ?? item.amount;
+/** live: 입력하는 대로 바로 반영 (저장 전 항목 — 칸을 벗어나지 않고 바깥을 눌러도 입력값으로 저장) */
+function SpentInput({ title, value, onSpend, onEnter, live }: { title: string; value: number; onSpend: (spent: number) => void; onEnter?: () => void; live?: boolean }) {
   const [draft, setDraft] = useState<string | null>(null);
   const cancel = useRef(false);
+  const enter = useRef(false);
   const commit = () => {
     if (draft !== null && !cancel.current && draft !== '') onSpend(parseAmt(draft));
     cancel.current = false;
     setDraft(null);
+    if (enter.current) { enter.current = false; onEnter?.(); }
   };
   return (
-    <input className="num" inputMode="numeric" aria-label={`${item.title} 집행 금액`}
+    <input className="num" inputMode="numeric" aria-label={`${title} 집행 금액`}
       value={draft ?? value.toLocaleString('ko-KR')} placeholder={value.toLocaleString('ko-KR')}
       onFocus={() => setDraft('')}
-      onChange={e => { const d = e.target.value.replace(/\D/g, ''); setDraft(d ? Number(d).toLocaleString('ko-KR') : ''); }}
+      onChange={e => {
+        const d = e.target.value.replace(/\D/g, '');
+        setDraft(d ? Number(d).toLocaleString('ko-KR') : '');
+        if (live && d) onSpend(Number(d));
+      }}
       onBlur={commit}
       onKeyDown={e => {
-        if (e.key === 'Enter') e.currentTarget.blur();
+        if (e.key === 'Enter') { enter.current = true; e.currentTarget.blur(); }
         if (e.key === 'Escape') { cancel.current = true; e.currentTarget.blur(); }
       }} />
   );
 }
+
+/** 방금 체크한 항목 — 아직 저장 전 (집행 금액·집행일을 고칠 수 있는 순간) */
+type Pending = { id: string; spent: number; spentDate: string };
 
 /**
  * 경비 집행 체크리스트 줄 목록 (홈 · 코웍/My 체크리스트 · 프로젝트 상세 공용)
@@ -59,7 +68,9 @@ function SpentInput({ item, onSpend }: { item: ChecklistItem; onSpend: (spent: n
  * - actions: 줄 오른쪽 끝 편집 버튼 (공개 전환·삭제)
  */
 export default function CheckRows({ items, projects, onToggle, onExec, empty, hideProject, actions, flashId, selectable }: {
-  items: ChecklistItem[]; projects: Pick<Project, 'id' | 'name' | 'joined'>[]; onToggle: (id: string) => void;
+  items: ChecklistItem[]; projects: Pick<Project, 'id' | 'name' | 'joined'>[];
+  /** exec: 체크할 때 고른 집행 금액·집행일 (체크 해제는 없음) */
+  onToggle: (id: string, exec?: ExecPatch) => void;
   onExec?: (id: string, patch: ExecPatch) => void;
   empty: { icon: string; message: string; sub?: string } | ReactNode;
   hideProject?: boolean; actions?: (item: ChecklistItem) => ReactNode;
@@ -83,6 +94,40 @@ export default function CheckRows({ items, projects, onToggle, onExec, empty, hi
     return n;
   });
 
+  /*
+   * 체크 → 바로 저장하지 않고 '저장 전' 상태로 집행 금액(기본 예산)·집행일(기본 오늘)을 고칠 수 있게 함
+   * 줄 바깥을 누르거나(달력 팝업은 줄 안으로 봄) Enter → 그 값으로 완료 저장 · Esc / 체크 다시 누르기 → 취소
+   * 화면을 벗어나도 저장. 입력 중인 값까지 담으려고 ref 로도 들고 있음
+   */
+  const [pending, setPendingState] = useState<Pending | null>(null);
+  const pendingRef = useRef<Pending | null>(null);
+  const setPending = (p: Pending | null) => { pendingRef.current = p; setPendingState(p); };
+  const toggleRef = useRef(onToggle);
+  toggleRef.current = onToggle;
+  const commitPending = () => {
+    const p = pendingRef.current;
+    if (!p) return;
+    setPending(null);
+    toggleRef.current(p.id, { spent: p.spent, spentDate: p.spentDate });
+  };
+  useEffect(() => {
+    if (!pending) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (t?.closest(`[data-check="${pending.id}"]`) || t?.closest('.popover')) return;
+      // 입력 중이던 금액을 먼저 반영(blur) → 그 값으로 저장
+      const active = document.activeElement as HTMLElement | null;
+      if (active?.closest(`[data-check="${pending.id}"]`)) active.blur();
+      commitPending();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !(e.target instanceof Element && e.target.closest('input'))) setPending(null); };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onDown, true); document.removeEventListener('keydown', onKey); };
+  }, [pending?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 저장 전에 화면을 벗어나면 그대로 완료 저장
+  useEffect(() => () => commitPending(), []); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (items.length === 0) {
     const e = empty as { icon?: string; message?: string };
     return e && typeof e === 'object' && 'message' in e ? <EmptyState {...(e as { icon: string; message: string; sub?: string })} /> : <>{empty}</>;
@@ -93,32 +138,42 @@ export default function CheckRows({ items, projects, onToggle, onExec, empty, hi
         const proj = projects.find(p => p.id === item.projectId);
         const color = CAT_COLOR[item.category] ?? 'var(--faint)';
         const d = !item.checked && item.date ? dday(item.date) : null;
+        const isPending = pending?.id === item.id;
+        // 저장 전에는 고른 값으로 미리 보여 줌
+        const shown = isPending ? { ...item, checked: true, spent: pending.spent, spentDate: pending.spentDate } : item;
         const lockable = item.checked && !!onExec;
-        const editing = lockable && unlocked.has(item.id);
+        const editing = isPending || (lockable && unlocked.has(item.id));
         const locked = lockable && !editing;
-        const execDate = checkDateOf(item);
+        const execDate = checkDateOf(shown);
         return (
-          <li key={item.id} data-check={item.id} className={cx('check-row', item.checked && 'is-done', actions && 'has-actions', flashId === item.id && 'is-flash', selectable && selId === item.id && 'is-selected', editing && 'is-editing')}
+          <li key={item.id} data-check={item.id} className={cx('check-row', shown.checked && 'is-done', isPending && 'is-pending', actions && 'has-actions', flashId === item.id && 'is-flash', selectable && selId === item.id && 'is-selected', editing && 'is-editing')}
             onClick={selectable ? e => {
               // 체크박스·편집 버튼을 누르면 그 줄을 선택(해제하지 않음), 나머지 영역은 선택 ↔ 해제
               const onControl = (e.target as HTMLElement).closest('input, button');
               setSelId(s => (s === item.id && !onControl ? null : item.id));
             } : undefined}>
-            <Checkbox tone="success" checked={item.checked} aria-label={`${item.title} 완료 표시`}
+            <Checkbox tone="success" checked={shown.checked} aria-label={`${item.title} 완료 표시`}
               aria-disabled={locked || undefined} title={locked ? '잠금을 풀면 체크를 해제할 수 있습니다' : undefined}
               onClick={e => { if (locked) { e.preventDefault(); setNudgeId(item.id); } }}
               onChange={() => {
                 if (locked) return;
-                setLock(item.id, !item.checked); // 방금 체크 → 풀린 상태로 바로 입력, 해제 → 잠금 기록 지움
+                if (isPending) { setPending(null); return; }   // 저장 전 체크를 다시 누름 → 취소
+                if (!item.checked && onExec) {
+                  // 다른 줄이 저장 전이면 먼저 저장하고, 이 줄을 저장 전 상태로
+                  commitPending();
+                  setPending({ id: item.id, spent: item.amount, spentDate: TODAY_ISO });
+                  return;
+                }
+                setLock(item.id, false);
                 onToggle(item.id);
               }} />
             <div className="check-row__body">
               <div className="check-row__head">
                 <span className="check-row__title">{item.title}</span>
-                {item.checked
+                {shown.checked
                   ? <span className="check-row__money">
                       <span className="check-row__spentline">
-                        {lockable && (
+                        {lockable && !isPending && (
                           <button type="button" className={cx('check-row__lock', editing && 'is-open', nudgeId === item.id && 'is-nudge')}
                             aria-pressed={editing} aria-label={editing ? `${item.title} 잠그기` : `${item.title} 잠금 풀고 수정`}
                             title={editing ? '잠그기' : '잠금 풀고 수정'} onClick={() => setLock(item.id, !editing)}>
@@ -126,7 +181,10 @@ export default function CheckRows({ items, projects, onToggle, onExec, empty, hi
                           </button>
                         )}
                         <span className="check-row__spent num">
-                          {editing ? <SpentInput item={item} onSpend={spent => onExec!(item.id, { spent })} /> : (item.spent ?? item.amount).toLocaleString('ko-KR')}
+                          {editing
+                            ? <SpentInput title={item.title} value={shown.spent ?? item.amount} live={isPending} onEnter={isPending ? commitPending : undefined}
+                                onSpend={spent => (isPending ? setPending({ ...pendingRef.current!, spent }) : onExec!(item.id, { spent }))} />
+                            : (item.spent ?? item.amount).toLocaleString('ko-KR')}
                           <span aria-hidden={editing || undefined}>원</span>
                         </span>
                       </span>
@@ -141,12 +199,13 @@ export default function CheckRows({ items, projects, onToggle, onExec, empty, hi
                 {!isPublicCheck(item) && !actions && (
                   <span className="check-row__vis" title="비공개: 주관 팀만 볼 수 있음" aria-label="비공개" role="img"><IconLock size={12} /></span>
                 )}
-                {item.checked
+                {shown.checked
                   ? <span className="check-row__date is-exec">
                       <span className="check-row__datelabel">집행</span>
                       {editing
                         ? <span className="check-row__datefield">
-                            <DateField aria-label={`${item.title} 집행일`} value={execDate ?? TODAY_ISO} onChange={v => onExec!(item.id, { spentDate: v })} />
+                            <DateField aria-label={`${item.title} 집행일`} value={execDate ?? TODAY_ISO}
+                              onChange={v => (isPending ? setPending({ ...pendingRef.current!, spentDate: v || TODAY_ISO }) : onExec!(item.id, { spentDate: v }))} />
                           </span>
                         : execDate ?? '날짜 없음'}
                     </span>
@@ -154,6 +213,12 @@ export default function CheckRows({ items, projects, onToggle, onExec, empty, hi
                     ? <span className="check-row__date">{item.date}{d && <b className={cx('check-row__dday', d.late && 'is-late')}>{d.text}</b>}</span>
                     : <span className="check-row__date is-none">예정일 없음</span>}
               </div>
+              {isPending && (
+                <p className="check-row__pending" role="status">
+                  집행 금액·집행일을 확인하세요. <b>다른 곳을 누르면 완료로 저장</b>돼요
+                  <button type="button" className="check-row__pending-done" onClick={commitPending}>완료</button>
+                </p>
+              )}
             </div>
             {actions && <div className="check-row__actions">{actions(item)}</div>}
           </li>

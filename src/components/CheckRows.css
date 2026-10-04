@@ -72,3 +72,8 @@
 }
 /* 비공개 표시 (자물쇠) */
 .check-row__vis { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--text); color: var(--surface); flex-shrink: 0; }
+/* 방금 체크한 항목 — 저장 전 (금액·집행일을 고칠 수 있는 순간) */
+.check-row.is-pending { background: var(--primary-25); box-shadow: inset 3px 0 0 var(--primary-400, var(--primary)); }
+.check-row__pending { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 6px 0 0; font-size: calc(12px * var(--fs)); color: var(--muted); }
+.check-row__pending b { color: var(--primary-700); }
+.check-row__pending-done { margin-left: auto; padding: 3px 12px; border-radius: var(--r-pill); background: var(--grad-primary); color: var(--ink); font-size: calc(12px * var(--fs)); font-weight: 800; }

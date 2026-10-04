@@ -7,6 +7,7 @@ import { requestFocus } from '@/lib/search';
 import { overlapsYear, setViewYear, useViewYear } from '@/lib/viewYear';
 import { Btn, Card, PageHead, SectionHead } from '@/components/ui';
 import { EMPTY_PROJECT, ProjectForm, draftReady, normalizeDraft } from './Project';
+import { newProjectId } from '@/lib/dataApi';
 import './Project.css';
 import './Exec.css';
 
@@ -21,10 +22,16 @@ export default function ProjectNew({ onBack }: { onBack: () => void }) {
   const canSave = draftReady(draft);
   const [year] = useViewYear();
 
-  const save = () => {
-    if (!canSave) return;
-    const id = uid('p');
-    dispatch({ type: 'ADD_PROJECT', id, draft: normalizeDraft(draft), team: state.session?.team ?? '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const save = async () => {
+    if (!canSave || saving) return;
+    const d = normalizeDraft(draft);
+    setSaving(true);
+    setError('');
+    let id: string;
+    try { id = await newProjectId(d, () => uid('p')); } catch (e) { setError(e instanceof Error ? e.message : '프로젝트를 등록하지 못했습니다'); return; } finally { setSaving(false); }
+    dispatch({ type: 'ADD_PROJECT', id, draft: d, team: state.session?.team ?? '' });
     // 조회 연도에 걸치지 않으면 착수 연도로 이동해 새 프로젝트가 목록에 보이도록
     if (!overlapsYear(draft.startDate, draft.endDate, year)) setViewYear(Number(draft.startDate.slice(0, 4)));
     requestFocus('project', id);
@@ -38,10 +45,11 @@ export default function ProjectNew({ onBack }: { onBack: () => void }) {
       <Card pad="lg">
         <SectionHead title="신규 프로젝트 정보" sub="* 표시(사업명 · 착수일 · 종료일)는 꼭 입력해 주세요" />
         <ProjectForm draft={draft} onChange={setDraft} />
+        {error && <p className="reg-note" role="alert">{error}</p>}
         {/* PC 전용 — 모바일은 하단 고정 바 */}
         <div className="row proj-sheet__actions hide-mobile">
           <Btn variant="secondary" onClick={onBack}>취소</Btn>
-          <Btn onClick={save} disabled={!canSave}>등록</Btn>
+          <Btn onClick={() => { void save(); }} disabled={!canSave || saving}>{saving ? '등록 중…' : '등록'}</Btn>
         </div>
       </Card>
 
@@ -50,7 +58,7 @@ export default function ProjectNew({ onBack }: { onBack: () => void }) {
         <div className="exec-bar" role="region" aria-label="프로젝트 등록">
           <div className="exec-bar__btns">
             <Btn variant="secondary" onClick={onBack}>취소</Btn>
-            <Btn onClick={save} disabled={!canSave}>등록</Btn>
+            <Btn onClick={() => { void save(); }} disabled={!canSave || saving}>{saving ? '등록 중…' : '등록'}</Btn>
           </div>
         </div>, document.body)}
     </div>

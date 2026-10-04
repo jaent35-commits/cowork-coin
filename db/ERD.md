@@ -1,5 +1,7 @@
 # 코웍-코인 DB 설계 (PostgreSQL · Supabase)
 
+> **v2.5 (2026-10-04)** — **앱 데이터 연동**. 로그인한 팀은 프로젝트·배분·체크리스트·집행·팀 인원·업무비·회의비 단가·알림을 Supabase 에서 읽고 씁니다 (`src/lib/dataApi.ts`). 읽기 = 팀별 RLS(주관·배분받은 프로젝트만, 참여 팀은 공개 체크리스트만, 집행은 우리 팀 건 + 주관 프로젝트에 들어온 건), 쓰기 = 권한을 검사하는 서버 함수(`save_project` · `checklist_*` · `exec_*` · `set_meeting_rate` · `notify_add`). 컬럼 추가: `projects.memo` · `project_allocations.use_end_date` · `expense_categories.team_id`(팀이 만든 구분). [`migrations/20261004_app_data_v2_5.sql`](migrations/20261004_app_data_v2_5.sql) + 삭제가 들어간 함수 [`20261004b_…`](migrations/20261004b_app_data_v2_5_delete_functions.sql)(SQL Editor 에서 실행).
+>
 > **v2.4 (2026-09-28)** — 팀 로그인 **Edge Function 5개**([`supabase/functions`](../supabase/functions))와 **앱 로그인 연동**. `VITE_SUPABASE_URL` · `VITE_SUPABASE_ANON_KEY` 가 있으면 로그인·팀 계정을 Supabase 로 처리하고, 없으면 지금처럼 브라우저 저장본으로 로그인합니다. 프로젝트·집행 데이터는 아직 브라우저 저장본입니다(다음 단계 RLS 정책). [§2-1 Edge Function](#edge-function-supabasefunctions).
 >
 > **v2.3 (2026-09-28)** — 체크리스트 **집행일** `checklist_items.spent_date` 추가. 체크하면 예정일 자리에 집행일(기본 = 체크한 날, 수정 가능)을 보여 주고, 예정일(`due_date`)은 그대로 둬 체크를 풀면 돌아갑니다. 완료 항목의 체크 해제·금액·집행일 수정은 화면의 **잠금** 버튼을 풀어야 가능합니다(오클릭 방지 · 화면 기능이라 DB 에 저장 안 함). 이미 만든 DB 는 v2.2 다음에 [`migrations/20260928b_checklist_spent_date.sql`](migrations/20260928b_checklist_spent_date.sql) 을 실행합니다.

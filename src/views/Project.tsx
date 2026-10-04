@@ -19,6 +19,7 @@ import YearPicker, { YearBar } from '@/components/layout/YearPicker';
 import Donut from '@/components/Donut';
 import ProjectChecklist, { resetChecklistFilters } from './ProjectChecklist';
 import CheckRows from '@/components/CheckRows';
+import { newProjectId } from '@/lib/dataApi';
 import './Project.css';
 import './Exec.css';
 
@@ -240,10 +241,14 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
   const listToggle = <Segmented options={LIST_FILTERS} value={listFilter} onChange={setListFilter} label="프로젝트 보기" />;
 
   const startAdd = () => { setTab('My 프로젝트'); setAddingNew(true); setEditMode(false); setNewProj(EMPTY_PROJECT); };
-  const saveNew = () => {
-    if (!draftReady(newProj)) return;
-    const id = uid('p');
-    dispatch({ type: 'ADD_PROJECT', id, draft: normalizeDraft(newProj), team: state.session?.team ?? '' });
+  const [savingNew, setSavingNew] = useState(false);
+  const saveNew = async () => {
+    if (!draftReady(newProj) || savingNew) return;
+    const draft = normalizeDraft(newProj);
+    setSavingNew(true);
+    let id: string;
+    try { id = await newProjectId(draft, () => uid('p')); } catch (e) { showToast(e instanceof Error ? e.message : '프로젝트를 등록하지 못했습니다', 'warn'); return; } finally { setSavingNew(false); }
+    dispatch({ type: 'ADD_PROJECT', id, draft, team: state.session?.team ?? '' });
     setAddingNew(false);
     setSelectedId(id);
     showToast('프로젝트가 등록되었습니다!');
@@ -408,7 +413,7 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
           <SectionHead title="신규 프로젝트 등록" right={
             <div className="row">
               <Btn variant="secondary" size="sm" onClick={() => setAddingNew(false)}>취소</Btn>
-              <Btn size="sm" onClick={saveNew} disabled={!draftReady(newProj)}>저장</Btn>
+              <Btn size="sm" onClick={() => { void saveNew(); }} disabled={!draftReady(newProj) || savingNew}>{savingNew ? '저장 중…' : '저장'}</Btn>
             </div>
           } />
           <ProjectForm draft={newProj} onChange={setNewProj} />
@@ -648,7 +653,7 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
               })()}
               <div className="mb-14">
                 <CheckRows items={items} projects={[selected]} hideProject
-                  onToggle={id => dispatch({ type: 'TOGGLE_CHECK', id })}
+                  onToggle={(id, exec) => dispatch({ type: 'TOGGLE_CHECK', id, exec })}
                   onExec={(id, patch) => dispatch({ type: 'SET_CHECK_EXEC', id, patch })}
                   empty={<div className="soft-empty">등록된 항목이 없습니다</div>}
                   actions={selected.isMine ? item => (<>

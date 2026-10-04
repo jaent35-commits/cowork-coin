@@ -111,6 +111,17 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
   /** 집행이 확정된 마지막 달 (미래 연도 = -1) */
   const lastMonth = isCurYear ? CUR_MONTH : year < CUR_YEAR ? 11 : -1;
   const team = state.session?.team ?? '';
+  /** 우리 팀이 배분받은 올해 프로젝트 (주관 프로젝트는 My 경비 배분) · 그 배분액 */
+  const teamProjects = projects.filter(p => overlapsYear(p.startDate, p.endDate, year) && !!state.allocs[p.id]?.some(a => a.teamName === team));
+  const myAlloc = (p: Project) => state.allocs[p.id]?.find(a => a.teamName === team)?.amount ?? 0;
+  /** 프로젝트 예산이 생기는 달: 착수월 (올해 전에 착수했으면 1월) — amount: 그 프로젝트에서 셀 금액 */
+  const projectAddOf = (mi: number, list: Project[], amount: (p: Project) => number) => {
+    const key = ym(year, mi);
+    return list.reduce((s, p) => {
+      const st = p.startDate.slice(0, 7);
+      return s + (st === key || (mi === 0 && st < key) ? amount(p) : 0);
+    }, 0);
+  };
   /** 월 예산 배분(+): 회의비 = 월 인원 × 1인 단가(올해만), 업무비 = 월 예산, 프로젝트 = 착수월에 우리 팀 배분액 */
   const planOf = (mi: number): Plan & { meeting: number; work: number } => {
     if (mi > lastMonth) return { team: 0, project: 0, meeting: 0, work: 0 };
@@ -118,8 +129,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
     // 팀 회의비는 분기 단위 — 분기 첫 달에 3개월치 예산이 한 번에 생김 (매달 생기지 않음)
     const meeting = isCurYear && mi % 3 === 0 ? quarters[quarterOf(mi)]?.budget ?? 0 : 0;
     const work = workBudgetOf(state, key).amount;
-    const project = projects.filter(p => p.startDate.startsWith(key))
-      .reduce((s, p) => s + (state.allocs[p.id]?.find(a => a.teamName === team)?.amount ?? 0), 0);
+    const project = projectAddOf(mi, teamProjects, myAlloc);
     return { meeting, work, team: meeting + work, project };
   };
   const flowOf = (mi: number): Flow => {
@@ -190,22 +200,15 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
    * 과거 연도는 예산을 보관하지 않아 0 (단일 프로젝트는 표시)
    */
   const execOf = (mi: number, k: 'meeting' | 'work' | 'project') => (mi <= lastMonth ? monthly[mi]?.[k] ?? 0 : 0);
-  const projectAddOf = (mi: number, list: Project[]) => {
-    const key = ym(year, mi);
-    return list.reduce((s, p) => {
-      const st = p.startDate.slice(0, 7);
-      return s + (st === key || (mi === 0 && st < key) ? p.allocPool : 0);
-    }, 0);
-  };
   const remainAt = (mi: number): number => {
     if (!isCurYear && !oneProject) return 0;
     const sum = (from: number, f: (i: number) => number) => { let t = 0; for (let i = from; i <= mi; i++) t += f(i); return t; };
-    if (oneProject) return Math.max(0, sum(0, i => projectAddOf(i, [oneProject])) - sum(0, i => oneRow?.[i] ?? 0));
+    if (oneProject) return Math.max(0, sum(0, i => projectAddOf(i, [oneProject], p => p.allocPool)) - sum(0, i => oneRow?.[i] ?? 0));
     const qStart = quarterOf(mi) * 3;
     const meeting = Math.max(0, (quarters[quarterOf(mi)]?.budget ?? 0) - sum(qStart, i => execOf(i, 'meeting')));
     const work = Math.max(0, workBudgetOf(state, ym(year, mi)).amount - execOf(mi, 'work'));
-    const mine = yearProjects.filter(p => p.isMine);
-    const project = Math.max(0, sum(0, i => projectAddOf(i, mine)) - sum(0, i => execOf(i, 'project')));
+    // 우리 팀 기준: 우리 팀이 배분받은 금액(주관 프로젝트의 My 경비 + 참여 프로젝트 배분) − 우리 팀 프로젝트 집행
+    const project = Math.max(0, sum(0, i => projectAddOf(i, teamProjects, myAlloc)) - sum(0, i => execOf(i, 'project')));
     const teamPart = teamSub === 'meeting' ? meeting : teamSub === 'work' ? work : meeting + work;
     return line === 'team' ? teamPart : line === 'project' ? project : teamPart + project;
   };

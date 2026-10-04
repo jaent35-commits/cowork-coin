@@ -1,9 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, type Dispatch, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
 import { reducer, seedState, type Action, type AppState } from './reducer';
 import { shouldDropSession } from '@/lib/remember';
 import { splitRecords } from '@/lib/records';
 import { CUR_YEAR, toEndDate, toStartDate } from '@/lib/date';
 import { LEGACY_INITIAL_PASSWORD } from '@/lib/password';
+import { REMOTE_AUTH } from '@/lib/supabase';
+import { EMPTY_DATA, SyncError, loadRemote, pushAction } from '@/lib/dataApi';
 
 /** 시드/스키마를 바꾸면 버전을 올려 저장본을 무효화한다. */
 const STORAGE_KEY = 'cowork-coin-v5'; // 데모 데이터 제거: 이전 버전의 로컬 저장본은 가져오지 않음
@@ -63,9 +65,28 @@ function withTeamView(s: AppState): AppState {
   };
 }
 
+/** 서버에 반영하지 않는 동작 — 로그인·팀 계정은 Edge Function, 구분은 체크리스트 추가 때 서버가 만듦 */
+const LOCAL_ONLY = new Set<Action['type']>([
+  'INITIALIZE', 'LOGIN', 'LOGOUT', 'HYDRATE', 'SYNC_TEAMS', 'TOGGLE_TEAM', 'ADD_TEAM', 'RENAME_TEAM', 'DELETE_TEAM',
+  'SET_TEAM_ADMIN', 'SET_TEAM_PASSWORD', 'ADD_CATEGORY',
+]);
+/** 서버 반영 실패 안내 — App 이 토스트로 보여 줌 */
+export const SYNC_ERROR_EVENT = 'cowork-sync-error';
+const syncError = (e: unknown) =>
+  window.dispatchEvent(new CustomEvent(SYNC_ERROR_EVENT, { detail: e instanceof SyncError ? e.message : '서버에 저장하지 못했습니다. 네트워크를 확인하세요' }));
+/** 서버 팀 id 를 가진 로그인 팀 (브라우저 저장본 로그인이면 없음) */
+const remoteTeam = (s: AppState) => {
+  const t = s.teams.find(x => x.name === s.session?.team);
+  return t && /^\d+$/.test(t.id) && !t.mustChangePassword ? t : null;
+};
+
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, loadInitial);
+  const [state, rawDispatch] = useReducer(reducer, undefined, loadInitial);
   const view = useMemo(() => withTeamView(state), [state]);
+  // 비동기 반영에서 쓰는 최신 상태 (같은 이벤트에서 연달아 보낸 동작도 이어서 계산)
+  //   그리는 즉시 갱신 — 자식 화면의 effect(기한 임박 확인 등)가 이 컴포넌트 effect 보다 먼저 돌기 때문
+  const latest = useRef(state);
+  latest.current = state;
 
   useEffect(() => {
     try {
@@ -74,6 +95,61 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       /* 저장 공간 부족/비공개 모드 — 메모리 상태로만 동작 */
     }
   }, [state]);
+
+  /* ── Supabase 연동: 로그인한 팀 데이터 읽기 · 바꾼 내용 반영 (src/lib/dataApi.ts) ── */
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const reloadTimer = useRef<number | undefined>(undefined);
+  const lastLoad = useRef(0);
+
+  const reload = useCallback(async () => {
+    const team = remoteTeam(latest.current);
+    if (!REMOTE_AUTH || !team) return;
+    try {
+      const { teams, ...data } = await loadRemote(team);
+      if (latest.current.session?.team !== team.name) return; // 읽는 사이 팀이 바뀜
+      lastLoad.current = Date.now();
+      rawDispatch({ type: 'SYNC_TEAMS', teams });
+      rawDispatch({ type: 'HYDRATE', data });
+    } catch (e) {
+      syncError(e);
+    }
+  }, []);
+  /** 연달아 바꿔도 마지막에 한 번만 다시 읽기 (반영 대기열 뒤에서) */
+  const scheduleReload = useCallback(() => {
+    window.clearTimeout(reloadTimer.current);
+    reloadTimer.current = window.setTimeout(() => { queue.current = queue.current.then(reload); }, 400);
+  }, [reload]);
+
+  const dispatch = useCallback<Dispatch<Action>>(action => {
+    if (!REMOTE_AUTH) { rawDispatch(action); return; }
+    // 로그인·로그아웃(팀 전환): 이전 팀 데이터를 먼저 비움 — 다른 팀의 비공개 항목 등이 남지 않게
+    if (action.type === 'LOGIN' || action.type === 'LOGOUT') rawDispatch({ type: 'HYDRATE', data: EMPTY_DATA });
+    const before = latest.current;
+    const after = reducer(action.type === 'LOGIN' || action.type === 'LOGOUT' ? { ...before, ...EMPTY_DATA } : before, action);
+    latest.current = after;
+    rawDispatch(action);
+    if (LOCAL_ONLY.has(action.type)) return;
+    const team = remoteTeam(before);
+    if (!team) return;
+    queue.current = queue.current.then(async () => {
+      try {
+        if (await pushAction(action, before, after, team)) scheduleReload();
+      } catch (e) {
+        syncError(e);
+        scheduleReload(); // 서버 값으로 되돌림
+      }
+    });
+  }, [scheduleReload]);
+
+  // 로그인(팀이 정해지면) 바로 읽기 · 앱으로 돌아오면 다시 읽기(다른 팀이 바꾼 배분·알림 반영, 20초에 한 번까지)
+  const teamKey = remoteTeam(state)?.id;
+  useEffect(() => { if (teamKey) void reload(); }, [teamKey, reload]);
+  useEffect(() => {
+    if (!REMOTE_AUTH) return;
+    const onShow = () => { if (document.visibilityState === 'visible' && Date.now() - lastLoad.current > 20_000) scheduleReload(); };
+    document.addEventListener('visibilitychange', onShow);
+    return () => document.removeEventListener('visibilitychange', onShow);
+  }, [scheduleReload]);
 
   return (
     <StateCtx.Provider value={view}>

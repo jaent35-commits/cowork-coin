@@ -23,6 +23,9 @@ import MyPage from './views/MyPage';
 import Notification from './views/Notification';
 import Search from './views/Search';
 import Admin from './views/Admin';
+import { SYNC_ERROR_EVENT } from './store/StoreContext';
+import { useToast } from './hooks/useToast';
+import { Toast } from './components/ui';
 
 const GNB_KEY = 'cowork-coin-gnb-collapsed';
 
@@ -38,6 +41,13 @@ export default function App() {
   const session = state.session;
 
   // 모바일 플로팅 + 버튼: 아래로 스크롤 중이면 숨김, 위로 스크롤·맨 위면 표시
+  // Supabase 반영 실패 안내 (화면은 서버 값으로 되돌아감)
+  const [syncToast, showSync] = useToast(4000);
+  useEffect(() => {
+    const onError = (e: Event) => showSync((e as CustomEvent<string>).detail, 'warn');
+    window.addEventListener(SYNC_ERROR_EVENT, onError);
+    return () => window.removeEventListener(SYNC_ERROR_EVENT, onError);
+  }, [showSync]);
   const [fabAway, setFabAway] = useState(false);
   useEffect(() => {
     let lastY = window.scrollY;
@@ -116,6 +126,7 @@ export default function App() {
         title={view === 'project-detail' ? state.projects.find(p => p.id === readDetailId())?.name : undefined} />
       <Sidebar view={view} isAdmin={session.isAdmin} collapsed={gnbCollapsed} onToggle={toggleGnb} onNavigate={navigate} />
 
+      <Toast msg={syncToast} />
       <main className="app-main">
         <div className="app-main__inner" key={view}>
           {view === 'home' && <Home onNavigate={navigate} />}

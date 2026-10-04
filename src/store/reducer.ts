@@ -60,6 +60,8 @@ export function seedState(): AppState {
 
 export type Action =
   | { type: 'INITIALIZE'; name: string; password: string }
+  /** Supabase 에서 읽은 팀 데이터로 교체 (src/lib/dataApi.ts) */
+  | { type: 'HYDRATE'; data: Partial<AppState> }
   | { type: 'LOGIN'; session: Session }
   | { type: 'LOGOUT' }
   | { type: 'TOGGLE_TEAM'; id: string }
@@ -83,7 +85,8 @@ export type Action =
   /** 코웍 팀 미사용 금액을 주관 팀으로 — 코웍 팀 배분액 = 사용액(잔액 0), 남은 금액은 주관 팀 배분에 더함 */
   | { type: 'RECLAIM_ALLOCS'; id: string }
   | { type: 'DEACTIVATE_PROJECT'; id: string; month: string }
-  | { type: 'TOGGLE_CHECK'; id: string }
+  /** exec: 체크할 때 집행 금액·집행일을 함께 (없으면 금액 = 예산, 집행일 = 오늘) */
+  | { type: 'TOGGLE_CHECK'; id: string; exec?: Pick<ChecklistItem, 'spent' | 'spentDate'> }
   /** 완료 항목의 집행 금액 · 집행일 수정 */
   | { type: 'SET_CHECK_EXEC'; id: string; patch: Pick<ChecklistItem, 'spent' | 'spentDate'> }
   | { type: 'ADD_CHECK'; item: Omit<ChecklistItem, 'id' | 'checked'> }
@@ -176,6 +179,8 @@ export function reducer(state: AppState, action: Action): AppState {
         teams: [{ id: uid('t'), name: action.name, password: action.password, active: true, isAdmin: true, mustChangePassword: false }],
         session: { team: action.name, isAdmin: true },
       };
+    case 'HYDRATE':
+      return { ...state, ...action.data };
     case 'LOGIN':
       return { ...state, session: action.session };
     case 'LOGOUT':
@@ -307,7 +312,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'TOGGLE_CHECK':
       // 체크하면 집행 금액 = 예산 · 집행일 = 오늘로 시작, 체크 해제하면 둘 다 지움 (예정일로 돌아감)
       return { ...state, checklist: state.checklist.map(c => (c.id === action.id
-        ? c.checked ? { ...c, checked: false, spent: undefined, spentDate: undefined } : { ...c, checked: true, spent: c.amount, spentDate: TODAY_ISO }
+        ? c.checked ? { ...c, checked: false, spent: undefined, spentDate: undefined } : { ...c, checked: true, spent: action.exec?.spent ?? c.amount, spentDate: action.exec?.spentDate ?? TODAY_ISO }
         : c)) };
     case 'SET_CHECK_EXEC':
       return { ...state, checklist: state.checklist.map(c => (c.id === action.id && c.checked ? { ...c, ...action.patch } : c)) };

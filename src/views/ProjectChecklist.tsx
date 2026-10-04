@@ -118,7 +118,7 @@ export default function ProjectChecklist({ scope }: { scope: Scope }) {
           <p className="proj-check__todo">잔여 예정 <b className="num">{fmt(todoAmt)}</b></p>
         </div>
         {budgetNote && <p className="proj-check__budget">{budgetNote}</p>}
-        <CheckRows selectable items={shown} projects={projects} flashId={flashId} onToggle={id => dispatch({ type: 'TOGGLE_CHECK', id })}
+        <CheckRows selectable items={shown} projects={projects} flashId={flashId} onToggle={(id, exec) => dispatch({ type: 'TOGGLE_CHECK', id, exec })}
           onExec={(id, patch) => dispatch({ type: 'SET_CHECK_EXEC', id, patch })}
           empty={active.length === 0
             ? (scope === 'my'

@@ -19,11 +19,12 @@ export function useEndOf(s: Pick<AppState, 'allocs' | 'session'>, p: Pick<Projec
 }
 
 /**
- * 집행 등록에서 고를 수 있는 프로젝트 — 활성 + 주관 또는 배분받은 팀 + 사용일자가 사용 종료일 이내
+ * 집행 등록에서 고를 수 있는 프로젝트 — 활성 + 우리 팀 배분이 있음(주관 팀은 My 경비 배분) + 사용일자가 사용 종료일 이내
+ * (DB 규칙: 프로젝트 경비는 배분받은 팀만 집행 — exec_records → project_allocations 외래키)
  * (등록하는 날이 아니라 사용일자 기준: 9/30 종료면 10/1 사용 건은 안 보이고, 10/1 에 9/28 사용 건을 등록하면 보임)
  */
 export const execProjects = (s: AppState, useDate: string) =>
-  s.projects.filter(p => p.active && (p.isMine || p.joined) && useDate <= useEndOf(s, p));
+  s.projects.filter(p => p.active && !!s.allocs[p.id]?.some(a => a.teamName === s.session?.team) && useDate <= useEndOf(s, p));
 
 /** 다음 달 소멸 예정 금액 */
 export function expiring(s: AppState) {

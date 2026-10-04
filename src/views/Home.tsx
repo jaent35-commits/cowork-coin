@@ -96,7 +96,7 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
   const statusCount = { all: myChecklist.length, todo: myChecklist.filter(c => !c.checked).length, done: myChecklist.filter(c => c.checked).length };
   const statusOptions = STATUS.map(o => ({ ...o, label: `${o.label} ${statusCount[o.value]}` }));
   const shown = myChecklist.filter(c => (status === 'todo' ? !c.checked : status === 'done' ? c.checked : true));
-  const toggle = (id: string) => dispatch({ type: 'TOGGLE_CHECK', id });
+  const toggle = (id: string, exec?: { spent?: number; spentDate?: string }) => dispatch({ type: 'TOGGLE_CHECK', id, exec });
   const setExec = (id: string, patch: { spent?: number; spentDate?: string }) => dispatch({ type: 'SET_CHECK_EXEC', id, patch });
 
   return (
