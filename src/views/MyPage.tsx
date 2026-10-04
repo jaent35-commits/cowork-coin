@@ -24,7 +24,8 @@ const ERR: Record<Exclude<PwError, ''>, { v: 'danger' | 'warn'; msg: string }> =
 };
 const SERVER_ERR: Partial<Record<string, PwError>> = { wrong_password: 'current', weak_password: 'short', same_password: 'same' };
 
-export default function MyPage() {
+/** 계정 메뉴 화면 — password: 비밀번호 변경 / display: 화면 설정 */
+export default function MyPage({ section }: { section: 'password' | 'display' }) {
   const { session, teams } = useAppState();
   const dispatch = useDispatch();
   const [toast, showToast] = useToast();
@@ -64,9 +65,10 @@ export default function MyPage() {
   return (
     <div className="view-enter">
       <Toast msg={toast} />
-      <PageHead title="마이페이지" />
+      <PageHead title={section === 'password' ? '비밀번호 변경' : '화면 설정'} />
 
       <div className="narrow">
+        {section === 'password' && (
         <Card pad className="mb-16">
           <div className="profile">
             <Avatar name={teamName} size="lg" />
@@ -80,7 +82,9 @@ export default function MyPage() {
             <Input id="my-team" className="input--lg" value={teamName} disabled />
           </Field>
         </Card>
+        )}
 
+        {section === 'display' && (
         <Card pad className="mb-16">
           <h2 className="card-title" data-search-anchor="display">🔠 화면 설정</h2>
           <div className="row row--between row--wrap mb-14">
@@ -95,7 +99,9 @@ export default function MyPage() {
             <Segmented<ThemePref> options={THEME_OPTIONS} value={themePref} onChange={setThemePref} label="화면 모드" />
           </div>
         </Card>
+        )}
 
+        {section === 'password' && (
         <Card pad>
           <h2 className="card-title" data-search-anchor="password">🔐 비밀번호 변경</h2>
           {!team ? (
@@ -117,6 +123,7 @@ export default function MyPage() {
             </form>
           )}
         </Card>
+        )}
       </div>
     </div>
   );

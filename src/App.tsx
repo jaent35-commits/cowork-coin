@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { useAppState, useDispatch } from './store/StoreContext';
 import { unreadCount } from './store/selectors';
 import { useHashView } from './hooks/useHashView';
@@ -51,6 +51,8 @@ export default function App() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
   useEffect(() => { setFabAway(false); }, [view]);
+  // 메뉴(화면)를 옮기면 새 화면이 그려진 뒤 맨 위(main 시작)로 — 이전 화면의 스크롤 위치가 남지 않게
+  useLayoutEffect(() => { window.scrollTo({ top: 0 }); }, [view]);
 
   const toggleGnb = () => setGnbCollapsed(v => {
     try { localStorage.setItem(GNB_KEY, v ? '0' : '1'); } catch { /* 저장 불가 시 세션 동안만 유지 */ }
@@ -125,7 +127,8 @@ export default function App() {
           {view === 'project-new' && <ProjectNew onBack={() => navigate('project')} />}
           {view === 'cowork' && <CoworkChecklist onNavigate={navigate} />}
           {view === 'report' && <Report onNavigate={navigate} />}
-          {view === 'mypage' && <MyPage />}
+          {view === 'mypage' && <MyPage section="password" />}
+          {view === 'settings' && <MyPage section="display" />}
           {view === 'notification' && <Notification />}
           {view === 'search' && <Search onNavigate={navigate} />}
           {view === 'admin' && session.isAdmin && <Admin />}

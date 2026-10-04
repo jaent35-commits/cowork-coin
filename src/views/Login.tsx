@@ -289,7 +289,7 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
 
             <hr className="lg-divider" />
             <p className="lg-recovery">
-              바꾼 비밀번호는 마이페이지에서 다시 변경할 수 있어요.{' '}
+              바꾼 비밀번호는 팀 이름 메뉴 › 비밀번호 변경에서 다시 바꿀 수 있어요.{' '}
               <button type="button" className="lg-link" onClick={cancelChange}>다른 팀으로 로그인</button>
             </p>
           </form>

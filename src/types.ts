@@ -9,6 +9,7 @@ export type View =
   | 'cowork'
   | 'report'
   | 'mypage'
+  | 'settings'
   | 'notification'
   | 'admin'
   | 'search';
@@ -45,6 +46,8 @@ export interface Project {
   active: boolean;
   /** 주관(등록) 팀 */
   ownerTeam: string;
+  /** 프로젝트 메모 (선택) */
+  memo?: string;
   /** 화면용 계산값 — 로그인한 팀이 주관 팀 (StoreContext 에서 채움, 저장값은 무시) */
   isMine: boolean;
   /** 화면용 계산값 — 로그인한 팀이 주관 팀은 아니지만 배분받은 참여 팀 */
@@ -59,9 +62,12 @@ export interface AllocRow {
   amount: number;
   /** 이 팀이 배분액에서 사용한 금액 */
   used?: number;
+  /** 사용 종료일 YYYY-MM-DD — 집행 사용일자가 이 날까지인 건만 이 프로젝트 경비로 등록 (없으면 프로젝트 종료일) */
+  endDate?: string;
 }
 
-export type Category = '식비' | '교통비' | '자재비' | '숙박비' | '기타';
+/** 체크리스트(My 경비) 구분 — 고정 구분(FIXED_CATEGORIES) 또는 팀이 직접 만든 구분 */
+export type Category = string;
 
 /** 체크리스트 공개 범위 — public: 배분받은 코웍 팀 모두, private: 주관 팀만 */
 export type CheckVisibility = 'public' | 'private';

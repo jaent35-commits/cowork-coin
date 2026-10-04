@@ -3,6 +3,7 @@ import { IconBack, IconBan, IconCheckCircle, IconEye, IconEyeOff, IconInfo, Icon
 import { createPortal } from 'react-dom';
 import { fmtAmt, hangulWon, parseAmt } from '@/lib/format';
 import type { ToastState } from '@/hooks/useToast';
+import { useDigitCaret } from './useDigitCaret';
 import './ui.css';
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
@@ -162,10 +163,12 @@ export { StepNav, YearGrid, MonthGrid } from './StepNav';
 /** 천 단위 콤마 금액 입력 + '원' 접미사 (hangul: 입력칸 아래에 "1억2천5백만원" 읽기 표시) */
 export function AmountInput({ value, onChange, className, hangul, ...rest }:
   Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> & { value: number; onChange: (v: number) => void; hangul?: boolean }) {
+  // 콤마가 다시 들어가도 커서는 입력하던 자리에 (끝으로 튀지 않게)
+  const caret = useDigitCaret();
   const field = (
     <div className={cx('amount-input', !hangul && className)}>
-      <input className="input" inputMode="numeric" placeholder="0" value={fmtAmt(value)}
-        onChange={e => onChange(parseAmt(e.target.value))} {...rest} />
+      <input ref={caret.ref} className="input" inputMode="numeric" placeholder="0" value={fmtAmt(value)}
+        onChange={e => { caret.mark(e.target); onChange(parseAmt(e.target.value)); }} {...rest} />
       <span className="amount-input__suffix" aria-hidden="true">원</span>
     </div>
   );
@@ -324,7 +327,8 @@ export function Tabs<T extends string>({ tabs, active, onSelect }: { tabs: reado
     <div className="tabs no-scrollbar" role="tablist">
       {tabs.map(t => (
         <button key={t} type="button" role="tab" aria-selected={active === t}
-          className={cx('tabs__tab', active === t && 'is-active')} onClick={() => onSelect(t)}>
+          className={cx('tabs__tab', active === t && 'is-active')}
+          onClick={() => { if (t !== active && window.scrollY > 0) window.scrollTo({ top: 0, behavior: 'smooth' }); onSelect(t); }}>
           {t}
         </button>
       ))}

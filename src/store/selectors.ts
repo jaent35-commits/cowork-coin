@@ -13,6 +13,18 @@ export const myActiveProjects = (s: AppState) => s.projects.filter(p => p.isMine
 /** 진행 중 프로젝트 = 활성 + 종료월이 지나지 않은 건 */
 export const openProjects = (s: AppState) => s.projects.filter(p => p.active && monthsUntil(p.endDate) >= 0);
 
+/** 로그인한 팀의 이 프로젝트 경비 사용 종료일 — 팀 배분에 정한 날, 없으면 프로젝트 종료일 */
+export function useEndOf(s: Pick<AppState, 'allocs' | 'session'>, p: Pick<Project, 'id' | 'endDate'>): string {
+  return s.allocs[p.id]?.find(a => a.teamName === s.session?.team)?.endDate || p.endDate;
+}
+
+/**
+ * 집행 등록에서 고를 수 있는 프로젝트 — 활성 + 주관 또는 배분받은 팀 + 사용일자가 사용 종료일 이내
+ * (등록하는 날이 아니라 사용일자 기준: 9/30 종료면 10/1 사용 건은 안 보이고, 10/1 에 9/28 사용 건을 등록하면 보임)
+ */
+export const execProjects = (s: AppState, useDate: string) =>
+  s.projects.filter(p => p.active && (p.isMine || p.joined) && useDate <= useEndOf(s, p));
+
 /** 다음 달 소멸 예정 금액 */
 export function expiring(s: AppState) {
   const q = currentQuarter(s);

@@ -3,7 +3,8 @@ import type {
 } from '@/types';
 
 export const DEFAULT_MEETING_RATE = 30000;
-export const CATEGORIES = ['식비', '교통비', '자재비', '숙박비', '기타'] as const;
+/** My 경비 구분 — 모든 팀 공통 고정값 (팀이 직접 만든 구분은 state.categories 에 팀별로) */
+export const CATEGORIES = ['회의비(원가)', '업무비(원가)', '일반교통비(원가)', '기타(원가)'] as const;
 
 export const SEED_TEAMS: Team[] = [];
 export const SEED_PROJECTS: Project[] = [];

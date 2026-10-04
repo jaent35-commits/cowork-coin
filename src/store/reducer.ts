@@ -3,7 +3,7 @@ import type { CheckVisibility,
 } from '@/types';
 import { splitRecords } from '@/lib/records';
 import {
-  DEFAULT_MEETING_RATE, SEED_ALLOCS, SEED_CHECKLIST, SEED_MONTHLY, SEED_NOTIFICATIONS,
+  CATEGORIES, DEFAULT_MEETING_RATE, SEED_ALLOCS, SEED_CHECKLIST, SEED_MONTHLY, SEED_NOTIFICATIONS,
   SEED_PROJECT_MONTHLY, SEED_PROJECTS, SEED_QUARTERS, SEED_RECORDS, SEED_TEAMS, SEED_WORK_BUDGETS,
 } from '@/data/seed';
 import { CUR_QUARTER, CUR_YEAR, TODAY_ISO, monthsUntil, parseYm, quarterOf, toEndDate } from '@/lib/date';
@@ -27,6 +27,12 @@ export interface AppState {
   meetingRate: number;
   /** 팀 업무비 월 예산 'YYYY-MM' → 금액 (입력한 달만. 사용액은 집행 이력에서 계산) */
   workBudgets: Record<string, number>;
+  /** 팀명 → 팀이 직접 만든 My 경비 구분 (그 팀만 보고 씀) */
+  categories: Record<string, string[]>;
+  /** 다음 연도 분기 인원·예산 미리 입력 (연도 → 분기 4개) — 그 해가 되면 quarters 로 옮김 */
+  plannedQuarters: Record<string, QuarterData[]>;
+  /** quarters 가 몇 년 것인지 — 해가 바뀌면 그 해 계획(plannedQuarters)으로 교체 */
+  quartersYear: number;
 }
 
 export const DEFAULT_PREFS: NotifPrefs = { push: false, kinds: { exec: true, setting: true, alloc: true, deadline: true } };
@@ -46,6 +52,9 @@ export function seedState(): AppState {
     notifPrefs: {},
     meetingRate: DEFAULT_MEETING_RATE,
     workBudgets: SEED_WORK_BUDGETS,
+    categories: {},
+    plannedQuarters: {},
+    quartersYear: CUR_YEAR,
   });
 }
 
@@ -64,17 +73,23 @@ export type Action =
   /** Supabase 팀 목록으로 교체 — 이름이 바뀐 팀은 배분·집행·주관 팀 이름도 함께 변경 */
   | { type: 'SYNC_TEAMS'; teams: Team[] }
   | { type: 'SET_RATE'; rate: number }
-  | { type: 'SAVE_HEADCOUNTS'; quarterIdx: number; headcounts: number[] }
+  /** year: 올해가 아닌(다음) 연도면 plannedQuarters 에 저장 — 9월부터 다음 해 인원을 미리 입력 */
+  | { type: 'SAVE_HEADCOUNTS'; quarterIdx: number; headcounts: number[]; year?: number }
   /** scope: after = 이후 달도 같은 금액(이후에 따로 입력한 달은 지움), only = 이 달만 (다음 달은 기존 금액 유지) */
   | { type: 'SAVE_WORK_BUDGET'; month: string; amount: number; scope: 'after' | 'only' }
   | { type: 'ADD_PROJECT'; id: string; draft: ProjectDraft; team: string }
-  | { type: 'UPDATE_PROJECT'; id: string; draft: ProjectDraft; allocs: AllocRow[] }
+  /** reactivate: 비활성 프로젝트를 편집에서 다시 활성화 */
+  | { type: 'UPDATE_PROJECT'; id: string; draft: ProjectDraft; allocs: AllocRow[]; reactivate?: boolean }
+  /** 코웍 팀 미사용 금액을 주관 팀으로 — 코웍 팀 배분액 = 사용액(잔액 0), 남은 금액은 주관 팀 배분에 더함 */
+  | { type: 'RECLAIM_ALLOCS'; id: string }
   | { type: 'DEACTIVATE_PROJECT'; id: string; month: string }
   | { type: 'TOGGLE_CHECK'; id: string }
   /** 완료 항목의 집행 금액 · 집행일 수정 */
   | { type: 'SET_CHECK_EXEC'; id: string; patch: Pick<ChecklistItem, 'spent' | 'spentDate'> }
   | { type: 'ADD_CHECK'; item: Omit<ChecklistItem, 'id' | 'checked'> }
   | { type: 'DELETE_CHECK'; id: string }
+  /** 팀이 직접 만든 My 경비 구분 추가 (고정 구분·이미 있는 이름이면 무시) */
+  | { type: 'ADD_CATEGORY'; team: string; name: string }
   | { type: 'SET_CHECK_VISIBILITY'; id: string; visibility: CheckVisibility }
   | { type: 'ADD_RECORD'; record: Omit<ExecRecord, 'id' | 'total'> }
   /** 집행 등록 화면: 여러 줄(1줄 = 1건)을 한 번에 — 알림은 1개로 묶음 */
@@ -98,9 +113,10 @@ function notify(state: AppState, n: Omit<NotifItem, 'id' | 'time' | 'read'>): No
 function allocNotices(state: AppState, p: Pick<Project, 'name'>, prev: AllocRow[], next: AllocRow[]): NotifItem[] {
   let list = state.notifications;
   for (const a of next) {
-    if (!a.teamName.trim() || a.amount <= 0) continue;
+    if (!a.teamName.trim()) continue;
     const before = prev.find(x => x.teamName === a.teamName)?.amount ?? 0;
-    if (before === a.amount) continue;
+    // 0원 → 0원은 알릴 것 없음 (배분액이 0원으로 줄어든 팀은 '변경'으로 알림)
+    if (before === a.amount || (a.amount <= 0 && before <= 0)) continue;
     list = notify({ ...state, notifications: list }, before > 0
       ? { type: 'alloc', team: a.teamName, title: '프로젝트 배분 변경', desc: `${p.name} 프로젝트의 우리 팀 배분 금액이 ${fmt(before)} → ${fmt(a.amount)}으로 변경되었습니다.` }
       : { type: 'alloc', team: a.teamName, title: '새 프로젝트 배분', desc: `${p.name} 프로젝트에 우리 팀 예산 ${fmt(a.amount)}이 배분되었습니다.` });
@@ -182,6 +198,7 @@ export function reducer(state: AppState, action: Action): AppState {
         allocs: Object.fromEntries(Object.entries(state.allocs).map(([k, rows]) => [k, rows.map(a => ({ ...a, teamName: rn(a.teamName)! }))])),
         records: state.records.map(r => (r.team === from ? { ...r, team: action.name } : r)),
         projects: state.projects.map(p => (p.ownerTeam === from ? { ...p, ownerTeam: action.name } : p)),
+        categories: Object.fromEntries(Object.entries(state.categories).map(([k, v]) => [rn(k)!, v])),
         session: state.session && state.session.team === from ? { ...state.session, team: action.name } : state.session,
       };
     }
@@ -218,15 +235,18 @@ export function reducer(state: AppState, action: Action): AppState {
           i < CUR_QUARTER ? q : { ...q, budget: q.headcounts.reduce((s, n) => s + n, 0) * action.rate }),
       };
 
-    case 'SAVE_HEADCOUNTS':
-      return {
-        ...state,
-        quarters: state.quarters.map((q, i) => i !== action.quarterIdx ? q : {
-          ...q,
-          headcounts: [...action.headcounts],
-          budget: action.headcounts.reduce((s, n) => s + n, 0) * state.meetingRate,
-        }),
-      };
+    case 'SAVE_HEADCOUNTS': {
+      const save = (qs: QuarterData[]) => qs.map((q, i) => i !== action.quarterIdx ? q : {
+        ...q,
+        headcounts: [...action.headcounts],
+        budget: action.headcounts.reduce((s, n) => s + n, 0) * state.meetingRate,
+      });
+      if (action.year && action.year !== CUR_YEAR) {
+        const key = String(action.year);
+        return { ...state, plannedQuarters: { ...state.plannedQuarters, [key]: save(state.plannedQuarters[key] ?? structuredClone(SEED_QUARTERS)) } };
+      }
+      return { ...state, quarters: save(state.quarters) };
+    }
 
     case 'SAVE_WORK_BUDGET': {
       const { month, scope } = action;
@@ -258,10 +278,28 @@ export function reducer(state: AppState, action: Action): AppState {
       const allocs = action.allocs.filter(a => a.teamName.trim() || a.amount);
       return {
         ...state,
-        projects: state.projects.map(p => (p.id === action.id ? { ...p, ...action.draft } : p)),
+        projects: state.projects.map(p => (p.id === action.id ? { ...p, ...action.draft, ...(action.reactivate ? { active: true } : {}) } : p)),
         allocs: { ...state.allocs, [action.id]: allocs },
         notifications: allocNotices(state, action.draft, state.allocs[action.id] ?? [], allocs),
       };
+    }
+    case 'RECLAIM_ALLOCS': {
+      const p = state.projects.find(x => x.id === action.id);
+      const prev = state.allocs[action.id] ?? [];
+      if (!p) return state;
+      let freed = 0;
+      let next = prev.map(a => {
+        if (a.teamName === p.ownerTeam) return a;
+        const used = a.used ?? 0;
+        if (a.amount <= used) return a;
+        freed += a.amount - used;
+        return { ...a, amount: used };
+      });
+      if (!freed) return state;
+      next = next.some(a => a.teamName === p.ownerTeam)
+        ? next.map(a => (a.teamName === p.ownerTeam ? { ...a, amount: a.amount + freed } : a))
+        : [{ id: uid('a'), teamName: p.ownerTeam, amount: freed, used: 0 }, ...next];
+      return { ...state, allocs: { ...state.allocs, [action.id]: next }, notifications: allocNotices(state, p, prev, next) };
     }
     case 'DEACTIVATE_PROJECT':
       return { ...state, projects: state.projects.map(p => (p.id === action.id ? { ...p, active: false, endDate: toEndDate(action.month) } : p)) };
@@ -279,6 +317,12 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, checklist: state.checklist.map(c => (c.id === action.id ? { ...c, visibility: action.visibility } : c)) };
     case 'DELETE_CHECK':
       return { ...state, checklist: state.checklist.filter(c => c.id !== action.id) };
+    case 'ADD_CATEGORY': {
+      const name = action.name.trim();
+      const mine = state.categories[action.team] ?? [];
+      if (!name || (CATEGORIES as readonly string[]).includes(name) || mine.includes(name)) return state;
+      return { ...state, categories: { ...state.categories, [action.team]: [...mine, name] } };
+    }
 
     case 'ADD_RECORD': {
       const record: ExecRecord = { ...action.record, id: uid('e'), total: sumItems(action.record) };

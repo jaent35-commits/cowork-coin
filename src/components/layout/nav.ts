@@ -39,7 +39,7 @@ export const ADMIN_NAV: NavItem = { view: 'admin', label: '관리자 메뉴', sh
 /** 모바일(≤1024) 상단 헤더에 표시할 화면 제목 — 코웍 체크리스트는 모바일에서 집행 현황 안의 화면이므로 '집행 현황' */
 const MOBILE_TITLE: Record<View, string> = {
   home: '홈', meeting: '팀 운영', project: '프로젝트 운영', exec: '집행 현황', 'exec-new': '집행 등록', 'project-new': '프로젝트 등록', 'project-detail': '프로젝트 상세',
-  cowork: '집행 현황', report: '리포트', mypage: '마이페이지', notification: '알림', admin: '관리자', search: '검색 결과',
+  cowork: '집행 현황', report: '리포트', mypage: '비밀번호 변경', settings: '화면 설정', notification: '알림', admin: '관리자', search: '검색 결과',
 };
 export const mobileTitle = (view: View) => MOBILE_TITLE[view];
 

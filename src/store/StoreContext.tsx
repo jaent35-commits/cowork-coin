@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useReducer, type Dispatc
 import { reducer, seedState, type Action, type AppState } from './reducer';
 import { shouldDropSession } from '@/lib/remember';
 import { splitRecords } from '@/lib/records';
-import { toEndDate, toStartDate } from '@/lib/date';
+import { CUR_YEAR, toEndDate, toStartDate } from '@/lib/date';
 import { LEGACY_INITIAL_PASSWORD } from '@/lib/password';
 
 /** 시드/스키마를 바꾸면 버전을 올려 저장본을 무효화한다. */
@@ -17,6 +17,21 @@ function loadInitial(): AppState {
       // 관리자 권한 필드가 없던 저장본 → 시드 기본값으로 보정
       // 알림 설정이 없던 저장본 보정
       state.notifPrefs = state.notifPrefs ?? {};
+      // 팀이 만든 My 경비 구분이 없던 저장본
+      state.categories = state.categories ?? {};
+      // 다음 해 분기 계획 — 해가 바뀌면 그 해 계획(없으면 빈 분기)을 올해 분기로, 집행액은 집행 이력에서 다시 계산
+      state.plannedQuarters = state.plannedQuarters ?? {};
+      state.quartersYear = state.quartersYear ?? CUR_YEAR;
+      if (state.quartersYear !== CUR_YEAR) {
+        const { [String(CUR_YEAR)]: plan, ...rest } = state.plannedQuarters;
+        state.quarters = (plan ?? seed.quarters).map((q, qi) => ({
+          ...q,
+          used: state.records.filter(r => r.type === 'meeting' && r.month.startsWith(`${CUR_YEAR}-`) && Math.floor((Number(r.month.slice(5, 7)) - 1) / 3) === qi)
+            .reduce((s, r) => s + r.total, 0),
+        }));
+        state.plannedQuarters = rest;
+        state.quartersYear = CUR_YEAR;
+      }
       // 팀 업무비가 없던 저장본 → 시드 월 예산으로 시작
       state.workBudgets = state.workBudgets ?? seed.workBudgets;
       state.records = splitRecords(state.records ?? []);

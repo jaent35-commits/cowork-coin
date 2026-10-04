@@ -128,3 +128,19 @@ export const IconLock = (p: P) => (
 export const IconUnlock = (p: P) => (
   <Svg strokeWidth={2} {...p}><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5" /><path d="M8 10.5V7.5a4 4 0 0 1 7.75-1.4" /></Svg>
 );
+/** 화면 설정 (모니터 + 글씨) */
+export const IconDisplay = (p: P) => (
+  <Svg strokeWidth={2} {...p}><rect x="3" y="4" width="18" height="12.5" rx="2" /><path d="M8.5 20.5h7M12 16.5v4" /><path d="M8.5 12.5l2-5 2 5M9.2 11h2.6" /><path d="M14.5 12.5V9.5" /></Svg>
+);
+/** 저장 (디스크) */
+export const IconSave = (p: P) => (
+  <Svg strokeWidth={2} {...p}><path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4z" /><path d="M8 4v5h7V4" /><rect x="8" y="13" width="8" height="5" rx="1" /></Svg>
+);
+/** 되돌리기 (다시 활성화) */
+export const IconRestore = (p: P) => (
+  <Svg strokeWidth={2} {...p}><path d="M4 12a8 8 0 1 0 2.4-5.7" /><path d="M4 4v4.5h4.5" /></Svg>
+);
+/** 이동 (미사용 금액 회수) */
+export const IconMove = (p: P) => (
+  <Svg strokeWidth={2} {...p}><path d="M4 12h14" /><path d="M13 6l6 6-6 6" /></Svg>
+);

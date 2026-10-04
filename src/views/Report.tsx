@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ExecRecord, View } from '@/types';
+import type { ExecRecord, Project, View } from '@/types';
 import { useAppState } from '@/store/StoreContext';
 import { currentQuarter } from '@/store/selectors';
 import { YEARLY_HISTORY } from '@/data/seed';
@@ -66,12 +66,13 @@ function LineChart({ pts, sel, onSelect }: { pts: Pt[]; sel: number; onSelect: (
 }
 
 /** + 배분 / − 집행 두 줄 (없으면 —) */
+/** + 배분 · − 집행 — 금액이 없어도 두 줄 자리를 지켜 상자 높이가 바뀌지 않게 */
 function PlusMinus({ plus, minus }: { plus: number; minus: number }) {
-  if (plus <= 0 && minus <= 0) return <b>—</b>;
+  const none = plus <= 0 && minus <= 0;
   return (
     <>
-      {plus > 0 && <b className="is-plus">+{fmt(plus)}</b>}
-      {minus > 0 && <b className="is-minus">−{fmt(minus)}</b>}
+      {plus > 0 ? <b className="is-plus">+{fmt(plus)}</b> : <b className={cx(!none && 'is-blank')} aria-hidden={!none}>{none ? '—' : '0'}</b>}
+      {minus > 0 ? <b className="is-minus">−{fmt(minus)}</b> : <b className="is-blank" aria-hidden="true">0</b>}
     </>
   );
 }
@@ -114,7 +115,8 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
   const planOf = (mi: number): Plan & { meeting: number; work: number } => {
     if (mi > lastMonth) return { team: 0, project: 0, meeting: 0, work: 0 };
     const key = ym(year, mi);
-    const meeting = isCurYear ? (quarters[quarterOf(mi)]?.headcounts[mi % 3] ?? 0) * state.meetingRate : 0;
+    // 팀 회의비는 분기 단위 — 분기 첫 달에 3개월치 예산이 한 번에 생김 (매달 생기지 않음)
+    const meeting = isCurYear && mi % 3 === 0 ? quarters[quarterOf(mi)]?.budget ?? 0 : 0;
     const work = workBudgetOf(state, key).amount;
     const project = projects.filter(p => p.startDate.startsWith(key))
       .reduce((s, p) => s + (state.allocs[p.id]?.find(a => a.teamName === team)?.amount ?? 0), 0);
@@ -180,33 +182,48 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
   };
   const pickYear = (y: { meeting: number; work?: number; project: number }) =>
     (line === 'team' ? teamOf(y) : line === 'project' ? y.project : y.meeting + (y.work ?? 0) + y.project);
-  const meetingBudget = quarters.reduce((s, x) => s + x.budget, 0);
-  const workBudget = Array.from({ length: 12 }, (_, i) => workBudgetOf(state, ym(CUR_YEAR, i)).amount).reduce((s, v) => s + v, 0);
-  const teamBudget = teamSub === 'meeting' ? meetingBudget : teamSub === 'work' ? workBudget : meetingBudget + workBudget;
-  const projectBudget = projects.filter(p => p.isMine).reduce((s, p) => s + p.allocPool, 0);
-  // 연도별 예산은 올해만 보관 — 다른 연도는 잔액선 0
-  const budget = !isCurYear && !oneProject ? 0 : oneProject ? oneProject.allocPool
-    : line === 'team' ? teamBudget : line === 'project' ? projectBudget : meetingBudget + workBudget + projectBudget;
+  /**
+   * 잔액선 — 그 달 말 기준 쓸 수 있는 예산 (예산이 처음 생긴 달 전에는 0)
+   * · 팀 회의비: 분기 예산이 분기 첫 달에 한 번에 생기고, 분기 안에서만 씀 → 분기가 끝나면 남은 금액 소멸
+   * · 팀 업무비: 그 달 예산을 그 달에만 씀 (이월 없음 · 남으면 소멸)
+   * · 프로젝트: 착수월에 배분 가능 금액이 생기고(올해 전에 착수했으면 1월) 사업 기간 동안 누적
+   * 과거 연도는 예산을 보관하지 않아 0 (단일 프로젝트는 표시)
+   */
+  const execOf = (mi: number, k: 'meeting' | 'work' | 'project') => (mi <= lastMonth ? monthly[mi]?.[k] ?? 0 : 0);
+  const projectAddOf = (mi: number, list: Project[]) => {
+    const key = ym(year, mi);
+    return list.reduce((s, p) => {
+      const st = p.startDate.slice(0, 7);
+      return s + (st === key || (mi === 0 && st < key) ? p.allocPool : 0);
+    }, 0);
+  };
+  const remainAt = (mi: number): number => {
+    if (!isCurYear && !oneProject) return 0;
+    const sum = (from: number, f: (i: number) => number) => { let t = 0; for (let i = from; i <= mi; i++) t += f(i); return t; };
+    if (oneProject) return Math.max(0, sum(0, i => projectAddOf(i, [oneProject])) - sum(0, i => oneRow?.[i] ?? 0));
+    const qStart = quarterOf(mi) * 3;
+    const meeting = Math.max(0, (quarters[quarterOf(mi)]?.budget ?? 0) - sum(qStart, i => execOf(i, 'meeting')));
+    const work = Math.max(0, workBudgetOf(state, ym(year, mi)).amount - execOf(mi, 'work'));
+    const mine = yearProjects.filter(p => p.isMine);
+    const project = Math.max(0, sum(0, i => projectAddOf(i, mine)) - sum(0, i => execOf(i, 'project')));
+    const teamPart = teamSub === 'meeting' ? meeting : teamSub === 'work' ? work : meeting + work;
+    return line === 'team' ? teamPart : line === 'project' ? project : teamPart + project;
+  };
   const cumulative = Array.from({ length: lastMonth + 1 }, (_, i) => pickMonth(i)).reduce((s, v) => s + v, 0);
+  /** 지금(집행 확정 달 말) 쓸 수 있는 예산 */
+  const remainNow = lastMonth >= 0 ? remainAt(lastMonth) : 0;
 
-  const monthPts = (): Pt[] => {
-    let run = 0;
-    return monthly.map(m => {
-      const past = m.month <= lastMonth;
-      const exec = past ? pickMonth(m.month) : 0;
-      run += exec;
-      return { label: String(m.month + 1), exec, remain: Math.max(0, budget - run), past };
-    });
-  };
-  const quarterPts = (): Pt[] => {
-    let run = 0;
-    return [0, 1, 2, 3].map(qi => {
-      const ms = monthly.filter(m => Math.floor(m.month / 3) === qi && m.month <= lastMonth);
-      const exec = ms.reduce((s, m) => s + pickMonth(m.month), 0);
-      run += exec;
-      return { label: `Q${qi + 1}`, exec, remain: Math.max(0, budget - run), past: ms.length > 0 };
-    });
-  };
+  const monthPts = (): Pt[] => monthly.map(m => {
+    const past = m.month <= lastMonth;
+    return { label: String(m.month + 1), exec: past ? pickMonth(m.month) : 0, remain: remainAt(m.month), past };
+  });
+  // 분기 = 분기 마지막 달 말 기준 (진행 중인 분기는 지금 기준)
+  const quarterPts = (): Pt[] => [0, 1, 2, 3].map(qi => {
+    const ms = monthly.filter(m => Math.floor(m.month / 3) === qi && m.month <= lastMonth);
+    const exec = ms.reduce((s, m) => s + pickMonth(m.month), 0);
+    const at = Math.min(qi * 3 + 2, lastMonth >= qi * 3 ? lastMonth : qi * 3 + 2);
+    return { label: `Q${qi + 1}`, exec, remain: remainAt(at), past: ms.length > 0 };
+  });
   const yearRows = [
     ...YEARLY_HISTORY,
     {
@@ -217,10 +234,10 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
   ] as { year: number; meeting: number; work?: number; project: number }[];
   // 과거 연도 예산은 보관하지 않으므로 올해만 잔액 표시. 단일 프로젝트는 올해 데이터만 있음
   const yearPts = (): Pt[] => oneRow
-    ? [{ label: String(year), exec: cumulative, remain: Math.max(0, budget - cumulative), past: true }]
+    ? [{ label: String(year), exec: cumulative, remain: remainNow, past: true }]
     : yearRows.map(y => ({
       label: String(y.year), exec: pickYear(y), past: true,
-      remain: y.year === CUR_YEAR ? Math.max(0, budget - cumulative) : 0,
+      remain: y.year === CUR_YEAR ? remainNow : 0,
     }));
 
   const pts = period === 'month' ? monthPts() : period === 'quarter' ? quarterPts() : yearPts();
@@ -288,12 +305,11 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
               className={cx('cal-month', isCur && 'is-cur', selMonth === m.month && 'is-sel', m.month > lastMonth && 'is-future')}>
               <span className="cal-month__name">{m.month + 1}월</span>
               {/* + 예산 배분 · − 집행 */}
-              {(plus > 0 || minus > 0) && (
-                <span className="cal-month__vals">
-                  {plus > 0 && <span className="is-plus">+{fmtMan(plus)}</span>}
-                  {minus > 0 && <span className="is-minus">−{fmtMan(minus)}</span>}
-                </span>
-              )}
+              {/* 금액이 없어도 두 줄 자리를 지켜 상자 높이 고정 */}
+              <span className="cal-month__vals">
+                {plus > 0 ? <span className="is-plus">+{fmtMan(plus)}</span> : <span className="is-blank" aria-hidden="true">0</span>}
+                {minus > 0 ? <span className="is-minus">−{fmtMan(minus)}</span> : <span className="is-blank" aria-hidden="true">0</span>}
+              </span>
             </button>
           );
         })}
@@ -317,7 +333,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
             <div className="row row--between">
               <span className="cal-year__name">{y.year}년 {isCur && <em>현재</em>}</span>
               <span className="cal-year__vals num">
-                {plus > 0 && <span className="is-plus">+{fmt(plus)}</span>}
+                {plus > 0 ? <span className="is-plus">+{fmt(plus)}</span> : <span className="is-blank" aria-hidden="true">0</span>}
                 <span className="is-minus">−{fmt(teamExec + y.project)}</span>
               </span>
             </div>

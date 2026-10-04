@@ -6,7 +6,7 @@ import { uid } from '@/lib/format';
 import { requestFocus } from '@/lib/search';
 import { overlapsYear, setViewYear, useViewYear } from '@/lib/viewYear';
 import { Btn, Card, PageHead, SectionHead } from '@/components/ui';
-import { EMPTY_PROJECT, ProjectForm, draftReady } from './Project';
+import { EMPTY_PROJECT, ProjectForm, draftReady, normalizeDraft } from './Project';
 import './Project.css';
 import './Exec.css';
 
@@ -24,7 +24,7 @@ export default function ProjectNew({ onBack }: { onBack: () => void }) {
   const save = () => {
     if (!canSave) return;
     const id = uid('p');
-    dispatch({ type: 'ADD_PROJECT', id, draft: { ...draft, name: draft.name.trim() }, team: state.session?.team ?? '' });
+    dispatch({ type: 'ADD_PROJECT', id, draft: normalizeDraft(draft), team: state.session?.team ?? '' });
     // 조회 연도에 걸치지 않으면 착수 연도로 이동해 새 프로젝트가 목록에 보이도록
     if (!overlapsYear(draft.startDate, draft.endDate, year)) setViewYear(Number(draft.startDate.slice(0, 4)));
     requestFocus('project', id);

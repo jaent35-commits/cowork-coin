@@ -70,3 +70,5 @@
   .check-row.has-actions .check-row__body { flex-basis: calc(100% - 30px); }
   .check-row.has-actions .check-row__actions { margin-left: auto; }
 }
+/* 비공개 표시 (자물쇠) */
+.check-row__vis { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--text); color: var(--surface); flex-shrink: 0; }

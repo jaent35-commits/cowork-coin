@@ -37,7 +37,7 @@
 .hsearch__field { position: relative; display: flex; align-items: center; }
 .hsearch__icon { position: absolute; left: 12px; color: var(--faint); pointer-events: none; }
 .hsearch__field input {
-  width: 280px; height: 38px; padding: 0 34px 0 36px;
+  width: 280px; height: 36px; padding: 0 34px 0 36px;
   border: 1.5px solid var(--line-input); border-radius: var(--r-pill); background: var(--surface-muted);
   font-size: calc(13.5px * var(--fs)); color: var(--text); outline: none; transition: border-color 0.15s, box-shadow 0.15s, background 0.15s, width 0.2s;
 }
@@ -77,6 +77,7 @@
 .team-menu { position: relative; }
 .app-header__team {
   display: inline-flex; align-items: center; gap: 4px; max-width: 120px;
+  height: 36px;
   padding: 5px 12px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--primary-25);
   font-size: calc(13px * var(--fs)); font-weight: 700; white-space: nowrap; transition: background 0.15s, border-color 0.15s;
 }
@@ -174,7 +175,8 @@
   padding: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 32px) 36px 80px;
   min-width: 0;
 }
-.app-main__inner { max-width: 1280px; }
+/* PC: 화면 좌우를 채우고 가운데 정렬 (아주 넓은 모니터에서만 1920px 로 제한) */
+.app-main__inner { max-width: 1920px; margin: 0 auto; }
 
 /* Bottom nav (mobile/tablet) */
 .bottom-nav {
@@ -331,7 +333,7 @@
 .step-nav .badge { font-family: var(--font-body); }
 
 /* PC 는 페이지 제목 오른쪽(PageHead extra), 모바일은 화면 상단 바 */
-.app-main__year { display: none; justify-content: flex-start; max-width: 1280px; }
+.app-main__year { display: none; justify-content: flex-start; max-width: 1920px; margin-left: auto; margin-right: auto; }
 @media (max-width: 1024px) {
   /* 화면 탭 바로 아래 (탭 없는 화면은 맨 위) */
   .app-main__year { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: -4px 0 14px; }
@@ -450,3 +452,5 @@
 .install-card__body > span { font-size: calc(12.5px * var(--fs)); color: var(--muted); }
 .install-card .install-guide li { font-size: calc(12.5px * var(--fs)); }
 .install-card__close { border-color: transparent; }
+/* 모바일 연도 바: 연도 선택과 오른쪽 버튼 높이를 같게 */
+.app-main__year .step-nav--pill, .app-main__year-actions .btn { height: 36px; min-height: 36px; }

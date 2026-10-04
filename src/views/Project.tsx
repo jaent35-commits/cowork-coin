@@ -1,20 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CheckVisibility, AllocRow, Category, Project, ProjectDraft, View } from '@/types';
 import { useAppState, useDispatch } from '@/store/StoreContext';
 import { CATEGORIES } from '@/data/seed';
-import { CUR_YYYYMM } from '@/lib/date';
+import { CUR_YYYYMM, TODAY_ISO } from '@/lib/date';
 import { MTag } from '@/components/ui/MTag';
-import { fmt, pct, uid } from '@/lib/format';
+import { fmt, fmtAmt, pct, uid } from '@/lib/format';
 import { useToast } from '@/hooks/useToast';
 import { onFocusRequest, takeFocus } from '@/lib/search';
 import { isPublicCheck, ownerBudget } from '@/store/selectors';
 import { overlapsYear, setViewYear, useViewYear } from '@/lib/viewYear';
 import {
-  Alert, AmountInput, Badge, Btn, Card, Checkbox, DateField, IconBtn, Divider, EmptyState, Input, PageHead, ProgressBar, SectionHead, Segmented, Select, TableWrap, Tabs, Toast, cx, progVariant,
+  Alert, AmountInput, Badge, Btn, Card, Checkbox, ConfirmLayer, DateField, IconBtn, Divider, EmptyState, Input, PageHead, ProgressBar, SectionHead, Segmented, Select, TableWrap, Tabs, Toast, cx, progVariant,
 } from '@/components/ui';
 import { MonthField } from '@/components/ui/MonthField';
-import { IconClose, IconEdit, IconPlus } from '@/components/icons';
+import { IconClose, IconEdit, IconEye, IconLock, IconMove, IconPlus, IconRestore, IconSave } from '@/components/icons';
 import YearPicker, { YearBar } from '@/components/layout/YearPicker';
 import Donut from '@/components/Donut';
 import ProjectChecklist, { resetChecklistFilters } from './ProjectChecklist';
@@ -22,10 +22,33 @@ import CheckRows from '@/components/CheckRows';
 import './Project.css';
 import './Exec.css';
 
-export const EMPTY_PROJECT: ProjectDraft = { name: '', client: '', startDate: '', endDate: '', totalAmount: 0, allocPool: 0, used: 0 };
+export const EMPTY_PROJECT: ProjectDraft = { name: '', client: '', startDate: '', endDate: '', totalAmount: 0, allocPool: 0, used: 0, memo: '' };
 /** 필수: 사업명 · 착수일 · 종료일 (기간이 없으면 연도별 목록에 나오지 않음) */
 export const draftReady = (d: ProjectDraft) => !!(d.name.trim() && d.startDate && d.endDate);
-const EMPTY_ITEM = { title: '', amount: 0, category: '' as Category | '', date: '', visibility: 'public' as CheckVisibility };
+/** 저장 전 정리 — 배분 가능 금액을 비워 두면 경비 총액 전체 */
+export const normalizeDraft = (d: ProjectDraft): ProjectDraft =>
+  ({ ...d, name: d.name.trim(), memo: d.memo?.trim() ?? '', allocPool: d.allocPool || d.totalAmount });
+
+/**
+ * 금액을 비워 둔(0원) 배분 줄 = 남은 금액 자동 — 주관 팀 줄부터 '배분 가능 금액 − 입력한 배분 합계'를 채움
+ * (화면에는 이 값을 placeholder 로 미리 보여 주고, 저장할 때 실제 금액으로 반영)
+ */
+export function fillAllocs(rows: AllocRow[], pool: number, owner: string): AllocRow[] {
+  let left = pool - rows.reduce((s, a) => s + a.amount, 0);
+  const fill = new Map<string, number>();
+  const order = [...rows].sort((a, b) => Number(b.teamName.trim() === owner) - Number(a.teamName.trim() === owner));
+  for (const a of order) {
+    if (a.amount || !a.teamName.trim()) continue;
+    const v = Math.max(0, left);
+    fill.set(a.id, v);
+    left -= v;
+  }
+  return rows.map(a => (fill.has(a.id) ? { ...a, amount: fill.get(a.id)! } : a));
+}
+
+const EMPTY_ITEM = { title: '', amount: 0, category: '' as Category, date: '', visibility: 'public' as CheckVisibility };
+/** 구분 선택의 '직접 입력' */
+const NEW_CATEGORY = '__new__';
 type ListFilter = 'all' | 'ongoing';
 const LIST_FILTERS: { value: ListFilter; label: string }[] = [{ value: 'all', label: '전체' }, { value: 'ongoing', label: '진행중' }];
 
@@ -75,7 +98,14 @@ export function ProjectForm({ draft, onChange, poolLabel = '코웍 팀 배분 �
       </div>
       <div>
         <label className="label" htmlFor="pf-pool">{poolLabel}</label>
-        <AmountInput id="pf-pool" hangul value={draft.allocPool} onChange={v => set('allocPool', v)} />
+        {/* 비워 두면 경비 총액 전체 (저장할 때 반영) */}
+        <AmountInput id="pf-pool" hangul value={draft.allocPool} onChange={v => set('allocPool', v)}
+          placeholder={draft.totalAmount ? fmtAmt(draft.totalAmount) : '0'} />
+      </div>
+      <div className="proj-form__full">
+        <label className="label" htmlFor="pf-memo">메모</label>
+        <textarea id="pf-memo" className="input proj-form__memo" rows={3} maxLength={1000}
+          placeholder="프로젝트에 대한 메모 (선택)" value={draft.memo ?? ''} onChange={e => set('memo', e.target.value)} />
       </div>
     </div>
   );
@@ -116,6 +146,11 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
   const [addingNew, setAddingNew] = useState(false);
   const [newProj, setNewProj] = useState<ProjectDraft>(EMPTY_PROJECT);
   const [editMode, setEditMode] = useState(false);
+  /** 코웍 팀 공통 사용 종료일 (편집 중) */
+  const [coworkEnd, setCoworkEnd] = useState('');
+  /** 비활성 프로젝트를 저장할 때 다시 활성화 */
+  const [reactivate, setReactivate] = useState(false);
+  const [reclaiming, setReclaiming] = useState(false);
   const [editData, setEditData] = useState<ProjectDraft>(EMPTY_PROJECT);
   const [editAllocs, setEditAllocs] = useState<AllocRow[]>([]);
   /** 사용액이 있어 삭제할 수 없는 배분 행 — 안내 + '배분액을 사용액으로 맞추기' 선택지 표시 */
@@ -124,6 +159,10 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
   const [deactivateMonth, setDeactivateMonth] = useState(CUR_YYYYMM);
   const [showAddItem, setShowAddItem] = useState(false);
   const [newItem, setNewItem] = useState(EMPTY_ITEM);
+  const [newCategory, setNewCategory] = useState('');
+  const myTeam = state.session?.team ?? '';
+  /** 우리 팀이 직접 만든 My 경비 구분 */
+  const myCategories = state.categories[myTeam] ?? [];
 
   const [year] = useViewYear();
   // My(주관·참여) 프로젝트만 조회 — 타 팀 프로젝트는 목록에 노출하지 않음
@@ -140,8 +179,25 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
   }, [year]); // eslint-disable-line react-hooks/exhaustive-deps
   const items = selected ? checklist.filter(c => c.projectId === selected.id) : [];
   const viewAllocs = selected ? allocs[selected.id] ?? [] : [];
-  const rows = editMode ? editAllocs : viewAllocs;
-  const pool = editMode ? editData.allocPool : selected?.allocPool ?? 0;
+  // 편집 중: 배분 가능 금액을 비워 두면 경비 총액, 비워 둔 배분은 남은 금액으로 채운 미리보기
+  const pool = editMode ? editData.allocPool || editData.totalAmount : selected?.allocPool ?? 0;
+  const rows = editMode ? fillAllocs(editAllocs, pool, selected?.ownerTeam ?? '') : viewAllocs;
+  /**
+   * 코웍 팀(주관 팀 제외) 미사용 금액 회수 — 사용 종료일(코웍 팀 공통, 없으면 프로젝트 종료일)이 속한 달의 다음 달 10일부터
+   * 누르면 코웍 팀 배분액 = 사용액(잔액 0원), 남은 금액은 모두 주관 팀 배분으로
+   */
+  const coworkRows = selected ? viewAllocs.filter(a => a.teamName !== selected.ownerTeam) : [];
+  const coworkEndView = coworkRows.find(a => a.endDate)?.endDate || selected?.endDate || '';
+  const reclaimFrom = (() => {
+    if (!coworkEndView) return '';
+    const [y, m] = coworkEndView.split('-').map(Number);
+    return `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-10`;
+  })();
+  const unusedCowork = coworkRows.reduce((s, a) => s + Math.max(0, a.amount - (a.used ?? 0)), 0);
+  const canReclaim = !!selected?.isMine && unusedCowork > 0 && !!reclaimFrom && TODAY_ISO >= reclaimFrom;
+  /** 편집 중 주관 팀 줄이 없을 때 저장하면 My 경비로 잡힐 남은 금액 */
+  const autoOwnerLeft = editMode && selected && rows.some(a => a.teamName.trim()) && !rows.some(a => a.teamName.trim() === selected.ownerTeam)
+    ? Math.max(0, pool - rows.reduce((s, a) => s + a.amount, 0)) : 0;
   const totalAlloc = rows.reduce((s, a) => s + a.amount, 0);
   const overAlloc = totalAlloc > pool;
   /** 지분율 = 팀 배분액 ÷ 배분 총액 (정수가 아니면 소수 첫째 자리) */
@@ -187,27 +243,58 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
   const saveNew = () => {
     if (!draftReady(newProj)) return;
     const id = uid('p');
-    dispatch({ type: 'ADD_PROJECT', id, draft: { ...newProj, name: newProj.name.trim() }, team: state.session?.team ?? '' });
+    dispatch({ type: 'ADD_PROJECT', id, draft: normalizeDraft(newProj), team: state.session?.team ?? '' });
     setAddingNew(false);
     setSelectedId(id);
     showToast('프로젝트가 등록되었습니다!');
   };
 
-  const startEdit = () => {
+  const startEdit = (allocRows?: AllocRow[]) => {
     if (!selected) return;
-    const { name, client, startDate, endDate, totalAmount, allocPool, used } = selected;
-    setEditData({ name, client, startDate, endDate, totalAmount, allocPool, used });
-    setEditAllocs(viewAllocs.map(a => ({ ...a })));
+    const { name, client, startDate, endDate, totalAmount, allocPool, used, memo = '' } = selected;
+    setEditData({ name, client, startDate, endDate, totalAmount, allocPool, used, memo });
+    // 주관 팀(My 경비) 배분이 '나머지 금액' 그대로면 비워 둔 상태(자동)로 열어, 다른 팀 금액을 바꾸면 따라 바뀌게
+    const others = viewAllocs.filter(a => a.teamName !== selected.ownerTeam).reduce((s, a) => s + a.amount, 0);
+    setEditAllocs(allocRows ?? viewAllocs.map(a => (a.teamName === selected.ownerTeam && a.amount === allocPool - others ? { ...a, amount: 0 } : { ...a })));
+    // 코웍 팀(주관 팀 제외)은 사용 종료일이 하나 — 지금 값은 코웍 팀 줄 중 첫 값
+    setCoworkEnd(viewAllocs.find(a => a.teamName !== selected.ownerTeam && a.endDate)?.endDate ?? '');
+    setReactivate(false);
     setLockedAllocId(null);
     setEditMode(true);
     setDeactivating(false);
   };
   const saveEdit = () => {
     if (!selected || !canSaveEdit) return;
-    dispatch({ type: 'UPDATE_PROJECT', id: selected.id, draft: editData, allocs: editAllocs });
+    const draft = normalizeDraft(editData);
+    // 비워 둔 배분 = 남은 금액, 주관 팀 줄이 없으면 남은 금액을 My 경비(주관 팀 배분)로
+    let allocs = fillAllocs(editAllocs, draft.allocPool, selected.ownerTeam);
+    const left = draft.allocPool - allocs.reduce((s, a) => s + a.amount, 0);
+    if (left > 0 && allocs.some(a => a.teamName.trim()) && !allocs.some(a => a.teamName.trim() === selected.ownerTeam)) {
+      allocs = [{ id: uid('a'), teamName: selected.ownerTeam, amount: left }, ...allocs];
+    }
+    // 사용 종료일: 코웍 팀 모두 같은 날, 주관 팀은 프로젝트 종료일까지 (따로 두지 않음)
+    allocs = allocs.map(a => {
+      const teamName = a.teamName.trim();
+      return { ...a, teamName, endDate: teamName !== selected.ownerTeam && coworkEnd ? coworkEnd : undefined };
+    });
+    dispatch({ type: 'UPDATE_PROJECT', id: selected.id, draft, allocs, reactivate: !selected.active && reactivate });
     setEditMode(false);
-    showToast('변경 사항이 저장되었습니다!');
+    showToast(!selected.active && reactivate ? '프로젝트를 다시 활성화했습니다!' : '변경 사항이 저장되었습니다!');
   };
+  /** 배분이 하나도 없을 때: 편집으로 바꾸고 주관 팀 1줄을 만든 뒤 팀 배분 칸으로 이동 */
+  const allocRef = useRef<HTMLElement>(null);
+  const [scrollToAlloc, setScrollToAlloc] = useState(false);
+  const startAlloc = () => {
+    if (!selected) return;
+    startEdit([{ id: uid('a'), teamName: selected.ownerTeam, amount: 0 }]);
+    setScrollToAlloc(true);
+  };
+  useEffect(() => {
+    if (!scrollToAlloc || !editMode) return;
+    setScrollToAlloc(false);
+    allocRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    allocRef.current?.querySelector<HTMLInputElement>('.alloc-edit__amt input')?.focus({ preventScroll: true });
+  }, [scrollToAlloc, editMode]);
 
   const deactivate = () => {
     if (!selected) return;
@@ -218,14 +305,30 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
 
   const addItem = () => {
     if (!selected || !newItem.title.trim() || !newItem.amount) return;
-    dispatch({ type: 'ADD_CHECK', item: { ...newItem, title: newItem.title.trim(), projectId: selected.id } });
+    let category = newItem.category;
+    if (category === NEW_CATEGORY) {
+      category = newCategory.trim();
+      if (!category) return;
+      // 직접 만든 구분은 우리 팀 목록에 저장 → 다음부터 바로 선택
+      dispatch({ type: 'ADD_CATEGORY', team: myTeam, name: category });
+    }
+    dispatch({ type: 'ADD_CHECK', item: { ...newItem, category, title: newItem.title.trim(), projectId: selected.id } });
     setNewItem(EMPTY_ITEM);
+    setNewCategory('');
     setShowAddItem(false);
   };
 
   return (
     <div className={cx('view-enter', sheet && 'proj-sheet')}>
       <Toast msg={toast} />
+      {reclaiming && selected && (
+        <ConfirmLayer title="미사용 금액을 주관팀으로 이동" confirmLabel="이동"
+          onConfirm={() => { dispatch({ type: 'RECLAIM_ALLOCS', id: selected.id }); setReclaiming(false); showToast(`미사용 금액 ${fmt(unusedCowork)}을 ${selected.ownerTeam}으로 옮겼습니다!`); }}
+          onCancel={() => setReclaiming(false)}>
+          코웍 팀의 남은 금액 <b>{fmt(unusedCowork)}</b>을 주관 팀({selected.ownerTeam}) My 경비로 옮깁니다.
+          코웍 팀 배분액은 사용액과 같아져 잔액이 0원이 됩니다.
+        </ConfirmLayer>
+      )}
       {!sheet && (<>
       <PageHead
         title="프로젝트 운영" extra={checkTab ? undefined : <YearPicker />}
@@ -312,7 +415,8 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
         </Card>
       )}
 
-      {!checkTab && !addingNew && !selected && (
+      {/* 목록이 비어 있으면 표 안의 '수행 프로젝트가 없습니다'만 — 선택 안내는 고를 프로젝트가 있을 때만 */}
+      {!checkTab && !addingNew && !selected && (sheet || listProjects.length > 0) && (
         <Card className={cx(!sheet && 'hide-mobile')}>
           <EmptyState icon="📁" message={sheet ? '프로젝트를 찾을 수 없습니다' : '선택된 프로젝트가 없습니다'}
             sub={sheet ? '목록으로 돌아가 다시 선택해 주세요' : '목록에서 내 프로젝트를 선택하거나 새로 등록하세요'} />
@@ -328,14 +432,24 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
                 {selected.isMine && <Badge variant="blue">주관 팀</Badge>}
                 {editMode && <Badge variant="amber"><IconEdit size={12} />편집 중</Badge>}
               </div>
-              {editMode ? (
+              {editMode ? (<>
+                {/* 비활성 프로젝트: 편집에서 다시 활성화 (저장할 때 반영) */}
+                {!selected.active && (
+                  <div className={cx('reactivate', reactivate && 'is-on')}>
+                    <span>{reactivate ? '저장하면 다시 활성 프로젝트가 됩니다.' : '비활성 처리된 프로젝트입니다.'}</span>
+                    <Btn size="sm" variant={reactivate ? 'secondary' : 'primary'} onClick={() => setReactivate(v => !v)}>
+                      {reactivate ? '활성화 취소' : <><IconRestore size={14} />다시 활성화</>}
+                    </Btn>
+                  </div>
+                )}
                 <ProjectForm draft={editData} onChange={setEditData} poolLabel="코웍 팀 배분 가능 금액" />
-              ) : (
+              </>) : (
                 <>
                   {/* 상세 화면은 헤더에 프로젝트명이 있으므로 생략 */}
                   {!sheet && <h2 className="proj-detail__title">{selected.name}</h2>}
                   <div className="proj-detail__meta">{selected.client} · {selected.startDate} – {selected.endDate}</div>
                   <div className="proj-detail__meta2">프로젝트 경비 총액 {fmt(selected.totalAmount)} · 코웍 팀 배분 가능 {fmt(selected.allocPool)}</div>
+                  {selected.memo && <p className="proj-detail__memo">{selected.memo}</p>}
                 </>
               )}
             </div>
@@ -343,17 +457,17 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
               <div className="row row--wrap proj-detail__actions">
                 {editMode ? (!sheet && (
                   <>
-                    <Btn variant="secondary" size="sm" onClick={() => setEditMode(false)}>취소</Btn>
-                    <Btn size="sm" onClick={saveEdit} disabled={!canSaveEdit}>저장</Btn>
+                    <Btn variant="secondary" className="proj-act" onClick={() => setEditMode(false)}><IconClose size={15} />취소</Btn>
+                    <Btn className="proj-act" onClick={saveEdit} disabled={!canSaveEdit}><IconSave size={15} />저장</Btn>
                   </>
                 )) : (
                   <>
-                    {!sheet && <Btn variant="secondary" size="sm" onClick={startEdit}>편집</Btn>}
                     {selected.active && (
-                      <Btn variant="danger" size="sm" onClick={() => { setDeactivating(true); setDeactivateMonth(selected.endDate?.slice(0, 7) || CUR_YYYYMM); }}>
+                      <Btn variant="danger" className="proj-act" onClick={() => { setDeactivating(true); setDeactivateMonth(selected.endDate?.slice(0, 7) || CUR_YYYYMM); }}>
                         비활성 처리
                       </Btn>
                     )}
+                    {!sheet && <Btn className="proj-act" onClick={() => startEdit()}><IconEdit size={15} />편집</Btn>}
                   </>
                 )}
               </div>
@@ -391,22 +505,31 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
           <Divider />
 
           <div className="grid-2 proj-detail__cols">
-            <section className="proj-detail__alloc">
+            <section className="proj-detail__alloc" ref={allocRef}>
               <SectionHead title="코웍-코인 팀 배분" />
               <p className="alloc-sum">
                 배분 총액 <b>{fmt(totalAlloc)}</b> · {overAlloc
-                  ? <b className="text-danger">초과 {fmt(totalAlloc - pool)}</b>
+                  ? <span className="alloc-sum__over">초과 <b>{fmt(totalAlloc - pool)}</b></span>
                   : <>미배분 <b className="text-faint">{fmt(pool - totalAlloc)}</b></>}
               </p>
 
               {editMode ? (
                 <div className="stack">
-                  {editAllocs.map(a => {
+                  {/* 코웍 팀(주관 팀 제외) 공통 사용 종료일 = 집행 사용일자 기준 (이 날 이후 사용 건은 이 프로젝트 경비로 등록 불가) */}
+                  <div className="alloc-edit__end">
+                    <span className="alloc-edit__end-label">코웍 팀 사용 종료일</span>
+                    <DateField aria-label="코웍 팀 사용 종료일" placeholder={editData.endDate ? `${editData.endDate} (종료일)` : 'YYYY-MM-DD'}
+                      value={coworkEnd} onChange={setCoworkEnd} />
+                    <small className="alloc-edit__end-note">주관 팀 제외 · 비우면 프로젝트 종료일</small>
+                  </div>
+                  {editAllocs.map((a, i) => {
                     // 추천 목록: 다른 줄에서 이미 고른 팀은 숨김
                     const taken = new Set(editAllocs.filter(b => b.id !== a.id).map(b => b.teamName.trim()));
                     const dup = dupAllocIds.has(a.id);
+                    // 금액을 비워 두면 남은 금액(미리보기) — 저장할 때 반영
+                    const eff = rows[i]?.amount ?? a.amount;
                     // 잔액 = 수정 중인 배분액 − 이미 사용한 금액
-                    const used = a.used ?? 0, left = a.amount - used;
+                    const used = a.used ?? 0, left = eff - used;
                     return (
                     <div key={a.id} className="alloc-edit-wrap">
                     <div className="alloc-edit">
@@ -414,9 +537,11 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
                       <div className="alloc-edit__team">
                         <Input className={cx(dup && 'is-error')} value={a.teamName} placeholder="팀명" aria-label="팀명" list={`team-names-${a.id}`} aria-invalid={dup}
                           onChange={e => setEditAllocs(rs => rs.map(r => (r.id === a.id ? { ...r, teamName: e.target.value } : r)))} />
-                        <small className="alloc-edit__bal"><span className="alloc-edit__used">사용 {fmt(used)} · </span>잔액 <b className={cx(left < 0 && 'is-over')}>{fmt(left)}</b> <span className="alloc-edit__sharewrap">· 지분 <b className="alloc-edit__share">{shareOf(a.amount)}</b></span></small>
+                        <small className="alloc-edit__bal"><span className="alloc-edit__used">사용 {fmt(used)} · </span>잔액 <b className={cx(left < 0 && 'is-over')}>{fmt(left)}</b> <span className="alloc-edit__sharewrap">· 지분 <b className="alloc-edit__share">{shareOf(eff)}</b></span></small>
                       </div>
                       <AmountInput className="alloc-edit__amt" value={a.amount} aria-label="배분액"
+                        placeholder={a.teamName.trim() ? fmtAmt(eff) || '0' : '0'}
+                        title={!a.amount && a.teamName.trim() ? '비워 두면 남은 금액으로 저장됩니다' : undefined}
                         onChange={v => setEditAllocs(rs => rs.map(r => (r.id === a.id ? { ...r, amount: v } : r)))} />
                       {/* 사용액이 있는 팀은 삭제 대신 안내 (집행 이력이 배분에 연결되어 있음) */}
                       <IconBtn className="icon-btn--remove" aria-label="배분 삭제" title="배분 삭제"
@@ -441,9 +566,25 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
                   })}
                   <button type="button" className="btn-dashed"
                     onClick={() => setEditAllocs(rs => [...rs, { id: uid('a'), teamName: '', amount: 0 }])}>+ 팀 배분 추가</button>
+                  {autoOwnerLeft > 0 && (
+                    <p className="alloc-edit__hint">남은 <b>{fmt(autoOwnerLeft)}</b>은 저장하면 주관 팀({selected.ownerTeam}) My 경비로 잡힙니다.</p>
+                  )}
                 </div>
-              ) : rows.length === 0 ? (
-                <div className="soft-empty">배분 내역이 없습니다</div>
+              ) : rows.length > 0 && coworkRows.length > 0 && (
+                <div className={cx('alloc-reclaim', canReclaim && 'is-ready')}>
+                  <span>코웍 팀 사용 종료일 <b>{coworkEndView}</b>
+                    {selected.isMine && unusedCowork > 0 && <> · 미사용 <b>{fmt(unusedCowork)}</b>{!canReclaim && <> · {reclaimFrom}부터 주관 팀으로 이동 가능</>}</>}
+                  </span>
+                  {canReclaim && (
+                    <Btn size="sm" onClick={() => setReclaiming(true)}><IconMove size={14} />미사용 금액을 주관팀으로 이동</Btn>
+                  )}
+                </div>
+              )}
+              {editMode ? null : rows.length === 0 ? (
+                <div className="soft-empty alloc-empty">
+                  <span>배분 내역이 없습니다</span>
+                  {selected.isMine && <Btn size="sm" onClick={startAlloc}><IconPlus size={13} />코웍팀 코인 배분하기</Btn>}
+                </div>
               ) : (
                 <table className={cx('alloc-table', selected.isMine && 'alloc-table--usage')}>
                   <thead>
@@ -491,20 +632,37 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
 
             <section>
               {/* 체크리스트 기준 = 주관 팀의 My 경비 배분 금액 (참여 팀 배분 예산과 별개) */}
-              {(() => { const b = ownerBudget(state, selected); return <SectionHead title="My 경비 집행 체크리스트" sub={`My 경비 총액 ${fmt(b.amount)} · 잔액 ${fmt(b.remain)}`} />; })()}
+              <SectionHead title="My 경비 집행 체크리스트" />
+              {/* 팀 배분과 같은 모양: 예산(My 경비) · 미배분(예산 − 체크리스트 예정 금액 합계), 넘으면 초과 */}
+              {(() => {
+                const b = ownerBudget(state, selected);
+                const planned = items.reduce((s, c) => s + c.amount, 0);
+                const left = b.amount - planned;
+                return (
+                  <p className="alloc-sum">
+                    예산 <b>{fmt(b.amount)}</b> · {left < 0
+                      ? <span className="alloc-sum__over">초과 <b>{fmt(-left)}</b></span>
+                      : <>미배분 <b className="text-faint">{fmt(left)}</b></>}
+                  </p>
+                );
+              })()}
               <div className="mb-14">
                 <CheckRows items={items} projects={[selected]} hideProject
                   onToggle={id => dispatch({ type: 'TOGGLE_CHECK', id })}
                   onExec={(id, patch) => dispatch({ type: 'SET_CHECK_EXEC', id, patch })}
                   empty={<div className="soft-empty">등록된 항목이 없습니다</div>}
-                  actions={editMode ? item => (<>
-                    <Badge variant={isPublicCheck(item) ? 'outline' : 'dark'} size="lg" pressed={!isPublicCheck(item)}
-                      title="공개: 배분받은 코웍 팀 모두 · 비공개: 주관 팀만"
+                  actions={selected.isMine ? item => (<>
+                    {/* 공개(눈) ↔ 비공개(자물쇠) — 누르면 전환 */}
+                    <IconBtn className={cx('vis-toggle', !isPublicCheck(item) && 'is-private')} aria-pressed={!isPublicCheck(item)}
+                      aria-label={`${item.title} ${isPublicCheck(item) ? '공개' : '비공개'} — 누르면 ${isPublicCheck(item) ? '비공개' : '공개'}로`}
+                      title={isPublicCheck(item) ? '공개: 배분받은 코웍 팀 모두 (누르면 비공개)' : '비공개: 주관 팀만 (누르면 공개)'}
                       onClick={() => dispatch({ type: 'SET_CHECK_VISIBILITY', id: item.id, visibility: isPublicCheck(item) ? 'private' : 'public' })}>
-                      {isPublicCheck(item) ? '공개' : '비공개'}
-                    </Badge>
-                    <IconBtn className="icon-btn--remove" aria-label={`${item.title} 삭제`} title="항목 삭제"
-                      onClick={() => dispatch({ type: 'DELETE_CHECK', id: item.id })}><IconClose size={13} /></IconBtn>
+                      {isPublicCheck(item) ? <IconEye size={15} /> : <IconLock size={15} />}
+                    </IconBtn>
+                    {editMode && (
+                      <IconBtn className="icon-btn--remove" aria-label={`${item.title} 삭제`} title="항목 삭제"
+                        onClick={() => dispatch({ type: 'DELETE_CHECK', id: item.id })}><IconClose size={13} /></IconBtn>
+                    )}
                   </>) : undefined} />
               </div>
 
@@ -522,15 +680,22 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
                     <AmountInput placeholder="금액" aria-label="금액" hangul value={newItem.amount} onChange={v => setNewItem(p => ({ ...p, amount: v }))} />
                   </div>
                   <div className="add-item__row">
-                    <Select value={newItem.category} aria-label="구분" onChange={e => setNewItem(p => ({ ...p, category: e.target.value as Category | '' }))}>
+                    {/* 고정 구분 + 우리 팀이 직접 만든 구분 (다른 팀에는 안 보임) + 직접 입력 */}
+                    <Select value={newItem.category} aria-label="구분" onChange={e => setNewItem(p => ({ ...p, category: e.target.value }))}>
                       <option value="">구분 선택</option>
                       {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                      {myCategories.map(c => <option key={`my-${c}`} value={c}>{c}</option>)}
+                      <option value={NEW_CATEGORY}>+ 직접 입력</option>
                     </Select>
                     <DateField aria-label="날짜" placeholder="날짜 선택" value={newItem.date} onChange={v => setNewItem(p => ({ ...p, date: v }))} />
                   </div>
+                  {newItem.category === NEW_CATEGORY && (
+                    <Input autoFocus placeholder="새 구분 이름 (예: 외주비(원가))" aria-label="새 구분 이름" maxLength={20}
+                      value={newCategory} onChange={e => setNewCategory(e.target.value)} />
+                  )}
                   <div className="add-item__btns">
-                    <Btn variant="secondary" onClick={() => { setShowAddItem(false); setNewItem(EMPTY_ITEM); }}>취소</Btn>
-                    <Btn onClick={addItem} disabled={!newItem.title.trim() || !newItem.amount}>추가</Btn>
+                    <Btn variant="secondary" onClick={() => { setShowAddItem(false); setNewItem(EMPTY_ITEM); setNewCategory(''); }}>취소</Btn>
+                    <Btn onClick={addItem} disabled={!newItem.title.trim() || !newItem.amount || (newItem.category === NEW_CATEGORY && !newCategory.trim())}>추가</Btn>
                   </div>
                 </div>
               )}
@@ -556,7 +721,7 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
             ) : (
               <>
                 <Btn variant="secondary" onClick={() => onNavigate('project')}>목록으로</Btn>
-                <Btn onClick={startEdit} disabled={!selected}>편집하기</Btn>
+                <Btn onClick={() => startEdit()} disabled={!selected}>편집하기</Btn>
               </>
             )}
           </div>

@@ -5,7 +5,7 @@ import { useTheme } from '@/lib/theme';
 
 /** 이번 접속에서 이미 안내했는지 — 새로고침·화면 이동마다 반복하지 않음 */
 const NOTICED_KEY = 'cowork-coin-theme-noticed';
-const MSG = '시스템 설정에 따라 다크 모드로 전환되었어요. 마이페이지 › 화면 설정에서 바꿀 수 있어요.';
+const MSG = '시스템 설정에 따라 다크 모드로 전환되었어요. 팀 이름 메뉴 › 화면 설정에서 바꿀 수 있어요.';
 
 const noticed = () => { try { return sessionStorage.getItem(NOTICED_KEY) === '1'; } catch { return false; } };
 const markNoticed = () => { try { sessionStorage.setItem(NOTICED_KEY, '1'); } catch { /* noop */ } };

@@ -7,6 +7,7 @@ import {
   PROJECT_GROUP, TEAM_GROUP, bucketOf, budgetName, groupOf, parseTypeKey, recordTypeKey, typeIcon, workBudgetOf, workUsedOf,
 } from '@/lib/budget';
 import { budgetTypeOptions } from '@/components/budgetTypeOptions';
+import { execProjects } from '@/store/selectors';
 import { useToast } from '@/hooks/useToast';
 import { onFocusRequest, takeFocus } from '@/lib/search';
 import { AmountInput, Btn, Card, Checkbox, ConfirmLayer, DateField, EmptyState, FilterChip, Input, PageHead, Select, TableWrap, Toast, cx } from '@/components/ui';
@@ -21,8 +22,6 @@ const FILTERS: [Filter, string][] = [['all', '전체'], ['team', TEAM_GROUP], ['
 interface SumLine { key: string; group: 'team' | 'project'; icon: string; name: string; sub: string; spent: number; remain: number | null; budget: number; used: number; ended?: boolean }
 
 const SUM_GROUPS = [{ key: 'team', name: TEAM_GROUP, icon: '👥' }, { key: 'project', name: PROJECT_GROUP, icon: '📁' }] as const;
-const OPEN_KEY = 'cowork-coin-exec-sum-open';
-const readOpen = () => { try { return localStorage.getItem(OPEN_KEY) === '1'; } catch { return false; } };
 
 /** 요약 칸 금액 — 접힘: 한 줄 [집행 등록 · 잔여 예산] / 펼침: 3줄 집행 가능 · 집행 등록 · 잔여 예산 */
 function SumFigures({ avail, spent, remain, full }: { avail: number; spent: number; remain: number; full: boolean }) {
@@ -48,8 +47,9 @@ function SumFigures({ avail, spent, remain, full }: { avail: number; spent: numb
  * 상세를 펼치면 바로 아래로 예산 항목별 조회 기간 집행 · 잔액 내역이 열림
  */
 function ExecSummary({ period, total, count, lines }: { period: string; total: number; count: number; lines: SumLine[] }) {
-  const [open, setOpen] = useState(readOpen);
-  const toggle = () => setOpen(v => { try { localStorage.setItem(OPEN_KEY, v ? '0' : '1'); } catch { /* 무시 */ } return !v; });
+  // 메뉴로 다시 들어오면 항상 접힌 상태 (펼침은 이번 화면에서만)
+  const [open, setOpen] = useState(false);
+  const toggle = () => setOpen(v => !v);
   const toGroup = (g: { key: string; name: string; icon: string }, ls: SumLine[]) => {
     const sum = (f: (l: SumLine) => number) => ls.reduce((t, l) => t + f(l), 0);
     // 집행률 막대: 예산을 아는 항목(잔액 null 제외)의 예산 대비 사용액
@@ -265,16 +265,24 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
     });
   }
   {
+    // 주관 프로젝트 = 프로젝트 배분 경비 전체 / 배분받은 코웍 프로젝트 = 우리 팀 배분액 기준
+    const team = state.session?.team;
     projects
-      .filter(p => (p.isMine && p.active) || inPeriod.some(r => r.projectId === p.id))
-      .forEach(p => sumLines.push({
-        key: p.id, group: 'project', icon: '📁', name: p.name, sub: `배분 경비 ${fmt(p.allocPool)}${p.active ? '' : ' · 종료'}`,
-        spent: spentOf(r => r.projectId === p.id), remain: p.allocPool - p.used, budget: p.allocPool, used: p.used, ended: !p.active,
-      }));
+      .filter(p => ((p.isMine || p.joined) && p.active) || inPeriod.some(r => r.projectId === p.id))
+      .forEach(p => {
+        const mine = !p.isMine ? state.allocs[p.id]?.find(a => a.teamName === team) : undefined;
+        const budget = mine ? mine.amount : p.allocPool, used = mine ? mine.used ?? 0 : p.used;
+        sumLines.push({
+          key: p.id, group: 'project', icon: '📁', name: p.name,
+          sub: `${mine ? '우리 팀 배분' : '배분 경비'} ${fmt(budget)}${p.active ? '' : ' · 종료'}`,
+          spent: spentOf(r => r.projectId === p.id && (!mine || r.team === team)), remain: budget - used, budget, used, ended: !p.active,
+        });
+      });
   }
 
   // ── 예산 유형 목록 (진행 중인 내 프로젝트 + 팀 회의비) ──
-  const typeProjects = projects.filter(p => p.isMine && p.active);
+  /** 이 집행의 사용일자에 쓸 수 있는 프로젝트 (사용 종료일 이내 · 주관 또는 배분받은 팀) */
+  const typeProjectsOf = (r: ExecRecord) => execProjects(state, spentDateOf(r));
   const typeName = (r: ExecRecord) => budgetName(state, r);
 
   /** r 을 key·사용월·금액으로 바꿀 때 예산이 모자라면 안내 문구 (같은 예산이면 기존 금액은 되돌려 계산) */
@@ -297,6 +305,11 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
       const v = String(value);
       if (!v || v === spentDateOf(r)) return;
       next = { ...r, useDate: v, month: v.slice(0, 7) };
+      // 프로젝트 경비는 사용 종료일이 지난 날짜로 옮길 수 없음
+      if (r.type === 'project' && r.projectId && !execProjects(state, v).some(p => p.id === r.projectId)) {
+        showToast(`${typeName(r)} 경비는 ${v} 사용 건으로 등록할 수 없습니다 (사용 종료일 이후).`, 'warn');
+        return;
+      }
     } else if (field === 'type') {
       const key = String(value);
       if (key === recordTypeKey(r)) return;
@@ -530,8 +543,8 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
                         {on('type') ? (
                           <Select bare defaultOpen className="exec-type-pick" popClassName="exec-type-pop" aria-label="예산 유형 변경"
                             value={recordTypeKey(r)} onChange={e => commit(r, 'type', e.target.value)} onClose={() => setEdit(null)}>
-                            {budgetTypeOptions(typeProjects, {
-                              extra: r.type === 'project' && !typeProjects.some(p => p.id === r.projectId) && (
+                            {budgetTypeOptions(typeProjectsOf(r), {
+                              extra: r.type === 'project' && !typeProjectsOf(r).some(p => p.id === r.projectId) && (
                                 <option value={recordTypeKey(r)} disabled>{projName(r.projectId)} (종료)</option>
                               ),
                             })}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { View } from '@/types';
 
-const VIEWS: readonly View[] = ['home', 'meeting', 'project', 'exec', 'exec-new', 'project-new', 'project-detail', 'cowork', 'report', 'mypage', 'notification', 'admin', 'search'];
+const VIEWS: readonly View[] = ['home', 'meeting', 'project', 'exec', 'exec-new', 'project-new', 'project-detail', 'cowork', 'report', 'mypage', 'settings', 'notification', 'admin', 'search'];
 
 function readHash(): View {
   const v = window.location.hash.replace(/^#\/?/, '') as View;

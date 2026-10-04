@@ -1,7 +1,7 @@
 import { useEffect, useState, type FocusEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppState, useDispatch } from '@/store/StoreContext';
-import { openProjects } from '@/store/selectors';
+import { execProjects } from '@/store/selectors';
 import { TODAY_ISO } from '@/lib/date';
 import { fmt, uid } from '@/lib/format';
 import { bucketOf, parseTypeKey, type Bucket } from '@/lib/budget';
@@ -25,10 +25,17 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
   const state = useAppState();
   const dispatch = useDispatch();
   const [toast, showToast] = useToast();
-  const projects = openProjects(state).filter(p => p.isMine);
   const [rows, setRows] = useState<Row[]>([newRow()]);
+  /** 이 줄의 사용일자에 쓸 수 있는 프로젝트 (사용 종료일 지난 프로젝트는 숨김) */
+  const projectsFor = (r: Row) => execProjects(state, r.useDate || TODAY_ISO);
+  const allowed = (r: Row) => !r.typeKey.startsWith('p:') || projectsFor(r).some(p => `p:${p.id}` === r.typeKey);
 
-  const update = (id: string, patch: Partial<Row>) => setRows(rs => rs.map(r => (r.id === id ? { ...r, ...patch } : r)));
+  // 사용일자를 바꿔 고른 프로젝트를 더 쓸 수 없으면 예산 유형을 팀 회의비로 되돌림
+  const update = (id: string, patch: Partial<Row>) => setRows(rs => rs.map(r => {
+    if (r.id !== id) return r;
+    const next = { ...r, ...patch };
+    return allowed(next) ? next : { ...next, typeKey: 'meeting' };
+  }));
   const monthOf = (r: Row) => (r.useDate || TODAY_ISO).slice(0, 7);
 
   // 예산 항목별 영향 (팀 회의비는 사용일자가 속한 분기, 프로젝트는 배분 경비)
@@ -47,7 +54,7 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
   }
   const sum = rows.reduce((s, r) => s + r.amount, 0);
   const anyOver = impacts.some(i => i.over);
-  const noProject = rows.some(r => r.amount > 0 && r.typeKey.startsWith('p:') && !projects.some(p => `p:${p.id}` === r.typeKey));
+  const noProject = rows.some(r => r.amount > 0 && !allowed(r));
   const canSave = sum > 0 && !anyOver && !noProject;
 
   // 입력 전 요약(PC): 첫 줄 예산의 현재 잔액
@@ -152,7 +159,7 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
                   <div className="reg-field reg-row__type">
                     <span className="reg-field__label" aria-hidden="true">예산 유형</span>
                     <Select value={row.typeKey} aria-label={`${idx + 1}번 예산 유형`} onChange={e => update(row.id, { typeKey: e.target.value })}>
-                      {budgetTypeOptions(projects, { icons: true })}
+                      {budgetTypeOptions(projectsFor(row), { icons: true })}
                     </Select>
                   </div>
                   <div className="reg-field reg-row__name">
@@ -174,7 +181,7 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
               );
             })}
           </div>
-          {noProject && <p className="reg-note">진행 중인 내 프로젝트만 선택할 수 있습니다.</p>}
+          {noProject && <p className="reg-note">사용일자가 사용 종료일 이내인 프로젝트만 선택할 수 있습니다.</p>}
         </Card>
 
         {/* PC 전용 — 모바일은 하단 고정 바 */}

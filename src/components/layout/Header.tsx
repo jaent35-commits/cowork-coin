@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { View } from '@/types';
-import { IconBack, IconBell, IconChevron, IconLogout, IconShield, IconUser } from '../icons';
+import { IconBack, IconBell, IconChevron, IconDisplay, IconLock, IconLogout, IconShield } from '../icons';
 import { IconBtn, cx } from '../ui';
 import { useFontMode } from '@/lib/fontScale';
 import kowokIcon from '@/assets/kowok-icon.png';
@@ -21,7 +21,7 @@ function FontToggle() {
   );
 }
 
-/** 로그인한 팀 이름 → 계정 메뉴 (마이페이지 · 관리자 메뉴 · 로그아웃) */
+/** 로그인한 팀 이름 → 계정 메뉴 (비밀번호 변경 · 화면 설정 · 관리자 메뉴 · 로그아웃) */
 function TeamButton({ teamName, isAdmin, onNavigate, onLogout }: {
   teamName: string; isAdmin: boolean; onNavigate: (v: View) => void; onLogout: () => void;
 }) {
@@ -46,7 +46,8 @@ function TeamButton({ teamName, isAdmin, onNavigate, onLogout }: {
       </button>
       {open && (
         <div className="team-menu__pop" role="menu">
-          <button type="button" role="menuitem" onClick={() => go('mypage')}><IconUser size={15} />마이페이지</button>
+          <button type="button" role="menuitem" onClick={() => go('mypage')}><IconLock size={15} />비밀번호 변경</button>
+          <button type="button" role="menuitem" onClick={() => go('settings')}><IconDisplay size={15} />화면 설정</button>
           {isAdmin && <button type="button" role="menuitem" onClick={() => go('admin')}><IconShield size={15} />관리자 메뉴</button>}
           <button type="button" role="menuitem" className="team-menu__logout" onClick={() => { setOpen(false); onLogout(); }}>
             <IconLogout size={15} />로그아웃

@@ -360,3 +360,44 @@
   :root[data-font="lg"] .proj-table th:first-child, :root[data-font="lg"] .proj-table td:first-child { padding-left: 12px; }
   :root[data-font="lg"] .proj-table th:last-child, :root[data-font="lg"] .proj-table td:last-child { padding-right: 12px; }
 }
+
+/* 프로젝트 메모 */
+.proj-form__full { grid-column: 1 / -1; }
+.proj-form__memo { min-height: 72px; resize: vertical; line-height: 1.5; font-family: inherit; }
+.proj-detail__memo { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-muted); font-size: calc(13px * var(--fs)); line-height: 1.55; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* 팀 배분 — 사용 종료일 · 자동 배분 안내 · 배분하기 버튼 */
+.alloc-edit__end { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.alloc-edit__end-label { flex-shrink: 0; font-size: calc(12px * var(--fs)); font-weight: 700; color: var(--muted); }
+.alloc-edit__end .month-field { flex: 1; max-width: 220px; }
+.alloc-edit__end .month-field__btn { padding: 6px 10px; font-size: calc(12.5px * var(--fs)); }
+.alloc-edit__hint { margin: 2px 0 0; font-size: calc(12px * var(--fs)); color: var(--muted); }
+.alloc-edit__hint b { color: var(--primary-700); }
+.alloc-team__end { display: block; margin-top: 2px; padding-left: 15px; font-size: calc(11.5px * var(--fs)); font-weight: 600; color: var(--faint); }
+.alloc-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+/* 프로젝트 상세 — 편집 · 저장 · 취소 (아이콘 + 조금 큰 버튼으로 잘 보이게) */
+.proj-detail__actions .proj-act { gap: 6px; padding: 7px 16px; font-size: calc(14px * var(--fs)); font-weight: 800; }
+.proj-detail__actions .proj-act svg { flex-shrink: 0; }
+
+/* 비활성 프로젝트 → 편집에서 다시 활성화 */
+.reactivate { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; padding: 10px 12px; border-radius: var(--r-md); background: var(--danger-50); font-size: calc(13px * var(--fs)); font-weight: 700; color: var(--danger-600); }
+.reactivate.is-on { background: var(--success-50, var(--primary-50)); color: var(--success-600); }
+.reactivate .btn { gap: 5px; }
+
+/* 코웍 팀 공통 사용 종료일 · 미사용 금액 이동 */
+.alloc-edit__end { flex-wrap: wrap; }
+.alloc-edit__end-note { font-size: calc(11.5px * var(--fs)); color: var(--faint); }
+.alloc-reclaim { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; padding: 9px 12px; border-radius: var(--r-md); background: var(--surface-muted); font-size: calc(12.5px * var(--fs)); color: var(--muted); }
+.alloc-reclaim b { color: var(--text); }
+.alloc-reclaim.is-ready { background: var(--primary-50); border: 1px solid var(--primary-200); }
+.alloc-reclaim .btn { gap: 5px; }
+
+/* 체크리스트 공개(눈) / 비공개(자물쇠) 전환 */
+.vis-toggle { width: 32px; height: 32px; border-radius: var(--r-sm); border-color: var(--line-input); color: var(--primary-600); }
+.vis-toggle.is-private { background: var(--text); color: var(--surface); }
+/* 배분 줄: 삭제 버튼을 입력칸 높이에 맞춤 */
+.alloc-edit .icon-btn--remove { width: var(--ctl-h); height: var(--ctl-h); }
+/* 배분·My 경비 초과 — 붉은 글씨로 눈에 띄게 */
+.alloc-sum__over { display: inline-flex; align-items: baseline; gap: 4px; padding: 1px 8px; border-radius: var(--r-pill); background: var(--danger-50); color: var(--danger-600); font-weight: 800; }
+.alloc-sum .alloc-sum__over b { color: var(--danger-600); font-weight: 900; }

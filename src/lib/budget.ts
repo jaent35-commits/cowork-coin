@@ -67,5 +67,12 @@ export function bucketOf(state: AppState, key: string, month: string): Bucket | 
   }
   const p = state.projects.find(x => x.id === projectId);
   if (!p) return null;
+  // 배분받은 코웍 팀은 우리 팀 배분액에서 차감 (주관 팀은 프로젝트 배분 경비 전체)
+  const team = state.session?.team;
+  const mine = p.ownerTeam !== team ? state.allocs[p.id]?.find(a => a.teamName === team) : undefined;
+  if (mine) {
+    const used = mine.used ?? 0;
+    return { id: p.id, name: p.name, sub: '우리 팀 배분 경비', budget: mine.amount, used, remain: mine.amount - used };
+  }
   return { id: p.id, name: p.name, sub: '프로젝트 경비', budget: p.allocPool, used: p.used, remain: p.allocPool - p.used };
 }

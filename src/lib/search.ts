@@ -61,8 +61,8 @@ const MENUS: { title: string; view: View; sub: string; kw: string; tab?: string;
   { title: '코웍-코인 리포트', view: 'report', sub: '보유 코웍-코인 · 운영일지 · 차트', kw: '리포트 보유 코인 운영일지 차트 통계 달력' },
   { title: '알림', view: 'notification', sub: '받은 알림 목록', kw: '알림 소식' },
   { title: '알림 설정', view: 'notification', tab: '알림 설정', sub: '알림 · 푸시 알림 켜기/끄기', kw: '푸시 알림 설정 끄기 켜기' },
-  { title: '비밀번호 변경', view: 'mypage', anchor: 'password', sub: '마이페이지', kw: '마이페이지 비밀번호 암호 계정' },
-  { title: '화면 설정 (글씨 크기 · 화면 모드)', view: 'mypage', anchor: 'display', sub: '마이페이지', kw: '마이페이지 글씨 크기 큰글씨 폰트 화면 다크 모드 라이트 테마 어둡게 밝게 야간' },
+  { title: '비밀번호 변경', view: 'mypage', anchor: 'password', sub: '계정 메뉴', kw: '마이페이지 비밀번호 암호 계정' },
+  { title: '화면 설정 (글씨 크기 · 화면 모드)', view: 'settings', anchor: 'display', sub: '계정 메뉴', kw: '마이페이지 글씨 크기 큰글씨 폰트 화면 다크 모드 라이트 테마 어둡게 밝게 야간' },
   { title: '관리자 메뉴', view: 'admin', sub: '팀(사용자) 추가·수정·비밀번호 초기화', kw: '관리자 팀 사용자 추가 휴면 권한 초기화', admin: true },
 ];
 

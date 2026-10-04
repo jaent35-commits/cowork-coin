@@ -10,6 +10,8 @@ import './CheckRows.css';
 export { checkDateOf };
 
 const CAT_COLOR: Record<string, string> = {
+  '회의비(원가)': 'var(--primary)', '업무비(원가)': 'var(--violet)', '일반교통비(원가)': 'var(--sage)', '기타(원가)': 'var(--faint)',
+  // 예전 구분 (이미 등록된 항목)
   식비: 'var(--primary)', 교통비: 'var(--sage)', 자재비: 'var(--violet)', 숙박비: 'var(--clay)', 기타: 'var(--faint)',
 };
 
@@ -136,7 +138,9 @@ export default function CheckRows({ items, projects, onToggle, onExec, empty, hi
                 {!hideProject && proj?.joined && <Badge variant="outline" size="sm" title="배분받은 참여 프로젝트 (공개 항목)">참여</Badge>}
                 {!hideProject && <span className="check-row__proj">{proj?.name}</span>}
                 {item.category && <Badge variant="tint" size="sm" color={color}>{item.category}</Badge>}
-                {!isPublicCheck(item) && <Badge variant="dark" size="sm" title="주관 팀만 볼 수 있음">비공개</Badge>}
+                {!isPublicCheck(item) && !actions && (
+                  <span className="check-row__vis" title="비공개: 주관 팀만 볼 수 있음" aria-label="비공개" role="img"><IconLock size={12} /></span>
+                )}
                 {item.checked
                   ? <span className="check-row__date is-exec">
                       <span className="check-row__datelabel">집행</span>
