@@ -14,6 +14,8 @@
   - [`schema.sql`](schema.sql) — 테이블·제약·뷰 (일반 PostgreSQL에서도 실행됨)
   - [`supabase.sql`](supabase.sql) — Supabase 전용: `auth.users` 연결, 로그인한 팀 확인 함수, RLS, 로그인 화면·관리자 메뉴 함수
   - [`migrations/`](migrations/) — 이미 적용된 DB 에 추가로 실행하는 변경 (새 DB 는 schema.sql 에 이미 포함)
+  - [`seed.sql`](seed.sql) — 오픈 전 검증용 테스트 데이터 (운영 Supabase 에 넣어 검증)
+  - [`cleanup_test_data.sql`](cleanup_test_data.sql) — 오픈 직전 테스트 데이터 전부 삭제 (기준 정보는 유지, 첫 실행 상태로)
 - 실행 순서: `schema.sql` → `supabase.sql` (Supabase SQL Editor 또는 마이그레이션)
 - 원칙: **입력값만 저장**하고, 사용액·잔액·분기 예산·집행률 같은 **계산값은 뷰(`v_*`)로 조회**합니다. 금액은 원 단위 `bigint`.
 
@@ -501,3 +503,4 @@ v2 팀·로그인 부분은 PGlite(브라우저·Node 용 PostgreSQL)에서 `sch
 | v2.2 `20260927164727 cowork_coin_checklist_spent_v2_2` (migrations/20260928_checklist_spent_amount.sql) | `checklist_items.spent_amount` bigint 추가 · 제약 `checklist_items_spent_amount_check`(≥ 0) · `checklist_items_spent_check` 있음, 기존 완료 항목 2건은 예정 금액으로 채워짐 |
 | v2.3 `20260927164738 cowork_coin_checklist_spent_date_v2_3` (migrations/20260928b_checklist_spent_date.sql) | `checklist_items.spent_date` date 추가 · 제약 `checklist_items_spent_date_check` 있음, 기존 완료 항목 2건은 체크한 날(한국 시간)로 채워짐 · `v_team_checklist` 에 두 컬럼 포함, `security_invoker=true` 유지(뷰 9개 모두) · Advisors 보안: 마이그레이션으로 생긴 경고 없음 (새로 보인 `auth_leaked_password_protection` 은 Auth 설정 항목) |
 | v2.4 Edge Function 5개 (supabase/functions, 2026-09-28) | `bootstrap-admin` · `change-password` · `admin-create-team` · `admin-reset-password` · `admin-delete-team` 배포 — 각각 `index.ts` + `../_shared/mod.ts`, `verify_jwt=false`(인증은 함수 안 `caller()`), 5개 모두 ACTIVE v1 · 인증 없는 POST 로 확인: `bootstrap-admin` 409 `already_setup`(팀 있음), 나머지 401 `unauthorized`, 로그에 부팅·실행 오류 없음 · 앱 설정 `.env.local`(VITE_SUPABASE_URL · publishable 키, git 제외) · seed 테스트 데이터 삭제(팀 4 · Auth 사용자 4 · 프로젝트 · 배분 · 체크리스트 · 집행 · 인원 · 업무비 · 알림 · 과거 요약) → `needs_setup()` true, 기준 정보(경비 분류 5 · 회의비 단가 2)는 유지 · Advisors 보안: 새 경고 없음 |
+| 오픈 전 검증 데이터 (2026-10-02) | `seed.sql` 적용(`execute_sql`) — 팀 8개 추가(기존 첫 실행 관리자 팀 id 5 는 유지, 마케팅팀은 id 9) · 프로젝트 10 · 배분 20 · 체크리스트 20 · 집행 35건/47항목 · 알림 16 · Auth 사용자 9 · 테스트 비밀번호는 git 제외 파일(`db/*.local.*`) · 로그인 목록 7팀(휴면 2팀 제외) · 뷰 확인: 마케팅팀 3분기 회의비 잔액 -90,000 · 개발팀 9월 업무비 600,000/600,000 · 디자인팀 9월 466,500/300,000 · 프로젝트 4 디자인팀 잔액 -250,000 · 개발팀 잔액 0 · 오픈 직전 `cleanup_test_data.sql` 로 삭제 예정 |
