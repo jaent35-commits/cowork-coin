@@ -68,7 +68,7 @@ export default function Header({ view, teamName, isAdmin, unread, onNavigate, on
   const egg = usePullEgg();
   return (
     <>
-    {/* 이스터에그: 모바일에서 헤더를 아래로 끌어내리면 랜덤 문구 */}
+    {/* 이스터에그: 모바일에서 헤더를 끌어내리거나 화면 맨 위에서 본문을 당기면 랜덤 문구 */}
     <div className={cx('pull-egg', egg.dragging && 'is-dragging', egg.height > 0 && 'is-open')} style={{ height: egg.height }}
       onClick={egg.close} aria-hidden={egg.height === 0}>
       <div className="pull-egg__inner">

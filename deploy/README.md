@@ -31,3 +31,17 @@
    - 직접 산 도메인의 하위 도메인: CNAME `jaent35-commits.github.io`
 4. **Settings → Pages → Custom domain** 에 `cw-coin.duckdns.org` 입력 → **Save** → DNS 확인이 끝나면 **Enforce HTTPS** 체크 (인증서 발급까지 수 분~최대 24시간)
 5. **Actions** 탭에서 `Deploy to GitHub Pages` 실행 결과 확인 → `https://cw-coin.duckdns.org` 접속 → 모바일 크롬에서 앱 설치 확인
+
+# GitHub Pages + OCR 서버
+
+앱 화면(Pages)과 OCR 서버를 다른 주소로 둡니다. Pages 가 HTTPS 라서 OCR 서버도 반드시 HTTPS 여야 합니다 (http 주소는 브라우저가 막음).
+
+1. DuckDNS 에 하위 도메인을 하나 더 만들고(예: `cw-coin-ocr`) OCR 서버를 돌릴 PC 의 공인 IP 를 넣습니다. 공유기 TCP 80·443 → 그 PC 포워딩, 방화벽 허용 (8000 은 열지 않음)
+2. OCR 서버 실행 (backend/README.md "운영 실행") — 다른 주소의 앱이 부를 수 있게 허용 출처를 지정
+   ```powershell
+   $env:PADDLE_PDX_CACHE_HOME = "C:\Users\Public\paddlex"; $env:OCR_CORS_ORIGINS = "https://cw-coin.duckdns.org"; .venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --timeout-graceful-shutdown 30
+   ```
+3. `Caddyfile.ocr.example` → `Caddyfile` 로 복사 후 `caddy run --config Caddyfile` (HTTPS 인증서 자동 발급)
+4. `https://cw-coin-ocr.duckdns.org/api/health` 가 열리는지 확인
+5. 저장소 변수 `VITE_OCR_API_URL` = `https://cw-coin-ocr.duckdns.org` 추가 → Actions 에서 배포 다시 실행
+6. 앱에서 영수증 사진 인식 — OCR 서버가 꺼져 있거나 응답이 늦으면 앱은 자동으로 브라우저 OCR 만 사용

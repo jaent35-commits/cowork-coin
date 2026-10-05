@@ -1,0 +1,13 @@
+# OCR 서버만 HTTPS 로 공개 (앱 화면은 GitHub Pages) — deploy/README.md "GitHub Pages + OCR 서버"
+# cw-coin-ocr.duckdns.org 를 이 PC 공인 IP 로, 공유기 TCP 80·443 을 이 PC 로 포워딩
+cw-coin-ocr.duckdns.org {
+  encode zstd gzip
+
+  handle /api/* {
+    reverse_proxy 127.0.0.1:8000
+  }
+
+  handle {
+    respond 404
+  }
+}

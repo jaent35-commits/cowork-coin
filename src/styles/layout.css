@@ -353,6 +353,8 @@
 @media (max-width: 1024px) {
   /* 세로 끌기는 이스터에그가 받도록 (탭·가로 동작은 그대로) */
   .app-header { touch-action: pan-x; user-select: none; -webkit-user-select: none; }
+  /* 화면 맨 위에서 본문을 당기는 것도 이스터에그 — 브라우저 당겨서 새로고침·튕김은 끔 (usePullEgg) */
+  html { overscroll-behavior-y: none; }
   /* 늘어나는 동안 헤더 하단선·그림자는 늘어난 영역 끝으로 */
   .app-header.is-pulled { border-bottom-color: transparent; box-shadow: none; }
   .app-header.is-boing .app-header__brand,
