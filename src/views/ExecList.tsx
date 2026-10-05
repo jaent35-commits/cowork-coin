@@ -171,6 +171,8 @@ const periodText = (s: string, e: string) => {
 
 /** 집행 등록 저장 후 집행 현황으로 돌아올 때 띄울 완료 안내 (한 번만) */
 let pendingToast: string | null = null;
+/** 집행 현황에 체크리스트 완료 항목 보기 (localStorage, 기본 켬) */
+const SHOW_CHECKS_KEY = 'cowork-coin-exec-show-checks';
 export const toastOnExecList = (msg: string) => { pendingToast = msg; };
 
 export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void }) {
@@ -209,7 +211,11 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
   const setRange = (s: string, e: string) => { setStart(s); setEnd(e); resetMarks(); };
 
   const projName = (id?: string) => projects.find(p => p.id === id)?.name ?? '삭제된 프로젝트';
-  const usedProjectIds = Array.from(new Set(records.filter(r => r.type === 'project').map(r => r.projectId!)));
+  // 사업 필터 목록: 집행이 있는 프로젝트 + 우리 팀이 체크리스트를 체크한 프로젝트
+  const usedProjectIds = Array.from(new Set([
+    ...records.filter(r => r.type === 'project').map(r => r.projectId!),
+    ...state.checklist.filter(c => c.checked && (c.checkedBy ?? state.session?.team) === state.session?.team).map(c => c.projectId),
+  ]));
   const filtered = records
     .filter(r => r.month >= start && r.month <= end)
     .filter(r => {
@@ -225,6 +231,21 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
       // 같으면 사용일자 → 등록일 최신순
       return c * sort.dir || spentDateOf(b).localeCompare(spentDateOf(a)) || b.date.localeCompare(a.date);
     });
+
+  /**
+   * 체크리스트 완료 항목 — 우리 팀이 체크한 것만, 표시 전용 (예산 사용액·합계에는 넣지 않음)
+   * 같은 프로젝트·사용일자·금액의 집행이 이미 있으면 그 집행으로 등록된 것으로 보고 빼서 중복 표시하지 않음
+   */
+  const myTeam = state.session?.team;
+  // 표 위 체크박스로 보기 on/off (기기별로 기억)
+  const [showChecks, setShowChecksState] = useState(() => { try { return localStorage.getItem(SHOW_CHECKS_KEY) !== '0'; } catch { return true; } });
+  const setShowChecks = (v: boolean) => { setShowChecksState(v); try { localStorage.setItem(SHOW_CHECKS_KEY, v ? '1' : '0'); } catch { /* 이번 방문만 */ } };
+  const checkRows = filter === 'team' || !showChecks ? [] : state.checklist
+    .filter(c => c.checked && c.spentDate && (c.checkedBy ?? myTeam) === myTeam)
+    .filter(c => { const m = c.spentDate!.slice(0, 7); return m >= start && m <= end; })
+    .filter(c => filter !== 'project' || projectFilter === 'all' || c.projectId === projectFilter)
+    .filter(c => !records.some(r => r.type === 'project' && r.projectId === c.projectId && spentDateOf(r) === c.spentDate && r.total === (c.spent ?? c.amount)))
+    .sort((a, b) => b.spentDate!.localeCompare(a.spentDate!));
 
   // 필터 칩 건수: 조회 기간 안의 전체 / 팀 운영 / 프로젝트 운영
   const inPeriod = records.filter(r => r.month >= start && r.month <= end);
@@ -265,16 +286,16 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
     });
   }
   {
-    // 주관 프로젝트 = 프로젝트 배분 경비 전체 / 배분받은 코웍 프로젝트 = 우리 팀 배분액 기준
+    // 우리 팀 배분액 기준 — 주관 프로젝트는 My 경비, 배분받은 코웍 프로젝트는 우리 팀 배분 (집행 등록·수정의 잔액 검사와 같은 기준)
     const team = state.session?.team;
     projects
       .filter(p => ((p.isMine || p.joined) && p.active) || inPeriod.some(r => r.projectId === p.id))
       .forEach(p => {
-        const mine = !p.isMine ? state.allocs[p.id]?.find(a => a.teamName === team) : undefined;
+        const mine = state.allocs[p.id]?.find(a => a.teamName === team);
         const budget = mine ? mine.amount : p.allocPool, used = mine ? mine.used ?? 0 : p.used;
         sumLines.push({
           key: p.id, group: 'project', icon: '📁', name: p.name,
-          sub: `${mine ? '우리 팀 배분' : '배분 경비'} ${fmt(budget)}${p.active ? '' : ' · 종료'}`,
+          sub: `${mine ? (p.isMine ? 'My 경비' : '우리 팀 배분') : '배분 경비'} ${fmt(budget)}${p.active ? '' : ' · 종료'}`,
           spent: spentOf(r => r.projectId === p.id && (!mine || r.team === team)), remain: budget - used, budget, used, ended: !p.active,
         });
       });
@@ -290,8 +311,11 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
     const to = bucketOf(state, key, month);
     if (!to || to.remain == null) return null;
     const from = bucketOf(state, recordTypeKey(r), r.month);
-    const avail = to.remain + (from?.id === to.id ? r.total : 0);
-    return amount > avail ? `${to.name} 잔액(${fmt(avail)})이 부족합니다.` : null;
+    const same = from?.id === to.id;
+    // 같은 예산 안에서 금액을 줄이거나 그대로 두는 수정(날짜·항목명 등)은 늘 허용 — 이미 초과된 예산이어도 바로잡을 수 있게
+    if (same && amount <= r.total) return null;
+    const avail = to.remain + (same ? r.total : 0);
+    return amount > avail ? `${to.name} 잔액(${fmt(Math.max(0, avail))})이 부족합니다.` : null;
   };
 
   /** 수정한 칸 1개 저장 — 값이 그대로면 아무것도 안 함 */
@@ -453,6 +477,12 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
             {usedProjectIds.map(id => <option key={id} value={id}>{projName(id)}</option>)}
           </Select>
         )}
+        {filter !== 'team' && (
+          <label className="exec-filter__checks">
+            <Checkbox checked={showChecks} onChange={() => setShowChecks(!showChecks)} aria-label="체크리스트 완료 항목 보기" />
+            <span>체크리스트 완료 보기</span>
+          </label>
+        )}
         <Btn variant="danger" size="sm" className={cx('exec-filter__del', mobile && 'hide-mobile')} disabled={!visibleChecked.length} onClick={() => setConfirmDelete(true)}>
           <IconTrash size={13} />선택 삭제{visibleChecked.length > 0 && ` (${visibleChecked.length})`}
         </Btn>
@@ -509,7 +539,7 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && (
+              {filtered.length === 0 && checkRows.length === 0 && (
                 <tr><td colSpan={6}><EmptyState icon="📋" message={`${periodText(start, end)} 집행 이력이 없습니다`} /></td></tr>
               )}
               {filtered.map(r => {
@@ -573,11 +603,46 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
                 );
               })}
             </tbody>
+            {/* 체크리스트 완료 항목 — 표시 전용 (수정은 체크리스트에서, 합계·예산에 넣지 않음) */}
+            {checkRows.length > 0 && (
+              <tbody className="exec-table__checks">
+                <tr className="exec-table__checks-head">
+                  <td />
+                  <td colSpan={5}>체크리스트 완료 <small>{checkRows.length}건 · {fmt(checkRows.reduce((s, c) => s + (c.spent ?? c.amount), 0))} · 예산 집행에는 포함되지 않아요</small></td>
+                </tr>
+                {checkRows.map(c => {
+                  const d = c.spentDate!;
+                  const pname = projName(c.projectId);
+                  return (
+                    <tr key={`chk-${c.id}`} data-rec={`chk-${c.id}`} className={cx('exec-table__check-row', !d.startsWith(`${CUR_YEAR}-`) && 'is-past-year')}
+                      title="체크리스트에서 체크한 항목 — 금액·날짜는 체크리스트에서 수정">
+                      <td className="exec-table__check" />
+                      <td className="exec-table__use t-nowrap">
+                        <span className="exec-table__month">
+                          {d.startsWith(`${CUR_YEAR}-`)
+                            ? <><span className="hide-mobile"><span className="dt-full">{d}</span><span className="dt-short">{shortYmd(d)}</span></span><span className="show-mobile-inline">{d.slice(5)}</span></>
+                            : <><span className="dt-full">{d}</span><span className="dt-short">{shortYmd(d)}</span></>}
+                        </span>
+                      </td>
+                      <td className="exec-table__typecol">
+                        <div className="exec-table__type-cell">
+                          <span className="type-ico is-check" aria-hidden="true">✅</span>
+                          <span className="exec-table__type-name" title={pname}>{pname}</span>
+                        </div>
+                      </td>
+                      <td className="exec-table__name"><span>{c.title}</span> <span className="exec-chk-badge">체크리스트</span></td>
+                      <td className="exec-table__amtcol t-right t-nowrap"><span className="num exec-table__amt">{fmt(c.spent ?? c.amount)}</span></td>
+                      <td className="t-nowrap t-muted exec-table__date">—</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            )}
             {filtered.length > 0 && (
               <tfoot>
                 <tr className="exec-table__total">
                   <td />
-                  <td colSpan={3}>합계 <small>{filtered.length}건</small></td>
+                  <td colSpan={3}>{checkRows.length ? '집행 합계' : '합계'} <small>{filtered.length}건</small></td>
                   <td className="t-right t-nowrap"><span className="num">{fmt(filtered.reduce((s, r) => s + r.total, 0))}</span></td>
                   <td className="exec-table__date" />
                 </tr>

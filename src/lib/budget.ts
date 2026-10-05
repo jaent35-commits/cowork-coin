@@ -67,12 +67,13 @@ export function bucketOf(state: AppState, key: string, month: string): Bucket | 
   }
   const p = state.projects.find(x => x.id === projectId);
   if (!p) return null;
-  // 배분받은 코웍 팀은 우리 팀 배분액에서 차감 (주관 팀은 프로젝트 배분 경비 전체)
+  // 우리 팀 배분액에서 차감 — 주관 팀도 My 경비(주관 팀 배분)에서 씀 (DB: 집행은 배분받은 팀만 · 팀 배분 단위)
+  //   프로젝트 전체(배분 가능 금액 − 모든 팀 사용액)로 보면 다른 팀 사용액까지 빠져 우리 팀 예산 안의 수정도 막힘
   const team = state.session?.team;
-  const mine = p.ownerTeam !== team ? state.allocs[p.id]?.find(a => a.teamName === team) : undefined;
+  const mine = state.allocs[p.id]?.find(a => a.teamName === team);
   if (mine) {
     const used = mine.used ?? 0;
-    return { id: p.id, name: p.name, sub: '우리 팀 배분 경비', budget: mine.amount, used, remain: mine.amount - used };
+    return { id: p.id, name: p.name, sub: p.ownerTeam === team ? 'My 경비' : '우리 팀 배분 경비', budget: mine.amount, used, remain: mine.amount - used };
   }
   return { id: p.id, name: p.name, sub: '프로젝트 경비', budget: p.allocPool, used: p.used, remain: p.allocPool - p.used };
 }

@@ -43,7 +43,7 @@ export const EMPTY_DATA: RemoteData = {
 interface ProjectRow { id: number; name: string; client: string | null; start_date: string; end_date: string; total_amount: number; alloc_pool: number; owner_team_id: number; is_active: boolean; memo: string | null }
 interface AllocDbRow { id: number; project_id: number; team_id: number; amount: number; use_end_date: string | null }
 interface UsageRow { project_id: number; team_id: number; used: number }
-interface CheckRow { id: number; project_id: number; title: string; amount: number; due_date: string | null; visibility: 'public' | 'private'; is_checked: boolean; spent_amount: number | null; spent_date: string | null; category: { name: string } | null }
+interface CheckRow { id: number; project_id: number; title: string; amount: number; due_date: string | null; visibility: 'public' | 'private'; is_checked: boolean; spent_amount: number | null; spent_date: string | null; checked_by_team_id: number | null; category: { name: string } | null }
 interface RecRow { id: number; team_id: number; budget_type: BudgetType; project_id: number | null; use_date: string; registered_at: string; exec_items: { line_no: number; name: string; amount: number }[] }
 interface NotifRow { id: number; type: NotifType; title: string; body: string; target_team_id: number | null; dedupe_key: string | null; created_at: string }
 interface PrefRow { push_enabled: boolean; push_exec: boolean; push_setting: boolean; push_alloc: boolean; push_deadline: boolean }
@@ -69,7 +69,7 @@ export async function loadRemote(me: Team): Promise<RemoteData & { teams: Team[]
     c.from('projects').select('id, name, client, start_date, end_date, total_amount, alloc_pool, owner_team_id, is_active, memo').order('id'),
     c.from('project_allocations').select('id, project_id, team_id, amount, use_end_date').order('id'),
     c.rpc('project_usage'),
-    c.from('checklist_items').select('id, project_id, title, amount, due_date, visibility, is_checked, spent_amount, spent_date, category:expense_categories(name)').order('id'),
+    c.from('checklist_items').select('id, project_id, title, amount, due_date, visibility, is_checked, spent_amount, spent_date, checked_by_team_id, category:expense_categories(name)').order('id'),
     c.from('exec_records').select('id, team_id, budget_type, project_id, use_date, registered_at, exec_items(line_no, name, amount)').order('use_date', { ascending: false }).order('id', { ascending: false }),
     c.from('team_headcounts').select('month, headcount'),
     c.from('work_budgets').select('effective_month, amount'),
@@ -99,6 +99,7 @@ export async function loadRemote(me: Team): Promise<RemoteData & { teams: Team[]
     id: String(r.id), projectId: String(r.project_id), title: r.title, amount: Number(r.amount), category: r.category?.name ?? '',
     date: r.due_date ?? undefined, checked: r.is_checked, spent: r.spent_amount == null ? undefined : Number(r.spent_amount),
     spentDate: r.spent_date ?? undefined, visibility: r.visibility,
+    checkedBy: r.is_checked && r.checked_by_team_id != null ? nameOf(r.checked_by_team_id) : undefined,
   }));
 
   const allRecs = must(rRes as unknown as Res<RecRow[]>, '집행 조회') ?? [];

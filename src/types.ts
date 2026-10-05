@@ -84,6 +84,8 @@ export interface ChecklistItem {
   spent?: number;
   /** 집행일 YYYY-MM-DD — 체크할 때 그날로 시작 (수정 가능), 미체크면 없음. 예정일(date)은 그대로 둠 */
   spentDate?: string;
+  /** 체크(집행 완료)한 팀 — 집행 현황에 우리 팀이 체크한 항목만 보여 줄 때 씀 */
+  checkedBy?: string;
   projectId: string;
   /** 없으면 공개 */
   visibility?: CheckVisibility;

@@ -514,3 +514,21 @@
 .camera-sheet__shutter:disabled { opacity: 0.4; }
 .camera-sheet__ring { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border: 2px solid #ffd54a; border-radius: 50%; pointer-events: none; animation: camera-ring 0.9s ease forwards; }
 @keyframes camera-ring { 0% { transform: scale(1.4); opacity: 0; } 25% { transform: scale(1); opacity: 1; } 100% { opacity: 0; } }
+
+/* 집행 현황 — 체크리스트 완료 항목 (표시 전용, 예산·합계 미포함) */
+.exec-table__checks-head td { padding-top: 12px; padding-bottom: 8px; border-top: 1.5px dashed var(--line); background: var(--surface-alt); font-size: calc(12.5px * var(--fs)); font-weight: 800; color: var(--muted); }
+.exec-table__checks-head small { margin-left: 6px; font-weight: 600; color: var(--faint); }
+.exec-table__check-row td { color: var(--muted); background: var(--surface); }
+.exec-table__check-row .exec-table__amt { color: var(--muted); }
+.type-ico.is-check { background: var(--success-50); }
+.exec-chk-badge { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: var(--r-pill); background: var(--success-50); color: var(--success-600); font-size: calc(11px * var(--fs)); font-weight: 800; vertical-align: 1px; white-space: nowrap; }
+@media (max-width: 1024px) {
+  /* 체크리스트 완료 제목 줄 — 모바일은 한 줄 블록 */
+  .exec-table__checks-head { display: block; padding: 12px 16px 8px; border-top: 1.5px dashed var(--line); background: var(--surface-alt); }
+  .exec-table__checks-head td { display: inline; padding: 0; border: 0; background: none; }
+  .exec-table__checks-head td:first-child { display: none; }
+  .exec-table__checks-head small { display: block; margin: 2px 0 0; }
+  .exec-table tbody tr.exec-table__check-row { -webkit-user-select: text; user-select: text; }
+}
+/* 체크리스트 완료 보기 on/off */
+.exec-filter__checks { display: inline-flex; align-items: center; gap: 6px; font-size: calc(13px * var(--fs)); font-weight: 700; color: var(--muted); cursor: pointer; white-space: nowrap; user-select: none; }

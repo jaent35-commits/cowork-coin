@@ -312,7 +312,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'TOGGLE_CHECK':
       // 체크하면 집행 금액 = 예산 · 집행일 = 오늘로 시작, 체크 해제하면 둘 다 지움 (예정일로 돌아감)
       return { ...state, checklist: state.checklist.map(c => (c.id === action.id
-        ? c.checked ? { ...c, checked: false, spent: undefined, spentDate: undefined } : { ...c, checked: true, spent: action.exec?.spent ?? c.amount, spentDate: action.exec?.spentDate ?? TODAY_ISO }
+        ? c.checked ? { ...c, checked: false, spent: undefined, spentDate: undefined, checkedBy: undefined } : { ...c, checked: true, spent: action.exec?.spent ?? c.amount, spentDate: action.exec?.spentDate ?? TODAY_ISO, checkedBy: state.session?.team }
         : c)) };
     case 'SET_CHECK_EXEC':
       return { ...state, checklist: state.checklist.map(c => (c.id === action.id && c.checked ? { ...c, ...action.patch } : c)) };
