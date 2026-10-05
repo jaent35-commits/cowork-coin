@@ -250,8 +250,8 @@
   /* 우측 상단 MY 띠 */
   .proj-table tbody tr[data-proj]::after {
     content: 'MY'; position: absolute; top: 0; right: 0; padding: 3px 10px 4px 12px;
-    border-bottom-left-radius: 12px; background: linear-gradient(135deg, var(--primary-600), var(--primary));
-    color: var(--white); font-family: var(--font-display); font-size: calc(10.5px * var(--fs)); font-weight: 900; letter-spacing: 0.08em;
+    border-bottom-left-radius: var(--r-lg); background: var(--ribbon-bg);
+    color: var(--ribbon-fg); font-family: var(--font-display); font-size: calc(10.5px * var(--fs)); font-weight: 900; letter-spacing: 0.08em;
   }
   .proj-table tbody tr[data-proj] td:nth-child(1) { padding-right: 40px; }
   .proj-table tbody tr[data-proj] td:nth-child(6) { margin-top: 12px; }
@@ -274,7 +274,7 @@
   .proj-table tbody tr.is-ended.is-selected .donut svg { filter: grayscale(1); opacity: 0.6; }
   /* 종료 카드: 강조선·띠를 회색으로 */
   .proj-table tbody tr.is-ended::before { background: var(--line-input); }
-  .proj-table tbody tr.is-ended::after { background: var(--faint-2); }
+  .proj-table tbody tr.is-ended::after { background: var(--ribbon-ended-bg); color: var(--ribbon-ended-fg); }
   .proj-table__new td { border-radius: var(--r-lg); }
   .proj-table tbody tr td[colspan] { border: 0; }
 }

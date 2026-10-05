@@ -285,7 +285,7 @@
     border-bottom: 1px solid var(--line-soft); background: var(--surface-alt); border-radius: var(--r-lg) var(--r-lg) 0 0;
   }
   .reg-row.is-over .reg-row__top { background: var(--danger-50); }
-  .reg-row__no { height: 24px; padding: 0 10px; background: var(--primary-50); color: var(--primary-700); font-size: calc(12px * var(--fs)); }
+  .reg-row__no { height: 24px; padding: 0 10px; background: var(--tag-amber-bg); box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor var(--tag-line), transparent); color: var(--primary-700); font-size: calc(12px * var(--fs)); }
   .reg-field { flex-direction: row; align-items: center; gap: 10px; }
   .reg-field__label { flex: 0 0 calc(58px * var(--fs)); font-size: calc(12.5px * var(--fs)); color: var(--text-2); white-space: nowrap; }
   .reg-field > :not(.reg-field__label) { flex: 1 1 auto; width: auto; }

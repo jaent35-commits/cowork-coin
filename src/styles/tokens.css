@@ -99,6 +99,27 @@
   --grad-success: linear-gradient(90deg, #5f9b78, #86b99a);
   --grad-warning: linear-gradient(90deg, #e39a2e, #f2c46b);
   --grad-danger: linear-gradient(90deg, #df5a48, #ec8a7c);
+  --grad-coin: linear-gradient(135deg, var(--coin-yellow), var(--coin-amber)); /* 아바타 */
+  --grad-sim: linear-gradient(135deg, var(--primary-25), var(--primary-50));  /* 예산 산정 시뮬레이터 */
+  /* 프로젝트 카드 MY 띠 — 진행 중 / 종료 */
+  --ribbon-bg: linear-gradient(135deg, var(--primary-600), var(--primary));
+  --ribbon-fg: var(--white);
+  --ribbon-ended-bg: var(--faint-2);
+  --ribbon-ended-fg: var(--white);
+
+  /* ── 작은 표시(배지·M-2 태그·번호 동그라미) — 라이트는 연한 채움, 다크는 채움 없이 선 (옅은 면 위 옅은 면이 번져 보이지 않게) ── */
+  --tag-amber-bg: var(--primary-50);
+  --tag-green-bg: var(--success-100);
+  --tag-red-bg: var(--danger-100);
+  --tag-red-soft-bg: var(--danger-50);
+  --tag-violet-bg: var(--violet-50);
+  --tag-gray-bg: var(--line-soft);
+  --tag-tint: 10%;            /* 구분 태그(.badge--tint) 채움 농도 */
+  --tag-line: 0%;             /* 글자색으로 그리는 테두리 농도 (라이트 없음) */
+  --pick-bg: var(--primary-25);       /* 연도·월 값 칸 (누르면 고르기) */
+  --pick-bg-hover: var(--primary-50);
+  --num-halo: 0 0 2px var(--surface), 0 0 2px var(--surface); /* 도넛 수치 — 링 위에 겹쳐도 또렷하게 */
+  --sel-halo: 0 0 0 4px var(--primary-200);                    /* 달력 월·연도 선택 바깥 테두리 */
 
   /* ── Type — 글씨 크기 배율: 작은 글씨 1 / 큰 글씨 1.4 (모든 font-size 가 calc(Npx * var(--fs))) ── */
   --fs: 1;
@@ -254,6 +275,31 @@
   --scroll-thumb-hover: #5a514b;
 
   --grad-hero: linear-gradient(135deg, #16130f 0%, #16130f 100%); /* 평면 — 누런 그라데이션 없음 */
+  /* 그라데이션은 어두운 바탕에서 글자 주변이 번져 보여 모두 단색 */
+  --grad-primary: #f2b04c;
+  --grad-bar: #f0a24e;
+  --grad-success: #6fae89;
+  --grad-warning: #e8a83c;
+  --grad-danger: #e4725f;
+  --grad-coin: var(--coin-amber);
+  --grad-sim: var(--surface-alt);
+  --ribbon-bg: var(--primary);
+  --ribbon-fg: var(--ink);
+  --ribbon-ended-bg: var(--faint-3);
+  --ribbon-ended-fg: var(--text-2);
+  /* 작은 표시: 채움 없이 글자색 선 */
+  --tag-amber-bg: transparent;
+  --tag-green-bg: transparent;
+  --tag-red-bg: transparent;
+  --tag-red-soft-bg: transparent;
+  --tag-violet-bg: transparent;
+  --tag-gray-bg: transparent;
+  --tag-tint: 0%;
+  --tag-line: 55%;
+  --pick-bg: transparent;
+  --pick-bg-hover: var(--line-soft);
+  --num-halo: none;
+  --sel-halo: 0 0 0 0 transparent;
   /* 모바일 홈 히어로: 웜 틴트 면 + 은은한 앰버 선 + 앰버 금액 (그림자·빛 번짐 없음) */
   --hero-m-bg: #1a1510;
   --hero-m-line: var(--primary-300);
@@ -277,7 +323,7 @@
   --shadow-sheet: 0 -12px 32px rgba(0, 0, 0, 0.5);
   --shadow-bar: 0 8px 24px rgba(0, 0, 0, 0.5);
   --shadow-soft: 0 0 0 1px var(--line);
-  --ring: 0 0 0 2px rgba(232, 162, 58, 0.5); /* 번지지 않는 2px 포커스 */
+  --ring: 0 0 0 2px #b9853a;  /* 번지지 않는 2px 불투명 포커스 */
 
   --dim: rgba(0, 0, 0, 0.6);
   --glass: rgba(34, 30, 27, 0.92);

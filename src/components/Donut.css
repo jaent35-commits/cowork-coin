@@ -7,7 +7,7 @@
 .donut.is-over .donut__bar { stroke: var(--danger); }
 .donut__pct {
   position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center;
-  text-shadow: 0 0 2px var(--surface), 0 0 2px var(--surface); /* 수치가 링 위에 겹쳐도 또렷하게 */
+  text-shadow: var(--num-halo); /* 수치가 링 위에 겹쳐도 또렷하게 (다크는 번져 보여 없음) */
   font-family: var(--font-display); font-size: calc(11px * var(--fs)); font-weight: 900; color: var(--text); letter-spacing: -0.02em;
 }
 .donut__pct small { font-size: calc(9px * var(--fs)); font-weight: 800; } /* 단위 기호 — 최소 크기 예외 */

@@ -420,7 +420,7 @@
 .install-guide li { display: flex; align-items: center; gap: 8px; font-size: calc(13px * var(--fs)); font-weight: 600; color: var(--text-2); line-height: 1.45; }
 .install-guide li > span {
   flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-  background: var(--primary-50); color: var(--primary-700); font-size: calc(11px * var(--fs)); font-weight: 800;
+  background: var(--tag-amber-bg); box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor var(--tag-line), transparent); color: var(--primary-700); font-size: calc(11px * var(--fs)); font-weight: 800;
 }
 
 /* 모바일: 바텀 시트 */

@@ -25,7 +25,7 @@
 /* ── Badge (태그·알약 공통) — 모든 변형이 같은 높이가 되도록 1px 테두리(기본 투명) 포함 ── */
 .badge {
   display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
-  padding: 1px 8px; border-radius: var(--r-pill); border: 1px solid transparent;
+  padding: 1px 8px; border-radius: var(--r-pill); border: 1px solid color-mix(in srgb, currentColor var(--tag-line), transparent);
   font-size: calc(11.5px * var(--fs)); font-weight: 700; white-space: nowrap;
 }
 .badge--sm { padding: 0 6px; font-size: calc(11px * var(--fs)); }
@@ -33,19 +33,19 @@
 .badge--outline { border-color: var(--line-input); background: var(--surface); color: var(--muted); }
 .badge--dark { background: var(--track); color: var(--ink); }
 /* 분류 태그: 글자는 분류색을 진한 갈색과 섞어 대비 확보(4.5+), 배경은 분류색 그대로 연하게 */
-.badge--tint { background: color-mix(in srgb, var(--c) 10%, transparent); color: color-mix(in srgb, var(--c) 50%, var(--text)); }
+.badge--tint { background: color-mix(in srgb, var(--c) var(--tag-tint), transparent); color: color-mix(in srgb, var(--c) 50%, var(--text)); }
 .badge--btn { cursor: pointer; transition: filter 0.15s; }
 .badge--btn:not(:disabled):hover { filter: brightness(0.96); }
 .badge--btn:disabled { cursor: not-allowed; opacity: 0.75; }
 .badge--btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* 표 안 상태 전환(활성/휴면): 테두리를 글자색으로 옅게 */
 .badge--lg.badge--green, .badge--lg.badge--gray { border-color: color-mix(in srgb, currentColor 24%, transparent); }
-.badge--green { background: var(--success-100); color: var(--success-600); }
-.badge--amber { background: var(--primary-50); color: var(--primary-700); }
-.badge--red { background: var(--danger-100); color: var(--danger-700); }
-.badge--blue { background: var(--primary-50); color: var(--primary-600); }
-.badge--purple { background: var(--violet-50); color: var(--violet-700); }
-.badge--gray { background: var(--line-soft); color: var(--muted); }
+.badge--green { background: var(--tag-green-bg); color: var(--success-600); }
+.badge--amber { background: var(--tag-amber-bg); color: var(--primary-700); }
+.badge--red { background: var(--tag-red-bg); color: var(--danger-700); }
+.badge--blue { background: var(--tag-amber-bg); color: var(--primary-600); }
+.badge--purple { background: var(--tag-violet-bg); color: var(--violet-700); }
+.badge--gray { background: var(--tag-gray-bg); color: var(--muted); }
 
 /* ── Progress ── */
 .progress { height: var(--h, 7px); background: var(--track); border-radius: var(--r-pill); overflow: hidden; }
@@ -142,8 +142,8 @@
   font-family: var(--font-display); font-size: calc(13.5px * var(--fs)); font-weight: 900; white-space: nowrap;
 }
 /* 값 누르면 선택 팝업: 옅은 바탕으로 눌리는 칸임을 표시 */
-.step-nav__value.is-pick { height: 28px; padding: 0 8px; border-radius: var(--r-pill); background: var(--primary-25); cursor: pointer; transition: background 0.15s; }
-.step-nav__value.is-pick:hover, .step-nav.is-open .step-nav__value.is-pick { background: var(--primary-50); }
+.step-nav__value.is-pick { height: 28px; padding: 0 8px; border-radius: var(--r-pill); background: var(--pick-bg); cursor: pointer; transition: background 0.15s; }
+.step-nav__value.is-pick:hover, .step-nav.is-open .step-nav__value.is-pick { background: var(--pick-bg-hover); }
 .step-nav__value.is-pick:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .step-nav--pill { height: var(--ctl-h); padding: 0 4px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface); }
 /* 달력·월 선택 팝업 머리: 폭 전체, 화살표 양 끝 */
@@ -384,7 +384,7 @@
 /* ── Avatar ── */
 .avatar {
   display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-  background: linear-gradient(135deg, var(--coin-yellow), var(--coin-amber)); color: var(--ink);
+  background: var(--grad-coin); color: var(--ink);
   font-family: var(--font-display); font-weight: 900;
 }
 .avatar--sm { width: 28px; height: 28px; border-radius: var(--r-sm); font-size: calc(12px * var(--fs)); }
@@ -394,12 +394,12 @@
 
 /* ── M-n 기한 태그 ── */
 .mtag {
-  flex-shrink: 0; padding: 2px 8px; border-radius: var(--r-xs); white-space: nowrap;
+  flex-shrink: 0; padding: 2px 8px; border-radius: var(--r-xs); white-space: nowrap; box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor var(--tag-line), transparent);
   font-family: var(--font-display); font-size: calc(11.5px * var(--fs)); font-weight: 800; letter-spacing: 0.02em;
 }
-.mtag.is-blue { background: var(--success-100); color: var(--success-600); }
-.mtag.is-amber { background: var(--primary-50); color: var(--primary-600); }
-.mtag.is-red { background: var(--danger-50); color: var(--danger-600); }
+.mtag.is-blue { background: var(--tag-green-bg); color: var(--success-600); }
+.mtag.is-amber { background: var(--tag-amber-bg); color: var(--primary-600); }
+.mtag.is-red { background: var(--tag-red-soft-bg); color: var(--danger-600); }
 .mtag.is-end { background: var(--line-soft); color: var(--faint); font-family: var(--font-body); font-size: calc(11px * var(--fs)); font-weight: 700; }
 .mtag--lg {
   width: 46px; height: 38px; padding: 0; border-radius: var(--r-lg);
