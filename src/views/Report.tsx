@@ -78,8 +78,17 @@ function PlusMinus({ plus, minus }: { plus: number; minus: number }) {
 }
 
 /** 운영일지 요약: [팀 운영 | 프로젝트 | 합계] × [+ 예산 배분 · − 집행] */
-function Triple({ flow, big }: { flow: Flow; big?: boolean }) {
+/** 필터가 전체가 아니면 그 항목 한 칸만 (key: 보일 값, label: 칸 이름) */
+interface OneCol { key: keyof Plan; label: string }
+function Triple({ flow, big, cols }: { flow: Flow; big?: boolean; cols?: OneCol }) {
   const { plan, exec } = flow;
+  if (cols) {
+    return (
+      <div className={cx('triple triple--one', big && 'triple--big')}>
+        <div><span>{cols.label}</span><PlusMinus plus={plan[cols.key]} minus={exec[cols.key]} /></div>
+      </div>
+    );
+  }
   return (
     <div className={cx('triple', big && 'triple--big')}>
       <div><span>팀 운영</span><PlusMinus plus={plan.team} minus={exec.team} /></div>
@@ -132,10 +141,25 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
     const project = projectAddOf(mi, teamProjects, myAlloc);
     return { meeting, work, team: meeting + work, project };
   };
+  /** 운영일지 한 달 — 차트와 같은 필터(전체 · 팀 운영(회의비·업무비) · 프로젝트(하나))로 거른 + 배분 · − 집행 */
   const flowOf = (mi: number): Flow => {
     const m = monthly[mi];
-    return { plan: planOf(mi), exec: { team: m.meeting + m.work, project: m.project } };
+    const plan = planOf(mi);
+    const team = { plan: teamOf(plan), exec: teamOf(m) };
+    const project = oneProject
+      ? { plan: mi > lastMonth ? 0 : projectAddOf(mi, [oneProject], p => p.allocPool), exec: oneRow?.[mi] ?? 0 }
+      : { plan: plan.project, exec: m.project };
+    const useTeam = line !== 'project', useProject = line !== 'team';
+    return {
+      plan: { team: useTeam ? team.plan : 0, project: useProject ? project.plan : 0 },
+      exec: { team: useTeam ? team.exec : 0, project: useProject ? project.exec : 0 },
+    };
   };
+  /** 운영일지 일 보기에 보일 집행 — 같은 필터 */
+  const recordInFilter = (r: ExecRecord) =>
+    line === 'team' ? (r.type !== 'project' && (teamSub === 'all' || r.type === teamSub))
+      : line === 'project' ? r.type === 'project' && (!oneProject || r.projectId === oneProject.id)
+        : true;
   const navLast = isCurYear ? CUR_MONTH : 11;
   const [selMonth, setSelMonth] = useState(isCurYear ? CUR_MONTH : 0);
   const [selDay, setSelDay] = useState<number | null>(null);
@@ -161,11 +185,26 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
 
   /* ── 보유 코웍-코인 ── */
   const q = currentQuarter(state);
+  // 팀 업무비 — 회의비처럼 이번 분기 누적 (분기 세 달의 월 예산 합 · 집행 합)
+  const qMonths = [0, 1, 2].map(i => ym(CUR_YEAR, CUR_QUARTER * 3 + i));
+  const workQ = {
+    budget: qMonths.reduce((s, m) => s + workBudgetOf(state, m).amount, 0),
+    used: qMonths.reduce((s, m) => s + workUsedOf(state, m), 0),
+  };
   const coins = [
-    // 회의비는 분기 말에 소멸하므로 분기 마지막 달을 기한으로 본다
+    // 회의비·업무비는 분기 단위로 보므로 분기 마지막 달을 기한으로 본다
     { key: 'meeting', label: `팀 회의비 (${q.label})`, endDate: ym(CUR_YEAR, CUR_QUARTER * 3 + 2), active: true, budget: q.budget, used: q.used },
+    { key: 'work', label: `팀 업무비 (${q.label})`, endDate: ym(CUR_YEAR, CUR_QUARTER * 3 + 2), active: true, budget: workQ.budget, used: workQ.used },
     ...projects.map(p => ({ key: p.id, label: p.name, endDate: p.endDate, active: p.active, budget: p.allocPool, used: p.used })),
   ];
+  /** 선택된 코인 = 지금 운영일지·차트 필터 (팀 회의비 · 팀 업무비 · 프로젝트 하나) */
+  const selCoin = line === 'team' && teamSub !== 'all' ? teamSub : line === 'project' && projectId !== ALL ? projectId : null;
+  /** 코인을 누르면 운영일지·차트를 그 항목으로, 선택된 코인을 다시 누르면 전체로 */
+  const pickCoin = (key: string) => {
+    if (selCoin === key) { setLine('total'); setTeamSub('all'); setProjectId(ALL); return; }
+    if (key === 'meeting' || key === 'work') { setLine('team'); setTeamSub(key); setProjectId(ALL); return; }
+    setLine('project'); setTeamSub('all'); setProjectId(key);
+  };
   const sortedCoins = [...coins].sort((a, b) => {
     // 종료(비활성) 건은 정렬 기준과 관계없이 맨 뒤
     if (a.active !== b.active) return a.active ? -1 : 1;
@@ -250,6 +289,35 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
   const selPt = pts[sel];
   const selLabel = `${selPt?.label ?? ''}${period === 'month' ? '월' : period === 'year' ? '년' : ''}`;
 
+  /** 운영일지 요약 칸 — 필터가 전체면 3칸, 아니면 고른 항목 한 칸 */
+  const filterLabel = line === 'team' ? TEAM_SUBS.find(o => o.value === teamSub)!.label
+    : line === 'project' ? oneProject?.name ?? `${year}년 전체 프로젝트` : '';
+  const tripleCols: OneCol | undefined = line === 'total' ? undefined : { key: line, label: filterLabel };
+
+  /** 전체 · 팀 운영 · 프로젝트 선택 — 운영일지와 차트가 함께 씀 (보유 코웍-코인을 눌러도 바뀜) */
+  const filterBar = (id: string) => (
+    <div className="chart-filter">
+      <div className="chip-row">
+        {([['total', '전체'], ['team', '팀 운영'], ['project', '프로젝트']] as const).map(([v, label]) => (
+          <FilterChip key={v} label={label} active={line === v} onClick={() => { setLine(v); setProjectId(ALL); setTeamSub('all'); }} />
+        ))}
+      </div>
+      {/* 팀 운영: 회의비 · 업무비 목록 */}
+      {line === 'team' && (
+        <Select size="sm" className="chart-filter__select" value={teamSub} onChange={e => setTeamSub(e.target.value as TeamSub)} aria-label={`${id} 팀 운영 항목 선택`}>
+          {TEAM_SUBS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </Select>
+      )}
+      {line === 'project' && (
+        <Select size="sm" className="chart-filter__select" value={projectId} onChange={e => setProjectId(e.target.value)}
+          aria-label={`${id} ${year}년 프로젝트 선택`}>
+          <option value={ALL}>{year}년 전체 프로젝트</option>
+          {yearProjects.map(p => <option key={p.id} value={p.id}>{p.name}{p.active ? '' : ' (종료)'}</option>)}
+        </Select>
+      )}
+    </div>
+  );
+
   /* ── 운영일지: 일 ── */
   const renderDay = () => {
     const first = new Date(year, selMonth, 1).getDay();
@@ -257,7 +325,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
     const cells: (number | null)[] = [...Array(first).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)];
     while (cells.length % 7) cells.push(null);
     const key = ym(year, selMonth);
-    const monthRecords = records.filter(r => r.date.startsWith(key));
+    const monthRecords = records.filter(r => r.date.startsWith(key) && recordInFilter(r));
     const txDays = new Set(monthRecords.map(r => Number(r.date.slice(8, 10))));
     const today = isCurYear && selMonth === CUR_MONTH ? TODAY.getDate() : -1;
     const dayRecords = selDay ? monthRecords.filter(r => Number(r.date.slice(8, 10)) === selDay) : [];
@@ -290,7 +358,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
               </div>
             ))}
           </div>
-        ) : <Triple flow={flowOf(selMonth)} />}
+        ) : <Triple flow={flowOf(selMonth)} cols={tripleCols} />}
       </div>
     );
   };
@@ -317,7 +385,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
           );
         })}
       </div>
-      <Triple big flow={flowOf(selMonth)} />
+      <Triple big flow={flowOf(selMonth)} cols={tripleCols} />
     </div>
   );
 
@@ -327,9 +395,14 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
       {yearRows.slice(-2).map(y => {
         const idx = yearRows.indexOf(y);
         const isCur = y.year === CUR_YEAR;
-        const teamExec = y.meeting + (y.work ?? 0);
+        // 필터 적용: 팀 운영(회의비·업무비) · 프로젝트(하나면 그 프로젝트 집행)
+        const teamExec = line === 'project' ? 0 : teamOf(y);
+        const oneSum = (list: number[]) => list.reduce((s, v) => s + v, 0);
+        const projExec = line === 'team' ? 0
+          : !oneProject ? y.project
+            : y.year === year && oneRow ? oneSum(oneRow.slice(0, lastMonth + 1)) : oneSum(monthlyOf(records, y.year, oneProject.id).map(m => m.project));
         // 예산 배분(+)은 조회 중인 연도만 (월별 배분 합)
-        const plus = y.year === year ? Array.from({ length: lastMonth + 1 }, (_, i) => { const p = planOf(i); return p.team + p.project; }).reduce((s, v) => s + v, 0) : 0;
+        const plus = y.year === year ? Array.from({ length: lastMonth + 1 }, (_, i) => { const p = flowOf(i).plan; return p.team + p.project; }).reduce((s, v) => s + v, 0) : 0;
         return (
           <button key={y.year} type="button" onClick={() => setSelYear(idx)} aria-pressed={selYear === idx}
             className={cx('cal-year', isCur && 'is-cur', selYear === idx && 'is-sel')}>
@@ -337,10 +410,14 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
               <span className="cal-year__name">{y.year}년 {isCur && <em>현재</em>}</span>
               <span className="cal-year__vals num">
                 {plus > 0 ? <span className="is-plus">+{fmt(plus)}</span> : <span className="is-blank" aria-hidden="true">0</span>}
-                <span className="is-minus">−{fmt(teamExec + y.project)}</span>
+                <span className="is-minus">−{fmt(teamExec + projExec)}</span>
               </span>
             </div>
-            <div className="cal-year__sub"><span>팀 운영 −{fmt(teamExec)}</span><span>프로젝트 −{fmt(y.project)}</span></div>
+            <div className="cal-year__sub">
+              {line === 'total'
+                ? <><span>팀 운영 −{fmt(teamExec)}</span><span>프로젝트 −{fmt(projExec)}</span></>
+                : <span>{filterLabel}</span>}
+            </div>
           </button>
         );
       })}
@@ -377,7 +454,9 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
           {sortedCoins.map(c => {
             const p = pct(c.used, c.budget);
             return (
-              <div key={c.key} className={cx('coin', !c.active && 'is-ended')}>
+              <button type="button" key={c.key} className={cx('coin', !c.active && 'is-ended', selCoin === c.key && 'is-sel')}
+                aria-pressed={selCoin === c.key} onClick={() => pickCoin(c.key)}
+                title={selCoin === c.key ? '다시 누르면 전체 보기' : '운영일지·차트에서 이 항목만 보기'}>
                 <div className="coin__head">
                   <MTag endDate={c.endDate} active={c.active} size="lg" />
                   <div className="grow">
@@ -388,7 +467,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
                 </div>
                 <ProgressBar value={p} variant={progVariant(p)} height={6} label={`${c.label} 집행률`} />
                 <div className="coin__foot"><span>집행 {fmt(c.used)}</span><span>예산 {fmt(c.budget)}</span></div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -404,6 +483,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
             <Segmented label="운영일지 단위" value={calView} onChange={v => { setCalView(v); setSelDay(null); }}
               options={[{ value: 'day', label: '일' }, { value: 'month', label: '월' }, { value: 'year', label: '년' }]} />
           </div>
+          {filterBar('운영일지')}
           {calView === 'day' && renderDay()}
           {calView === 'month' && renderMonth()}
           {calView === 'year' && renderYear()}
@@ -418,26 +498,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
             <Segmented label="차트 기간" value={period} onChange={setPeriod}
               options={[{ value: 'month', label: '월' }, { value: 'quarter', label: '분기' }, { value: 'year', label: '년' }]} />
           </div>
-          <div className="chart-filter">
-            <div className="chip-row">
-              {([['total', '전체'], ['team', '팀 운영'], ['project', '프로젝트']] as const).map(([v, label]) => (
-                <FilterChip key={v} label={label} active={line === v} onClick={() => { setLine(v); setProjectId(ALL); setTeamSub('all'); }} />
-              ))}
-            </div>
-            {/* 팀 운영: 회의비 · 업무비 목록 */}
-            {line === 'team' && (
-              <Select size="sm" className="chart-filter__select" value={teamSub} onChange={e => setTeamSub(e.target.value as TeamSub)} aria-label="팀 운영 항목 선택">
-                {TEAM_SUBS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </Select>
-            )}
-            {line === 'project' && (
-              <Select size="sm" className="chart-filter__select" value={projectId} onChange={e => setProjectId(e.target.value)}
-                aria-label={`${year}년 프로젝트 선택`}>
-                <option value={ALL}>{year}년 전체 프로젝트</option>
-                {yearProjects.map(p => <option key={p.id} value={p.id}>{p.name}{p.active ? '' : ' (종료)'}</option>)}
-              </Select>
-            )}
-          </div>
+          {filterBar('차트')}
           <div className="chart-total">
             {oneProject ? oneProject.name : `${year}년${line === 'team' ? ' ' + TEAM_SUBS.find(o => o.value === teamSub)!.label : ''}`} 누적 <b className="num">{fmt(cumulative)}</b>
             {oneProject && <span className="chart-total__sub"> / 예산 {fmt(oneProject.allocPool)}</span>}
