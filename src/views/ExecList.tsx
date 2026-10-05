@@ -292,10 +292,11 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
       .filter(p => ((p.isMine || p.joined) && p.active) || inPeriod.some(r => r.projectId === p.id))
       .forEach(p => {
         const mine = state.allocs[p.id]?.find(a => a.teamName === team);
-        const budget = mine ? mine.amount : p.allocPool, used = mine ? mine.used ?? 0 : p.used;
+        // 우리 팀 배분이 없으면(주관 팀이 전부 다른 팀에 배분 등) 쓸 수 있는 예산 0 — 프로젝트 전체 금액은 우리 팀 몫이 아님
+        const budget = mine ? mine.amount : 0, used = mine ? mine.used ?? 0 : 0;
         sumLines.push({
           key: p.id, group: 'project', icon: '📁', name: p.name,
-          sub: `${mine ? (p.isMine ? 'My 경비' : '우리 팀 배분') : '배분 경비'} ${fmt(budget)}${p.active ? '' : ' · 종료'}`,
+          sub: `${mine ? (p.isMine ? 'My 경비' : '우리 팀 배분') : '우리 팀 배분 없음 ·'} ${fmt(budget)}${p.active ? '' : ' · 종료'}`,
           spent: spentOf(r => r.projectId === p.id && (!mine || r.team === team)), remain: budget - used, budget, used, ended: !p.active,
         });
       });
@@ -347,7 +348,8 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
       next = { ...r, items: [{ name: v, amount: r.total }] };
     } else {
       const v = Number(value);
-      if (!v || v === r.total) return;
+      if (v === r.total) return;
+      if (!(v > 0)) { showToast('금액은 0원보다 커야 합니다.', 'warn'); return; }
       next = { ...r, items: [{ name: r.items[0]?.name ?? '기타 경비', amount: v }] };
     }
     const msg = shortage(r, recordTypeKey(next), next.month, next.items[0].amount);

@@ -6,6 +6,7 @@ import { CUR_YEAR, toEndDate, toStartDate } from '@/lib/date';
 import { LEGACY_INITIAL_PASSWORD } from '@/lib/password';
 import { REMOTE_AUTH } from '@/lib/supabase';
 import { EMPTY_DATA, SyncError, loadRemote, pushAction } from '@/lib/dataApi';
+import { uid } from '@/lib/format';
 
 /** 시드/스키마를 바꾸면 버전을 올려 저장본을 무효화한다. */
 const STORAGE_KEY = 'cowork-coin-v5'; // 데모 데이터 제거: 이전 버전의 로컬 저장본은 가져오지 않음
@@ -70,6 +71,17 @@ const LOCAL_ONLY = new Set<Action['type']>([
   'INITIALIZE', 'LOGIN', 'LOGOUT', 'HYDRATE', 'SYNC_TEAMS', 'TOGGLE_TEAM', 'ADD_TEAM', 'RENAME_TEAM', 'DELETE_TEAM',
   'SET_TEAM_ADMIN', 'SET_TEAM_PASSWORD', 'ADD_CATEGORY',
 ]);
+/**
+ * 새 집행·체크리스트 id 를 동작에 미리 넣음 — 리듀서가 두 번 돌아도(낙관적 계산 + 화면) 같은 id 가 되어,
+ * 서버 반영 전에 그 항목을 고치거나 지워도 서버 id 와 이어짐 (dataApi serverIdOf)
+ */
+function withIds(a: Action): Action {
+  if (a.type === 'ADD_RECORD' && !a.id) return { ...a, id: uid('e') };
+  if (a.type === 'ADD_RECORDS' && !a.ids) return { ...a, ids: a.records.map(() => uid('e')) };
+  if (a.type === 'ADD_CHECK' && !a.id) return { ...a, id: uid('c') };
+  return a;
+}
+
 /** 서버 반영 실패 안내 — App 이 토스트로 보여 줌 */
 export const SYNC_ERROR_EVENT = 'cowork-sync-error';
 const syncError = (e: unknown) =>
@@ -100,13 +112,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const reloadTimer = useRef<number | undefined>(undefined);
   const lastLoad = useRef(0);
+  /** 상태를 바꾼 동작 수 — 다시 읽는 사이에 바뀐 내용이 있으면 읽은 값으로 덮지 않음 */
+  const changes = useRef(0);
 
   const reload = useCallback(async () => {
     const team = remoteTeam(latest.current);
     if (!REMOTE_AUTH || !team) return;
+    const startedAt = changes.current;
     try {
       const { teams, ...data } = await loadRemote(team);
       if (latest.current.session?.team !== team.name) return; // 읽는 사이 팀이 바뀜
+      // 읽는 사이에 화면에서 바꾼 내용(아직 서버 반영 대기)이 있으면 덮지 않고, 그 반영이 끝난 뒤 다시 읽음
+      if (changes.current !== startedAt) { scheduleReloadRef.current(); return; }
       lastLoad.current = Date.now();
       rawDispatch({ type: 'SYNC_TEAMS', teams });
       rawDispatch({ type: 'HYDRATE', data });
@@ -119,14 +136,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     window.clearTimeout(reloadTimer.current);
     reloadTimer.current = window.setTimeout(() => { queue.current = queue.current.then(reload); }, 400);
   }, [reload]);
+  const scheduleReloadRef = useRef(scheduleReload);
+  scheduleReloadRef.current = scheduleReload;
 
-  const dispatch = useCallback<Dispatch<Action>>(action => {
+  const dispatch = useCallback<Dispatch<Action>>(input => {
+    const action = withIds(input);
     if (!REMOTE_AUTH) { rawDispatch(action); return; }
     // 로그인·로그아웃(팀 전환): 이전 팀 데이터를 먼저 비움 — 다른 팀의 비공개 항목 등이 남지 않게
     if (action.type === 'LOGIN' || action.type === 'LOGOUT') rawDispatch({ type: 'HYDRATE', data: EMPTY_DATA });
     const before = latest.current;
     const after = reducer(action.type === 'LOGIN' || action.type === 'LOGOUT' ? { ...before, ...EMPTY_DATA } : before, action);
     latest.current = after;
+    if (after !== before && action.type !== 'HYDRATE' && action.type !== 'SYNC_TEAMS') changes.current++;
     rawDispatch(action);
     if (LOCAL_ONLY.has(action.type)) return;
     const team = remoteTeam(before);
@@ -148,7 +169,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!REMOTE_AUTH) return;
     const onShow = () => { if (document.visibilityState === 'visible' && Date.now() - lastLoad.current > 20_000) scheduleReload(); };
     document.addEventListener('visibilitychange', onShow);
-    return () => document.removeEventListener('visibilitychange', onShow);
+    // 화면을 켜 둔 채로 있어도 다른 팀이 보낸 알림(배분 변경 등)·바꾼 배분이 1분 안에 보이도록
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && Date.now() - lastLoad.current > 55_000) scheduleReload();
+    }, 60_000);
+    return () => { document.removeEventListener('visibilitychange', onShow); window.clearInterval(timer); };
   }, [scheduleReload]);
 
   return (

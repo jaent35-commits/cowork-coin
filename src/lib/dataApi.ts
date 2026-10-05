@@ -62,6 +62,21 @@ function relTime(ts: string): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
+/**
+ * 한 번에 최대 행 수(Supabase 기본 1000) 제한에 잘리지 않게 끝까지 나눠 읽기
+ * — 집행·체크리스트가 쌓이면 월·분기 합계가 조용히 줄어드는 것을 막음
+ */
+const PAGE = 1000;
+async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<Res<T[]>>): Promise<Res<T[]>> {
+  const all: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const r = await page(from, from + PAGE - 1);
+    if (r.error) return r;
+    all.push(...(r.data ?? []));
+    if (!r.data || r.data.length < PAGE) return { data: all, error: null };
+  }
+}
+
 export async function loadRemote(me: Team): Promise<RemoteData & { teams: Team[] }> {
   const c = db();
   const [teams, pRes, aRes, uRes, cRes, rRes, hRes, wRes, mRes, catRes, nRes, readRes, prefRes] = await Promise.all([
@@ -69,8 +84,8 @@ export async function loadRemote(me: Team): Promise<RemoteData & { teams: Team[]
     c.from('projects').select('id, name, client, start_date, end_date, total_amount, alloc_pool, owner_team_id, is_active, memo').order('id'),
     c.from('project_allocations').select('id, project_id, team_id, amount, use_end_date').order('id'),
     c.rpc('project_usage'),
-    c.from('checklist_items').select('id, project_id, title, amount, due_date, visibility, is_checked, spent_amount, spent_date, checked_by_team_id, category:expense_categories(name)').order('id'),
-    c.from('exec_records').select('id, team_id, budget_type, project_id, use_date, registered_at, exec_items(line_no, name, amount)').order('use_date', { ascending: false }).order('id', { ascending: false }),
+    fetchAll((from, to) => c.from('checklist_items').select('id, project_id, title, amount, due_date, visibility, is_checked, spent_amount, spent_date, checked_by_team_id, category:expense_categories(name)').order('id').range(from, to)),
+    fetchAll((from, to) => c.from('exec_records').select('id, team_id, budget_type, project_id, use_date, registered_at, exec_items(line_no, name, amount)').order('use_date', { ascending: false }).order('id', { ascending: false }).range(from, to)),
     c.from('team_headcounts').select('month, headcount'),
     c.from('work_budgets').select('effective_month, amount'),
     c.from('meeting_rates').select('effective_from, rate').order('effective_from'),
@@ -147,7 +162,7 @@ export async function loadRemote(me: Team): Promise<RemoteData & { teams: Team[]
   const read = new Set((must(readRes as Res<{ notification_id: number }[]>, '알림 읽음 조회') ?? []).map(r => r.notification_id));
   const notifications: NotifItem[] = (must(nRes as Res<NotifRow[]>, '알림 조회') ?? []).map(n => ({
     id: String(n.id), title: n.title, desc: n.body, type: n.type, time: relTime(n.created_at), read: read.has(n.id),
-    team: n.target_team_id == null ? undefined : nameOf(n.target_team_id), key: n.dedupe_key ?? undefined,
+    team: n.target_team_id == null ? undefined : nameOf(n.target_team_id), key: n.dedupe_key ?? undefined, createdAt: n.created_at,
   }));
   const pref = must(prefRes as Res<PrefRow>, '알림 설정 조회');
   const notifPrefs: Record<string, NotifPrefs> = pref
@@ -176,25 +191,53 @@ export async function createProject(draft: ProjectDraft): Promise<string> {
   return String(id);
 }
 
+/**
+ * 화면에서 만든 임시 id(집행 e…, 체크리스트 c…) → 서버가 준 id
+ * 반영 대기열이 차례로 돌므로, 등록 직후(다시 읽기 전) 그 항목을 고치거나 지워도 서버의 같은 행에 반영됨
+ */
+const serverIds = new Map<string, string>();
+const serverIdOf = (id: string) => serverIds.get(id) ?? id;
+/** 서버 id 숫자 — 아직 서버에 없는 임시 id(등록 실패)면 오류 */
+function dbId(id: string, what: string): number {
+  const n = Number(serverIdOf(id));
+  if (!Number.isFinite(n)) throw new SyncError(`${what}: 아직 서버에 저장되지 않은 항목입니다`);
+  return n;
+}
 /** 집행 id → DB 집행 id ('15-2' = 15번 집행의 3번째 항목을 앱에서 나눠 보여 준 것) */
-const baseId = (id: string) => Number(id.split('-')[0]);
+const baseId = (id: string) => Number(serverIdOf(id).split('-')[0]);
 const recordPayload = (r: Pick<ExecRecord, 'type' | 'projectId' | 'useDate' | 'month' | 'items'>) => ({
   type: r.type, project_id: r.type === 'project' ? r.projectId ?? '' : '', use_date: r.useDate ?? `${r.month}-01`, items: r.items,
 });
 
-/** 집행 수정·삭제 — 나눠 보여 준 항목들을 원래 집행 단위로 다시 합쳐 저장 (남은 항목이 없으면 삭제) */
+/**
+ * 집행 수정·삭제 — 나눠 보여 준 항목들을 원래 집행 단위로 다시 합쳐 저장 (남은 항목이 없으면 삭제)
+ * 한 항목만 예산 유형·프로젝트·사용일자를 바꿨으면 그 항목은 새 집행으로 떼어 냄
+ *   (서버 집행 1건 = 유형·프로젝트·사용일자 1개 — 합치면 첫 항목 값으로 덮여 바꾼 내용이 사라짐)
+ */
 async function syncRecordGroups(before: AppState, after: AppState, ids: string[]) {
   const bases = [...new Set(ids.map(baseId))].filter(n => Number.isFinite(n));
   const toDelete: number[] = [];
   for (const b of bases) {
     const parts = after.records.filter(r => baseId(r.id) === b);
-    if (!before.records.some(r => baseId(r.id) === b)) continue; // 아직 서버에 없는 임시 집행
+    if (!before.records.some(r => baseId(r.id) === b)) continue; // 서버에 없는 임시 집행 (등록 실패)
     if (!parts.length) { toDelete.push(b); continue; }
-    const head = parts[0];
-    must(await db().rpc('exec_update', { p_id: b, r: { ...recordPayload(head), items: parts.flatMap(p => p.items) } }) as Res<null>, '집행 수정');
+    const groups = new Map<string, ExecRecord[]>();
+    for (const part of parts) {
+      const pl = recordPayload(part);
+      const k = `${pl.type}|${pl.project_id}|${pl.use_date}`;
+      groups.set(k, [...(groups.get(k) ?? []), part]);
+    }
+    const [head, ...split] = [...groups.values()];
+    must(await db().rpc('exec_update', { p_id: b, r: { ...recordPayload(head[0]), items: head.flatMap(p => p.items) } }) as Res<null>, '집행 수정');
+    if (split.length) {
+      must(await db().rpc('exec_add', { p: split.map(g => ({ ...recordPayload(g[0]), items: g.flatMap(p => p.items) })) }) as Res<number[]>, '집행 수정');
+    }
   }
   if (toDelete.length) must(await db().rpc('exec_delete', { p_ids: toDelete }) as Res<null>, '집행 삭제');
 }
+
+/** 이번 접속에서 서버에 보낸 알림 중복 방지 키 */
+const pushedKeys = new Set<string>();
 
 /** 화면에서 바뀐 내용을 서버에 반영 — 반영한 것이 있으면 true (그 뒤 다시 읽기) */
 export async function pushAction(action: Action, before: AppState, after: AppState, me: Team): Promise<boolean> {
@@ -217,30 +260,33 @@ export async function pushAction(action: Action, before: AppState, after: AppSta
     case 'TOGGLE_CHECK': case 'SET_CHECK_EXEC': {
       const it = after.checklist.find(x => x.id === action.id);
       if (!it) break;
-      must(await c.rpc('checklist_set_exec', { p_id: Number(it.id), p_checked: it.checked, p_spent: it.spent ?? null, p_date: it.spentDate ?? null }) as Res<null>, '체크리스트 집행');
+      must(await c.rpc('checklist_set_exec', { p_id: dbId(it.id, '체크리스트 집행'), p_checked: it.checked, p_spent: it.spent ?? null, p_date: it.spentDate ?? null }) as Res<null>, '체크리스트 집행');
       pushed = true;
       break;
     }
     case 'ADD_CHECK': {
       const it = action.item;
-      must(await c.rpc('checklist_save', { p_id: null, p: {
+      const id = must(await c.rpc('checklist_save', { p_id: null, p: {
         project_id: Number(it.projectId), title: it.title, amount: it.amount, category: it.category, due_date: it.date ?? '', visibility: it.visibility ?? 'public',
       } }) as Res<number>, '체크리스트 추가');
+      if (action.id && id != null) serverIds.set(action.id, String(id));
       pushed = true;
       break;
     }
     case 'SET_CHECK_VISIBILITY':
-      must(await c.rpc('checklist_save', { p_id: Number(action.id), p: { visibility: action.visibility } }) as Res<number>, '공개 범위 변경');
+      must(await c.rpc('checklist_save', { p_id: dbId(action.id, '공개 범위 변경'), p: { visibility: action.visibility } }) as Res<number>, '공개 범위 변경');
       pushed = true;
       break;
     case 'DELETE_CHECK':
-      must(await c.rpc('checklist_delete', { p_id: Number(action.id) }) as Res<null>, '체크리스트 삭제');
+      must(await c.rpc('checklist_delete', { p_id: dbId(action.id, '체크리스트 삭제') }) as Res<null>, '체크리스트 삭제');
       pushed = true;
       break;
     case 'ADD_RECORD': case 'ADD_RECORDS': {
       const recs = action.type === 'ADD_RECORD' ? [action.record] : action.records;
       if (!recs.length) break;
-      must(await c.rpc('exec_add', { p: recs.map(recordPayload) }) as Res<number[]>, '집행 등록');
+      const newIds = must(await c.rpc('exec_add', { p: recs.map(recordPayload) }) as Res<number[]>, '집행 등록') ?? [];
+      const localIds = action.type === 'ADD_RECORD' ? [action.id] : action.ids ?? [];
+      localIds.forEach((lid, i) => { if (lid && newIds[i] != null) serverIds.set(lid, String(newIds[i])); });
       pushed = true;
       break;
     }
@@ -297,12 +343,14 @@ export async function pushAction(action: Action, before: AppState, after: AppSta
   //   비밀번호 알림은 Edge Function 이 남기므로 제외
   if (action.type !== 'SET_TEAM_PASSWORD') {
     const old = new Set(before.notifications.map(n => n.id));
-    const added = after.notifications.filter(n => !old.has(n.id));
+    // 같은 키(기한 임박·예산 경고)는 이번 접속에서 한 번만 — 서버는 중복을 무시해도 보낼 때마다 다시 읽기가 돌아 반복될 수 있음
+    const added = after.notifications.filter(n => !old.has(n.id) && !(n.key && pushedKeys.has(n.key)));
     if (added.length) {
       const teamId = (name?: string) => (name ? Number(after.teams.find(t => t.name === name)?.id) || null : null);
       must(await c.rpc('notify_add', { p: added.map(n => ({
         type: n.type, title: n.title, body: n.desc, target_team_id: teamId(n.team) ?? '', dedupe_key: n.key ?? '',
       })) }) as Res<null>, '알림 저장');
+      for (const n of added) if (n.key) pushedKeys.add(n.key);
       pushed = true;
     }
   }

@@ -75,5 +75,6 @@ export function bucketOf(state: AppState, key: string, month: string): Bucket | 
     const used = mine.used ?? 0;
     return { id: p.id, name: p.name, sub: p.ownerTeam === team ? 'My 경비' : '우리 팀 배분 경비', budget: mine.amount, used, remain: mine.amount - used };
   }
-  return { id: p.id, name: p.name, sub: '프로젝트 경비', budget: p.allocPool, used: p.used, remain: p.allocPool - p.used };
+  // 우리 팀 배분이 없으면 쓸 수 있는 예산 없음 (프로젝트 전체 금액은 다른 팀 몫)
+  return { id: p.id, name: p.name, sub: '우리 팀 배분 없음', budget: 0, used: 0, remain: 0 };
 }

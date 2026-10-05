@@ -2,13 +2,26 @@ import type { ChecklistItem, Project } from '@/types';
 import type { AppState } from './reducer';
 import { CUR_MONTH, CUR_QUARTER, isQuarterEnd, monthsUntil } from '@/lib/date';
 
-/** 로그인한 팀이 받는 알림 (team 이 없으면 전체 대상) */
-export const myNotifications = (s: AppState) => s.notifications.filter(n => !n.team || n.team === s.session?.team);
+/** 로그인한 팀이 받는 알림 (team 이 없으면 전체 대상) — 집행 등록 완료(exec)는 없앤 알림이라 예전 것도 숨김 */
+export const myNotifications = (s: AppState) => s.notifications.filter(n => n.type !== 'exec' && (!n.team || n.team === s.session?.team));
 export const unreadCount = (s: AppState) => myNotifications(s).filter(n => !n.read).length;
 
 export const currentQuarter = (s: AppState) => s.quarters[CUR_QUARTER];
 
 export const myActiveProjects = (s: AppState) => s.projects.filter(p => p.isMine && p.active);
+
+/**
+ * 로그인한 팀의 이 프로젝트 예산 = 우리 팀 배분 행 (주관 팀은 My 경비) — 배분이 없으면 null
+ * 다른 팀 배분액은 우리 팀이 쓸 수 없으므로 프로젝트 전체(배분 가능 금액·전체 사용액)가 아닌 이 값을 예산으로 본다
+ */
+export function teamAllocOf(s: Pick<AppState, 'allocs' | 'session'>, p: Pick<Project, 'id' | 'endDate'>) {
+  const a = s.allocs[p.id]?.find(x => x.teamName === s.session?.team);
+  if (!a) return null;
+  const used = a.used ?? 0;
+  return { amount: a.amount, used, remain: a.amount - used, endDate: a.endDate || p.endDate };
+}
+/** 우리 팀이 예산을 가진 활성 프로젝트 — 주관(My 경비) + 배분받은 참여 프로젝트 */
+export const myBudgetProjects = (s: AppState) => s.projects.filter(p => p.active && !!teamAllocOf(s, p));
 
 /** 진행 중 프로젝트 = 활성 + 종료월이 지나지 않은 건 */
 export const openProjects = (s: AppState) => s.projects.filter(p => p.active && monthsUntil(p.endDate) >= 0);
@@ -31,20 +44,22 @@ export function expiring(s: AppState) {
   const q = currentQuarter(s);
   // 분기 마지막 달이면 남은 회의비는 다음 달에 소멸
   const meeting = isQuarterEnd(CUR_MONTH) ? Math.max(0, q.budget - q.used) : 0;
-  // 이번 달 종료 프로젝트의 잔액 소멸
-  const project = myActiveProjects(s)
-    .filter(p => monthsUntil(p.endDate) === 0)
-    .reduce((sum, p) => sum + Math.max(0, p.allocPool - p.used), 0);
+  // 이번 달에 사용 종료되는 프로젝트의 우리 팀 배분 잔액 소멸 (팀별 사용 종료일, 없으면 프로젝트 종료일)
+  const project = myBudgetProjects(s).reduce((sum, p) => {
+    const a = teamAllocOf(s, p)!;
+    return monthsUntil(a.endDate) === 0 ? sum + Math.max(0, a.remain) : sum;
+  }, 0);
   return { meeting, project, total: meeting + project };
 }
 
-/** 홈 히어로: 이번 분기 회의비 + 내 활성 프로젝트 경비 */
+/** 홈 히어로: 이번 분기 회의비 + 우리 팀 배분 프로젝트 경비 (주관 My 경비 + 참여 배분) */
 export function budgetOverview(s: AppState) {
   const q = currentQuarter(s);
-  const projects = myActiveProjects(s);
-  const projBudget = projects.reduce((sum, p) => sum + p.allocPool, 0);
-  const projUsed = projects.reduce((sum, p) => sum + p.used, 0);
+  const projects = myBudgetProjects(s);
+  const projBudget = projects.reduce((sum, p) => sum + teamAllocOf(s, p)!.amount, 0);
+  const projUsed = projects.reduce((sum, p) => sum + teamAllocOf(s, p)!.used, 0);
   return {
+    projectCount: projects.length,
     meetingBudget: q.budget,
     meetingUsed: q.used,
     projBudget,

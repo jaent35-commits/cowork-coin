@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import type { View } from '@/types';
 import { useAppState, useDispatch } from '@/store/StoreContext';
-import { budgetOverview, currentQuarter, expiring, myActiveProjects, visibleChecklist } from '@/store/selectors';
+import { budgetOverview, currentQuarter, expiring, teamAllocOf, visibleChecklist } from '@/store/selectors';
 import { CUR_MONTH, CUR_QUARTER, CUR_YEAR, CUR_YYYYMM, todayLabel } from '@/lib/date';
 import { workBudgetOf, workUsedOf } from '@/lib/budget';
 import { fmt, fmtMan, pct } from '@/lib/format';
@@ -47,7 +47,6 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
   const total = ov.total + workBudget;
   const used = ov.used + workUsed;
   const q = currentQuarter(state);
-  const projects = myActiveProjects(state);
   // 알림 카드: 이번 분기 팀 인원(회의비 산정 기준)이 비어 있을 때만
   const curQMissing = q.headcounts.some(h => h === 0);
 
@@ -55,21 +54,23 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
    * 잔여 금액 카드 — 고른 달 말 기준 (지난달·다음 달·다른 해 어디로든 이동)
    * · 팀 회의비: 그 달이 속한 분기 예산 − 그 분기에서 그 달까지 집행 (올해·미리 입력한 다음 해만 예산 있음)
    * · 팀 업무비: 그 달 예산 − 그 달 집행
-   * · 프로젝트: 그 달에 진행 중인 내 프로젝트 배분 경비 − 그 달까지 집행
+   * · 프로젝트: 그 달에 쓸 수 있는 우리 팀 배분 경비(주관 My 경비 + 참여 배분) − 그 달까지 우리 팀 집행
    */
   const heroOf = (m: string) => {
     const y = Number(m.slice(0, 4)), mi = Number(m.slice(5, 7)) - 1, qi = Math.floor(mi / 3);
     const qStart = ymOf(y, qi * 3);
     const qd = y === CUR_YEAR ? state.quarters[qi] : state.plannedQuarters[String(y)]?.[qi];
-    const sumRec = (pred: (r: (typeof state.records)[number]) => boolean) => state.records.filter(pred).reduce((s, r) => s + r.total, 0);
+    // 우리 팀 집행만 (팀 정보가 없는 예전 기록은 포함)
+    const sumRec = (pred: (r: (typeof state.records)[number]) => boolean) => state.records.filter(r => (!r.team || r.team === team) && pred(r)).reduce((s, r) => s + r.total, 0);
     const meeting = {
       budget: qd?.budget ?? 0, used: sumRec(r => r.type === 'meeting' && r.month >= qStart && r.month <= m),
       label: qd?.label ?? `${qi + 1}분기`, headcount: qd?.headcounts[mi % 3] ?? 0,
     };
     const work = { budget: workBudgetOf(state, m).amount, used: workUsedOf(state, m) };
-    const live = state.projects.filter(p => p.isMine && p.startDate.slice(0, 7) <= m && (p.endDate || p.startDate).slice(0, 7) >= m);
+    // 그 달이 착수월 ~ 우리 팀 사용 종료월 안에 드는 배분 프로젝트
+    const live = state.projects.filter(p => { const a = teamAllocOf(state, p); return !!a && p.startDate.slice(0, 7) <= m && a.endDate.slice(0, 7) >= m; });
     const project = {
-      budget: live.reduce((s, p) => s + p.allocPool, 0),
+      budget: live.reduce((s, p) => s + teamAllocOf(state, p)!.amount, 0),
       used: sumRec(r => r.type === 'project' && r.month <= m && live.some(p => p.id === r.projectId)), count: live.length,
     };
     return { meeting, work, project, total: meeting.budget + work.budget + project.budget, used: meeting.used + work.used + project.used };
@@ -83,7 +84,7 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
     ? {
       meeting: { budget: q.budget, used: q.used, label: q.label, headcount: q.headcounts[Math.min(2, CUR_MONTH - Q_START)] ?? 0 },
       work: { budget: workBudget, used: workUsed },
-      project: { budget: ov.projBudget, used: ov.projUsed, count: projects.length },
+      project: { budget: ov.projBudget, used: ov.projUsed, count: ov.projectCount },
       total, used,
     }
     : heroOf(month);
@@ -105,6 +106,8 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
   const projById = new Map(state.projects.map(p => [p.id, p]));
   const scopeOf = (projectId: string): Scope => (projById.get(projectId)?.isMine ? 'my' : 'cowork');
   const homeChecklist = visibleChecklist(state)
+    // 비활성(종료 처리) 프로젝트 항목은 제외 — My·코웍 체크리스트 화면과 같게
+    .filter(c => projById.get(c.projectId)?.active)
     .filter(c => !c.checked || !checkDateOf(c) || checkDateOf(c)!.startsWith(CUR_YYYYMM))
     .sort(byCheckDate);
   const myChecklist = homeChecklist.filter(c => scopes.has(scopeOf(c.projectId)));

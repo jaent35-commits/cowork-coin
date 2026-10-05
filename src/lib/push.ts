@@ -30,20 +30,26 @@ export async function showPush(n: Pick<NotifItem, 'id' | 'title' | 'desc'>) {
 const PUSH_KINDS: PushKind[] = ['exec', 'setting', 'alloc', 'deadline'];
 const isPushKind = (t: string): t is PushKind => (PUSH_KINDS as string[]).includes(t);
 
-/** 로그인한 팀에게 새로 생긴 알림을 설정(전체 on/off · 종류별 on/off)에 따라 기기 푸시로 보낸다 */
+/**
+ * 로그인한 팀에게 새로 생긴 알림을 설정(전체 on/off · 종류별 on/off)에 따라 기기 푸시로 보낸다
+ * - 로그인(팀이 정해진) 뒤에 생긴, 읽지 않은 알림만 — 로그인하며 서버에서 읽어 온 지난 알림이 한꺼번에 뜨지 않게
+ *   (로그인 직후엔 화면을 비운 뒤 서버 알림을 읽어 오므로 '처음 본 알림 = 새 알림'으로 보면 지난 알림이 모두 뜸)
+ * - 내 동작으로 생긴 알림은 화면에서 먼저 뜨고, 서버에 저장된 같은 알림(새 id)이 다시 읽혀도 한 번만
+ */
 export function usePushDelivery(state: AppState) {
   const team = state.session?.team;
-  const seen = useRef<Set<string> | null>(null);
+  const since = useRef(0);
+  const seen = useRef(new Set<string>());
   const mine = myNotifications(state);
 
-  // 팀이 바뀌면(로그인) 기존 알림은 보낸 것으로 간주
-  useEffect(() => { seen.current = null; }, [team]);
+  useEffect(() => { since.current = Date.now() - 5000; seen.current = new Set(); }, [team]);
 
   useEffect(() => {
     if (!team) return;
-    if (!seen.current) { seen.current = new Set(mine.map(n => n.id)); return; }
-    const fresh = mine.filter(n => !seen.current!.has(n.id));
-    fresh.forEach(n => seen.current!.add(n.id));
+    const sameKey = (n: NotifItem) => `${n.title}|${n.desc}`;
+    const fresh = mine.filter(n => !n.read && !!n.createdAt && Date.parse(n.createdAt) >= since.current
+      && !seen.current.has(n.id) && !seen.current.has(sameKey(n)));
+    fresh.forEach(n => { seen.current.add(n.id); seen.current.add(sameKey(n)); });
     const prefs = state.notifPrefs[team] ?? DEFAULT_PREFS;
     if (!prefs.push) return;
     fresh.filter(n => !isPushKind(n.type) || prefs.kinds[n.type]).forEach(n => { void showPush(n); });

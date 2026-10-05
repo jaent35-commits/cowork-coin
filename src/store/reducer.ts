@@ -8,7 +8,7 @@ import {
 } from '@/data/seed';
 import { CUR_QUARTER, CUR_YEAR, TODAY_ISO, monthsUntil, parseYm, quarterOf, toEndDate } from '@/lib/date';
 import { fmt, uid } from '@/lib/format';
-import { budgetName, workBudgetOf } from '@/lib/budget';
+import { workBudgetOf } from '@/lib/budget';
 
 export interface AppState {
   session: Session | null;
@@ -89,14 +89,15 @@ export type Action =
   | { type: 'TOGGLE_CHECK'; id: string; exec?: Pick<ChecklistItem, 'spent' | 'spentDate'> }
   /** 완료 항목의 집행 금액 · 집행일 수정 */
   | { type: 'SET_CHECK_EXEC'; id: string; patch: Pick<ChecklistItem, 'spent' | 'spentDate'> }
-  | { type: 'ADD_CHECK'; item: Omit<ChecklistItem, 'id' | 'checked'> }
+  /** id: 화면에서 미리 정한 임시 id (StoreContext 가 채움 — 서버 반영 전 수정·삭제를 서버 id 와 이어 주기 위해) */
+  | { type: 'ADD_CHECK'; item: Omit<ChecklistItem, 'id' | 'checked'>; id?: string }
   | { type: 'DELETE_CHECK'; id: string }
   /** 팀이 직접 만든 My 경비 구분 추가 (고정 구분·이미 있는 이름이면 무시) */
   | { type: 'ADD_CATEGORY'; team: string; name: string }
   | { type: 'SET_CHECK_VISIBILITY'; id: string; visibility: CheckVisibility }
-  | { type: 'ADD_RECORD'; record: Omit<ExecRecord, 'id' | 'total'> }
+  | { type: 'ADD_RECORD'; record: Omit<ExecRecord, 'id' | 'total'>; id?: string }
   /** 집행 등록 화면: 여러 줄(1줄 = 1건)을 한 번에 — 알림은 1개로 묶음 */
-  | { type: 'ADD_RECORDS'; records: Omit<ExecRecord, 'id' | 'total'>[] }
+  | { type: 'ADD_RECORDS'; records: Omit<ExecRecord, 'id' | 'total'>[]; ids?: string[] }
   | { type: 'UPDATE_RECORD'; record: ExecRecord }
   | { type: 'DELETE_RECORD'; id: string }
   | { type: 'DELETE_RECORDS'; ids: string[] }
@@ -109,7 +110,7 @@ export type Action =
 const sumItems = (r: Pick<ExecRecord, 'items'>) => r.items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
 function notify(state: AppState, n: Omit<NotifItem, 'id' | 'time' | 'read'>): NotifItem[] {
-  return [{ ...n, id: uid('n'), time: '방금 전', read: false }, ...state.notifications];
+  return [{ ...n, id: uid('n'), time: '방금 전', read: false, createdAt: new Date().toISOString() }, ...state.notifications];
 }
 
 /** 프로젝트 배분 변경 → 새로 배분되거나 금액이 바뀐 팀에게 알림 */
@@ -157,16 +158,25 @@ function applyRecord(state: AppState, r: ExecRecord, sign: 1 | -1): AppState {
   return { ...state, quarters, projects, monthly, projectMonthly, allocs };
 }
 
+/**
+ * 집행한 팀의 배분 잔액이 15% 미만이면 그 팀에게만 경고 (프로젝트·팀·월당 1회)
+ * — 프로젝트 전체가 아니라 그 팀 배분 기준 (다른 팀 배분은 이 팀이 쓸 수 없음), 받는 팀이 없으면 모든 팀에 보이므로 반드시 지정
+ */
 function budgetWarning(state: AppState, r: ExecRecord): NotifItem[] {
   if (r.type !== 'project') return state.notifications;
+  const team = r.team ?? state.session?.team;
   const p = state.projects.find(x => x.id === r.projectId);
-  if (!p || p.allocPool <= 0) return state.notifications;
-  const remainRatio = (p.allocPool - p.used) / p.allocPool;
+  const a = p && team ? state.allocs[p.id]?.find(x => x.teamName === team) : undefined;
+  if (!p || !team || !a || a.amount <= 0) return state.notifications;
+  const remain = a.amount - (a.used ?? 0);
+  const remainRatio = remain / a.amount;
   if (remainRatio >= 0.15) return state.notifications;
+  const key = `budget:${team}:${p.id}:${TODAY_ISO.slice(0, 7)}`;
+  if (state.notifications.some(n => n.key === key)) return state.notifications;
   return notify(state, {
-    type: 'budget',
+    type: 'budget', team, key,
     title: `예산 경고: ${p.name}`,
-    desc: `프로젝트 경비 잔액이 ${Math.max(0, Math.round(remainRatio * 100))}%(${fmt(Math.max(0, p.allocPool - p.used))}) 남았습니다. 추가 집행에 주의하세요.`,
+    desc: `우리 팀 배분 잔액이 ${Math.max(0, Math.round(remainRatio * 100))}%(${fmt(Math.max(0, remain))}) 남았습니다. 추가 집행에 주의하세요.`,
   });
 }
 
@@ -317,7 +327,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'SET_CHECK_EXEC':
       return { ...state, checklist: state.checklist.map(c => (c.id === action.id && c.checked ? { ...c, ...action.patch } : c)) };
     case 'ADD_CHECK':
-      return { ...state, checklist: [...state.checklist, { ...action.item, id: uid('c'), checked: false }] };
+      return { ...state, checklist: [...state.checklist, { ...action.item, id: action.id ?? uid('c'), checked: false }] };
     case 'SET_CHECK_VISIBILITY':
       return { ...state, checklist: state.checklist.map(c => (c.id === action.id ? { ...c, visibility: action.visibility } : c)) };
     case 'DELETE_CHECK':
@@ -330,26 +340,20 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'ADD_RECORD': {
-      const record: ExecRecord = { ...action.record, id: uid('e'), total: sumItems(action.record) };
-      let next = applyRecord({ ...state, records: [record, ...state.records] }, record, 1);
-      const label = budgetName(state, record);
-      next = { ...next, notifications: notify(next, { type: 'exec', team: record.team ?? state.session?.team, title: '집행 등록 완료', desc: `${label} ${fmt(record.total)}이 정상 등록되었습니다.` }) };
+      const record: ExecRecord = { ...action.record, id: action.id ?? uid('e'), total: sumItems(action.record) };
+      // 집행 등록 완료 알림은 보내지 않음 (등록 화면의 안내로 충분) — 예산 경고만
+      const next = applyRecord({ ...state, records: [record, ...state.records] }, record, 1);
       return { ...next, notifications: budgetWarning(next, record) };
     }
     case 'ADD_RECORDS': {
       if (!action.records.length) return state;
       let next = state;
       const added: ExecRecord[] = [];
-      for (const r of action.records) {
-        const record: ExecRecord = { ...r, id: uid('e'), total: sumItems(r) };
+      for (const [i, r] of action.records.entries()) {
+        const record: ExecRecord = { ...r, id: action.ids?.[i] ?? uid('e'), total: sumItems(r) };
         added.push(record);
         next = applyRecord({ ...next, records: [record, ...next.records] }, record, 1);
       }
-      const total = added.reduce((s, r) => s + r.total, 0);
-      const first = added[0];
-      const label = budgetName(state, first);
-      const desc = added.length === 1 ? `${label} ${fmt(total)}이 정상 등록되었습니다.` : `${label} 외 ${added.length - 1}건, 합계 ${fmt(total)}이 정상 등록되었습니다.`;
-      next = { ...next, notifications: notify(next, { type: 'exec', team: first.team ?? state.session?.team, title: '집행 등록 완료', desc }) };
       for (const r of added) next = { ...next, notifications: budgetWarning(next, r) };
       return next;
     }

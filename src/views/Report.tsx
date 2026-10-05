@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { ExecRecord, Project, View } from '@/types';
 import { useAppState } from '@/store/StoreContext';
-import { currentQuarter } from '@/store/selectors';
+import { currentQuarter, teamAllocOf } from '@/store/selectors';
 import { YEARLY_HISTORY } from '@/data/seed';
-import { CUR_MONTH, CUR_QUARTER, CUR_YEAR, TODAY, monthsUntil, quarterOf, ym } from '@/lib/date';
+import { CUR_MONTH, CUR_QUARTER, CUR_YEAR, TODAY, monthsUntil, quarterOf, spentDateOf, ym } from '@/lib/date';
 import { workBudgetOf, workUsedOf } from '@/lib/budget';
 import { fmt, fmtMan, pct } from '@/lib/format';
 import { Btn, Card, FilterChip, PageHead, ProgressBar, Segmented, Select, StepNav, Tabs, cx, progVariant } from '@/components/ui';
@@ -110,7 +110,7 @@ function monthlyOf(records: ExecRecord[], year: number, projectId?: string): Mon
 
 export default function Report({ onNavigate }: { onNavigate: (v: View) => void }) {
   const state = useAppState();
-  const { records, quarters, projects, projectMonthly } = state;
+  const { records, quarters, projects } = state;
   const [year] = useViewYear();
   const isCurYear = year === CUR_YEAR;
   // 올해: 저장된 월별 회의비·프로젝트 집행 + 업무비는 집행 기록에서
@@ -123,6 +123,21 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
   /** 우리 팀이 배분받은 올해 프로젝트 (주관 프로젝트는 My 경비 배분) · 그 배분액 */
   const teamProjects = projects.filter(p => overlapsYear(p.startDate, p.endDate, year) && !!state.allocs[p.id]?.some(a => a.teamName === team));
   const myAlloc = (p: Project) => state.allocs[p.id]?.find(a => a.teamName === team)?.amount ?? 0;
+  /** 우리 팀 집행 (팀 정보가 없는 예전 기록 포함) — 프로젝트 예산도 우리 팀 배분 − 우리 팀 집행으로 본다 */
+  const myRecords = records.filter(r => !r.team || r.team === team);
+  /**
+   * 그 달 말 우리 팀 프로젝트 잔액 — 배분액 − 그 달까지 우리 팀 집행(지난 연도 포함)
+   * 착수월 전·우리 팀 사용 종료월 후(종료·비활성 처리 포함)에는 쓸 수 없어 0
+   */
+  const projectRemainAt = (mi: number, list: Project[]) => {
+    const key = ym(year, mi);
+    return list.reduce((s, p) => {
+      const a = teamAllocOf(state, p);
+      if (!a || key < p.startDate.slice(0, 7) || key > a.endDate.slice(0, 7)) return s;
+      const used = myRecords.filter(r => r.type === 'project' && r.projectId === p.id && r.month <= key).reduce((t, r) => t + r.total, 0);
+      return s + Math.max(0, a.amount - used);
+    }, 0);
+  };
   /** 프로젝트 예산이 생기는 달: 착수월 (올해 전에 착수했으면 1월) — amount: 그 프로젝트에서 셀 금액 */
   const projectAddOf = (mi: number, list: Project[], amount: (p: Project) => number) => {
     const key = ym(year, mi);
@@ -147,7 +162,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
     const plan = planOf(mi);
     const team = { plan: teamOf(plan), exec: teamOf(m) };
     const project = oneProject
-      ? { plan: mi > lastMonth ? 0 : projectAddOf(mi, [oneProject], p => p.allocPool), exec: oneRow?.[mi] ?? 0 }
+      ? { plan: mi > lastMonth ? 0 : projectAddOf(mi, [oneProject], myAlloc), exec: oneRow?.[mi] ?? 0 }
       : { plan: plan.project, exec: m.project };
     const useTeam = line !== 'project', useProject = line !== 'team';
     return {
@@ -195,7 +210,8 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
     // 회의비·업무비는 분기 단위로 보므로 분기 마지막 달을 기한으로 본다
     { key: 'meeting', label: `팀 회의비 (${q.label})`, endDate: ym(CUR_YEAR, CUR_QUARTER * 3 + 2), active: true, budget: q.budget, used: q.used },
     { key: 'work', label: `팀 업무비 (${q.label})`, endDate: ym(CUR_YEAR, CUR_QUARTER * 3 + 2), active: true, budget: workQ.budget, used: workQ.used },
-    ...projects.map(p => ({ key: p.id, label: p.name, endDate: p.endDate, active: p.active, budget: p.allocPool, used: p.used })),
+    // 프로젝트는 우리 팀 배분 행 기준 (주관 = My 경비, 참여 = 우리 팀 배분) — 배분이 없는 프로젝트는 우리 팀 코인이 아님
+    ...projects.flatMap(p => { const a = teamAllocOf(state, p); return a ? [{ key: p.id, label: p.name, endDate: a.endDate, active: p.active, budget: a.amount, used: a.used }] : []; }),
   ];
   /** 선택된 코인 = 지금 운영일지·차트 필터 (팀 회의비 · 팀 업무비 · 프로젝트 하나) */
   const selCoin = line === 'team' && teamSub !== 'all' ? teamSub : line === 'project' && projectId !== ALL ? projectId : null;
@@ -218,9 +234,8 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
   // 올해 사업기간이 걸친 프로젝트
   const yearProjects = projects.filter(p => overlapsYear(p.startDate, p.endDate, year));
   const oneProject = line === 'project' && projectId !== ALL ? projects.find(p => p.id === projectId) : undefined;
-  const oneRow = !oneProject ? null
-    : isCurYear ? projectMonthly[oneProject.id] ?? Array(12).fill(0)
-    : monthlyOf(records, year, oneProject.id).map(m => m.project);
+  // 한 프로젝트 = 우리 팀 집행만 (projectMonthly 는 주관 프로젝트면 모든 팀 집행이 섞여 배분액과 맞지 않음)
+  const oneRow = !oneProject ? null : monthlyOf(myRecords, year, oneProject.id).map(m => m.project);
 
   /** 팀 운영 집행 — 하위 목록(전체 · 회의비 · 업무비)에 따라 */
   const teamOf = (y: { meeting: number; work?: number }) => (teamSub === 'meeting' ? y.meeting : teamSub === 'work' ? y.work ?? 0 : y.meeting + (y.work ?? 0));
@@ -242,12 +257,12 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
   const remainAt = (mi: number): number => {
     if (!isCurYear && !oneProject) return 0;
     const sum = (from: number, f: (i: number) => number) => { let t = 0; for (let i = from; i <= mi; i++) t += f(i); return t; };
-    if (oneProject) return Math.max(0, sum(0, i => projectAddOf(i, [oneProject], p => p.allocPool)) - sum(0, i => oneRow?.[i] ?? 0));
+    if (oneProject) return projectRemainAt(mi, [oneProject]);
     const qStart = quarterOf(mi) * 3;
     const meeting = Math.max(0, (quarters[quarterOf(mi)]?.budget ?? 0) - sum(qStart, i => execOf(i, 'meeting')));
     const work = Math.max(0, workBudgetOf(state, ym(year, mi)).amount - execOf(mi, 'work'));
     // 우리 팀 기준: 우리 팀이 배분받은 금액(주관 프로젝트의 My 경비 + 참여 프로젝트 배분) − 우리 팀 프로젝트 집행
-    const project = Math.max(0, sum(0, i => projectAddOf(i, teamProjects, myAlloc)) - sum(0, i => execOf(i, 'project')));
+    const project = projectRemainAt(mi, teamProjects);
     const teamPart = teamSub === 'meeting' ? meeting : teamSub === 'work' ? work : meeting + work;
     return line === 'team' ? teamPart : line === 'project' ? project : teamPart + project;
   };
@@ -325,10 +340,11 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
     const cells: (number | null)[] = [...Array(first).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)];
     while (cells.length % 7) cells.push(null);
     const key = ym(year, selMonth);
-    const monthRecords = records.filter(r => r.date.startsWith(key) && recordInFilter(r));
-    const txDays = new Set(monthRecords.map(r => Number(r.date.slice(8, 10))));
+    // 사용일자 기준 (월 합계·차트와 같은 기준 — 등록일이 아님)
+    const monthRecords = records.filter(r => spentDateOf(r).startsWith(key) && recordInFilter(r));
+    const txDays = new Set(monthRecords.map(r => Number(spentDateOf(r).slice(8, 10))));
     const today = isCurYear && selMonth === CUR_MONTH ? TODAY.getDate() : -1;
-    const dayRecords = selDay ? monthRecords.filter(r => Number(r.date.slice(8, 10)) === selDay) : [];
+    const dayRecords = selDay ? monthRecords.filter(r => Number(spentDateOf(r).slice(8, 10)) === selDay) : [];
     return (
       <div>
         <StepNav variant="bar" label="달력 월" className="cal-nav" prevLabel="이전 달" nextLabel="다음 달"
@@ -350,7 +366,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
         {selDay ? (
           <div className="day-list">
             <div className="day-list__title">{selMonth + 1}월 {selDay}일 집행 {dayRecords.length}건</div>
-            {dayRecords.length === 0 && <div className="day-list__empty">이 날 등록된 집행이 없습니다</div>}
+            {dayRecords.length === 0 && <div className="day-list__empty">이 날 사용한 집행이 없습니다</div>}
             {dayRecords.map(r => (
               <div key={r.id} className="day-list__row">
                 <span>{r.type === 'meeting' ? '👥 팀 회의비' : r.type === 'work' ? '💼 팀 업무비' : `📁 ${projects.find(p => p.id === r.projectId)?.name ?? '프로젝트'}`}</span>
@@ -501,7 +517,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
           {filterBar('차트')}
           <div className="chart-total">
             {oneProject ? oneProject.name : `${year}년${line === 'team' ? ' ' + TEAM_SUBS.find(o => o.value === teamSub)!.label : ''}`} 누적 <b className="num">{fmt(cumulative)}</b>
-            {oneProject && <span className="chart-total__sub"> / 예산 {fmt(oneProject.allocPool)}</span>}
+            {oneProject && <span className="chart-total__sub"> / 우리 팀 배분 {fmt(myAlloc(oneProject))}</span>}
           </div>
           <LineChart pts={pts} sel={sel} onSelect={onSelect} />
           <div className="chart-legend">

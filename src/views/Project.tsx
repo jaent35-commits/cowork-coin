@@ -497,7 +497,12 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
             <div className="deactivate">
               <div className="deactivate__msg">🔕 비활성화 적용 시작 월을 선택하세요</div>
               <div className="row row--wrap">
-                <MonthField value={deactivateMonth} onChange={setDeactivateMonth} />
+                {/* 착수월 이전은 고를 수 없음 (종료일이 착수일보다 앞서면 서버가 거부) */}
+                <MonthField value={deactivateMonth} onChange={v => {
+                  const start = selected.startDate.slice(0, 7);
+                  if (v < start) showToast(`착수월(${start}) 이전으로는 정할 수 없어 착수월로 맞췄습니다.`, 'warn');
+                  setDeactivateMonth(v < start ? start : v);
+                }} />
                 <Btn variant="danger" size="sm" onClick={deactivate}>이 달부터 비활성</Btn>
                 <Btn variant="secondary" size="sm" onClick={() => setDeactivating(false)}>취소</Btn>
               </div>
@@ -677,13 +682,15 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
                   onExec={(id, patch) => dispatch({ type: 'SET_CHECK_EXEC', id, patch })}
                   empty={<div className="soft-empty">등록된 항목이 없습니다</div>}
                   actions={selected.isMine ? item => (<>
-                    {/* 공개(눈) ↔ 비공개(눈 사선) — 누르면 전환 (자물쇠는 체크 후 잠금 전용) */}
-                    <IconBtn className={cx('vis-toggle', !isPublicCheck(item) && 'is-private')} aria-pressed={!isPublicCheck(item)}
+                    {/* 공개(눈) ↔ 비공개(눈 사선) — 누르면 전환 (자물쇠는 체크 후 잠금 전용)
+                        코웍 팀이 체크(집행)한 항목은 비공개로 바꿀 수 없음 — 그 팀이 볼 수 없게 되어 서버가 거부 */}
+                    {(() => { const lockedPublic = isPublicCheck(item) && item.checked && !!item.checkedBy && item.checkedBy !== selected.ownerTeam; return (
+                    <IconBtn className={cx('vis-toggle', !isPublicCheck(item) && 'is-private')} aria-pressed={!isPublicCheck(item)} disabled={lockedPublic}
                       aria-label={`${item.title} ${isPublicCheck(item) ? '공개' : '비공개'} — 누르면 ${isPublicCheck(item) ? '비공개' : '공개'}로`}
-                      title={isPublicCheck(item) ? '공개: 배분받은 코웍 팀 모두 (누르면 비공개)' : '비공개: 주관 팀만 (누르면 공개)'}
+                      title={lockedPublic ? `공개: ${item.checkedBy}이(가) 체크한 항목이라 비공개로 바꿀 수 없습니다` : isPublicCheck(item) ? '공개: 배분받은 코웍 팀 모두 (누르면 비공개)' : '비공개: 주관 팀만 (누르면 공개)'}
                       onClick={() => dispatch({ type: 'SET_CHECK_VISIBILITY', id: item.id, visibility: isPublicCheck(item) ? 'private' : 'public' })}>
                       {isPublicCheck(item) ? <IconEye size={15} /> : <IconEyeOff size={15} />}
-                    </IconBtn>
+                    </IconBtn>); })()}
                     {editMode && (
                       <IconBtn className="icon-btn--remove" aria-label={`${item.title} 삭제`} title="항목 삭제"
                         onClick={() => setPendingDel(d => new Set(d).add(item.id))}><IconClose size={13} /></IconBtn>

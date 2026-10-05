@@ -102,7 +102,7 @@ export interface QuarterData {
 
 /**
  * 알림 종류
- * - exec: 집행 등록 완료 (My 프로젝트·팀 회의비)
+ * - exec: 집행 등록 완료 — 더 이상 만들지 않음 (예전 알림은 목록에서 숨김, store/selectors myNotifications)
  * - setting: 설정 변경 (비밀번호 본인 변경 / 관리자 초기화)
  * - alloc: 새 프로젝트 배분 (우리 팀에 예산 배분)
  * - deadline: 기한 임박 (다음 달 종료 프로젝트 — 1개월 전)
@@ -123,6 +123,8 @@ export interface NotifItem {
   team?: string;
   /** 중복 발송 방지 키 (예: 기한 임박 알림은 프로젝트·종료월당 1회) */
   key?: string;
+  /** 생긴 시각 ISO — 기기 푸시는 로그인한 뒤에 생긴 알림만 (로그인 때 지난 알림이 한꺼번에 뜨지 않게) */
+  createdAt?: string;
 }
 
 /** 팀별 알림 설정 — push: 기기 푸시 전체 on/off, kinds: 종류별 푸시 on/off */
