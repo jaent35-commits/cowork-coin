@@ -1,0 +1,62 @@
+# GitHub Pages 배포 — main 에 푸시하면 앱 화면(dist)을 빌드해 Pages 에 올림
+#   준비 (저장소 Settings 에서 한 번만, deploy/README.md "GitHub Pages" 참고)
+#   · Pages → Source: GitHub Actions · Custom domain 입력 · Enforce HTTPS
+#   · Secrets and variables → Actions → Variables: VITE_SITE_URL · VITE_SUPABASE_URL · VITE_SUPABASE_ANON_KEY
+#     (ANON_KEY 는 브라우저에 공개되는 publishable 키 — service_role 키는 절대 넣지 않음)
+#   OCR 서버는 Pages 에 올릴 수 없음 → VITE_OCR_API_URL 이 비어 있으면 브라우저 OCR(Tesseract)만 사용
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 연달아 푸시하면 마지막 것만 배포 (진행 중인 배포는 끝까지)
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Supabase 값이 비면 앱이 '이 브라우저 저장본 로그인'으로 빌드됨 — 운영에서 팀 데이터가 공유되지 않으므로 배포 중단
+      - name: Check repository variables
+        env:
+          VITE_SITE_URL: ${{ vars.VITE_SITE_URL }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          for v in VITE_SITE_URL VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY; do
+            if [ -z "${!v}" ]; then echo "::error::저장소 변수 $v 가 없습니다 (Settings → Secrets and variables → Actions → Variables)"; exit 1; fi
+          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn build
+        env:
+          VITE_SITE_URL: ${{ vars.VITE_SITE_URL }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_OCR_API_URL: ${{ vars.VITE_OCR_API_URL }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

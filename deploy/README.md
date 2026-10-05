@@ -12,3 +12,22 @@
 6. 외부 네트워크에서 HTTPS 페이지와 `/api/health`를 확인합니다.
 
 현재 공개 전 조건은 Supabase 연결과 배포 PC 접근입니다. 이 파일만으로 배포를 시작하지 마세요.
+
+# GitHub Pages 배포 (앱 화면만)
+
+`.github/workflows/deploy-pages.yml` — `main` 에 푸시하면 앱 화면(`dist`)을 빌드해 GitHub Pages 에 올립니다. 로그인·데이터는 Supabase 를 그대로 씁니다.
+
+- **OCR 서버는 Pages 에 올릴 수 없습니다.** `VITE_OCR_API_URL` 이 비어 있으면 영수증은 브라우저 OCR(Tesseract)만으로 읽습니다. PaddleOCR 을 함께 쓰려면 OCR 서버를 다른 주소(예: `https://cw-coin-ocr.duckdns.org`)에 띄우고, 저장소 변수 `VITE_OCR_API_URL` 과 OCR 서버의 `OCR_CORS_ORIGINS=https://cw-coin.duckdns.org` 를 지정합니다.
+- 화면 이동은 `#/home` 같은 해시 주소라 Pages 에서 새로고침해도 404 가 나지 않습니다.
+
+## 한 번만 하는 설정
+1. 저장소 **Settings → Secrets and variables → Actions → Variables** 에 추가
+   - `VITE_SITE_URL` = `https://cw-coin.duckdns.org`
+   - `VITE_SUPABASE_URL` · `VITE_SUPABASE_ANON_KEY` = `.env.local` 과 같은 값 (publishable 키 — service_role 키는 넣지 않음)
+   - 셋 중 하나라도 없으면 배포가 멈춥니다 (Supabase 값 없이 빌드되면 팀 데이터가 공유되지 않는 '브라우저 저장본 로그인' 앱이 됨)
+2. **Settings → Pages → Build and deployment → Source: GitHub Actions**
+3. DNS — 도메인이 GitHub Pages 를 가리키게
+   - DuckDNS(`cw-coin.duckdns.org`): A 레코드만 지원 → duckdns.org 에서 `current ip` 를 `185.199.108.153` 으로 바꾸고 **update ip**. 배포 PC 의 DuckDNS 자동 갱신(공인 IP 로 되돌림)이 켜져 있으면 끕니다
+   - 직접 산 도메인의 하위 도메인: CNAME `jaent35-commits.github.io`
+4. **Settings → Pages → Custom domain** 에 `cw-coin.duckdns.org` 입력 → **Save** → DNS 확인이 끝나면 **Enforce HTTPS** 체크 (인증서 발급까지 수 분~최대 24시간)
+5. **Actions** 탭에서 `Deploy to GitHub Pages` 실행 결과 확인 → `https://cw-coin.duckdns.org` 접속 → 모바일 크롬에서 앱 설치 확인
