@@ -215,9 +215,10 @@ export default function Meeting({ onNavigate }: { onNavigate: (v: View) => void 
             <div className="sim__value num">{fmt(simBudget)}</div>
             <div className="sim__sub">{q.label} 합계</div>
           </div>
+          {/* (월별 인원 합) × 단가 = 예산 — 좁으면 괄호 묶음 단위로 줄바꿈, 가운데 정렬 */}
           <div className="sim__formula">
-            {headcounts.map((h, i) => `${q.months[i]} ${h}명`).join(' + ')}
-            <br />× {meetingRate.toLocaleString('ko-KR')}원 = <strong>{fmt(simBudget)}</strong>
+            <span className="sim__formula-part">({headcounts.map((h, i) => `${q.months[i]} ${h}명`).join(' + ')})</span>{' '}
+            <span className="sim__formula-part">× {meetingRate.toLocaleString('ko-KR')}원 = <strong>{fmt(simBudget)}</strong></span>
           </div>
           <Alert variant="info">
             <strong>예산 산정 기준</strong>

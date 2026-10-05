@@ -54,7 +54,7 @@ ON CONFLICT (id) DO UPDATE SET
 -- ---------------------------------------------------------------------
 INSERT INTO meeting_rates (effective_from, rate) VALUES
   ('2025-01-01', 30000),
-  ('2026-07-01', 35000)   -- 3분기부터 인상
+  ('2026-07-01', 30000)   -- 이력 행 (단가 기준 30,000원 유지)
 ON CONFLICT (effective_from) DO UPDATE SET rate = EXCLUDED.rate;
 
 INSERT INTO expense_categories (id, name, sort_order) OVERRIDING SYSTEM VALUE VALUES

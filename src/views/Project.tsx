@@ -147,6 +147,8 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
   const [addingNew, setAddingNew] = useState(false);
   const [newProj, setNewProj] = useState<ProjectDraft>(EMPTY_PROJECT);
   const [editMode, setEditMode] = useState(false);
+  // 편집 중 삭제한 체크리스트 항목 — [저장]을 눌러야 실제로 삭제, [취소]·편집 종료면 되돌림
+  const [pendingDel, setPendingDel] = useState<Set<string>>(new Set());
   /** 코웍 팀 공통 사용 종료일 (편집 중) */
   const [coworkEnd, setCoworkEnd] = useState('');
   /** 비활성 프로젝트를 저장할 때 다시 활성화 */
@@ -178,7 +180,8 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
     if (sheet || addingNew || yearProjects.some(p => p.id === selectedId)) return;
     setSelectedId(yearProjects.find(p => p.isMine)?.id ?? null);
   }, [year]); // eslint-disable-line react-hooks/exhaustive-deps
-  const items = selected ? checklist.filter(c => c.projectId === selected.id) : [];
+  useEffect(() => { if (!editMode) setPendingDel(new Set()); }, [editMode, selectedId]);
+  const items = selected ? checklist.filter(c => c.projectId === selected.id && !(editMode && pendingDel.has(c.id))) : [];
   const viewAllocs = selected ? allocs[selected.id] ?? [] : [];
   // 편집 중: 배분 가능 금액을 비워 두면 경비 총액, 비워 둔 배분은 남은 금액으로 채운 미리보기
   const pool = editMode ? editData.allocPool || editData.totalAmount : selected?.allocPool ?? 0;
@@ -291,6 +294,7 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
       const teamName = a.teamName.trim();
       return { ...a, teamName, endDate: teamName !== selected.ownerTeam && coworkEnd ? coworkEnd : undefined };
     });
+    pendingDel.forEach(id => dispatch({ type: 'DELETE_CHECK', id }));
     dispatch({ type: 'UPDATE_PROJECT', id: selected.id, draft, allocs, reactivate: !selected.active && reactivate });
     setEditMode(false);
     showToast(!selected.active && reactivate ? '프로젝트를 다시 활성화했습니다!' : '변경 사항이 저장되었습니다!');
@@ -661,6 +665,12 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
                   </p>
                 );
               })()}
+              {editMode && pendingDel.size > 0 && (
+                <p className="check-del-pending">
+                  <span>삭제 예정 <b>{pendingDel.size}건</b> · [저장]을 눌러야 삭제돼요</span>
+                  <button type="button" onClick={() => setPendingDel(new Set())}>되돌리기</button>
+                </p>
+              )}
               <div className="mb-14">
                 <CheckRows items={items} projects={[selected]} hideProject
                   onToggle={(id, exec) => dispatch({ type: 'TOGGLE_CHECK', id, exec })}
@@ -676,7 +686,7 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
                     </IconBtn>
                     {editMode && (
                       <IconBtn className="icon-btn--remove" aria-label={`${item.title} 삭제`} title="항목 삭제"
-                        onClick={() => dispatch({ type: 'DELETE_CHECK', id: item.id })}><IconClose size={13} /></IconBtn>
+                        onClick={() => setPendingDel(d => new Set(d).add(item.id))}><IconClose size={13} /></IconBtn>
                     )}
                   </>) : undefined} />
               </div>

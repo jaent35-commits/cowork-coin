@@ -396,6 +396,12 @@
 /* 체크리스트 공개(눈) / 비공개(자물쇠) 전환 */
 .vis-toggle { width: 32px; height: 32px; border-radius: var(--r-sm); border-color: var(--line-input); color: var(--primary-600); }
 .vis-toggle.is-private { background: var(--text); color: var(--surface); }
+/* PC: 누를 자리를 좌우로 넓히고, 마우스를 올리거나 누른 줄은 버튼을 강조색으로 (32px 정사각형은 작아 잘못 누르기 쉬움) */
+@media (min-width: 1025px) {
+  .vis-toggle { width: auto; min-width: 48px; padding: 0 14px; }
+  .check-row:is(:hover, :focus-within, .is-selected, .is-editing) .vis-toggle { border-color: var(--primary-300); background: var(--primary-50); color: var(--primary-700); }
+  .check-row:is(:hover, :focus-within, .is-selected, .is-editing) .vis-toggle.is-private { border-color: var(--primary-600); background: var(--primary-600); color: #fff; }
+}
 /* 배분 줄: 삭제 버튼을 입력칸 높이에 맞춤 */
 .alloc-edit .icon-btn--remove { width: var(--ctl-h); height: var(--ctl-h); }
 /* 배분·My 경비 초과 — 붉은 글씨로 눈에 띄게 */
@@ -404,3 +410,6 @@
 
 /* 편집 저장 막힘 안내 — 팀 배분 합계가 배분 가능 금액을 넘을 때 */
 .proj-save-block { margin: 12px 0 0; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--danger-200); background: var(--danger-50); color: var(--danger-600); font-size: calc(13px * var(--fs)); font-weight: 700; line-height: 1.5; }
+/* 편집 중 삭제한 체크리스트 — 저장 전까지 보류 */
+.check-del-pending { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; padding: 8px 12px; border-radius: var(--r-md); background: var(--danger-50); color: var(--danger-600); font-size: calc(12.5px * var(--fs)); font-weight: 700; }
+.check-del-pending button { flex-shrink: 0; padding: 4px 10px; border: 1px solid var(--danger-200); border-radius: var(--r-pill); background: var(--surface); color: var(--danger-600); font: inherit; cursor: pointer; }
