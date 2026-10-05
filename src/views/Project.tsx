@@ -206,10 +206,15 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
   // 팀 배분: 같은 팀은 한 번만 — 앞 줄에서 이미 쓴 팀명이면 중복
   const dupAllocIds = new Set(editAllocs.filter((a, i) => a.teamName.trim() && editAllocs.slice(0, i).some(b => b.teamName.trim() === a.teamName.trim())).map(a => a.id));
   // 팀 배분 합계 > 배분 가능 금액이면 서버(DB 트리거)가 거절 → 저장 전에 막음 (배분 가능 금액을 줄인 경우 포함)
-  const canSaveEdit = draftReady(editData) && dupAllocIds.size === 0 && !overAlloc;
-  const overAllocMsg = editMode && overAlloc
-    ? `팀 배분 합계(${fmt(totalAlloc)})가 배분 가능 금액(${fmt(pool)})보다 ${fmt(totalAlloc - pool)} 많아 저장할 수 없어요. 팀 배분 금액을 줄이거나 배분 가능 금액을 늘려 주세요.`
-    : '';
+  // 팀 배분은 그 팀이 이미 쓴 금액보다 작게 줄일 수 없음 (줄이면 잔액이 마이너스가 됨)
+  const underUsed = editMode ? rows.filter(a => a.teamName.trim() && (a.used ?? 0) > a.amount) : [];
+  const canSaveEdit = draftReady(editData) && dupAllocIds.size === 0 && !overAlloc && underUsed.length === 0;
+  const overAllocMsg = !editMode ? ''
+    : overAlloc
+      ? `팀 배분 합계(${fmt(totalAlloc)})가 배분 가능 금액(${fmt(pool)})보다 ${fmt(totalAlloc - pool)} 많아 저장할 수 없어요. 팀 배분 금액을 줄이거나 배분 가능 금액을 늘려 주세요.`
+      : underUsed.length
+        ? `${underUsed.map(a => `${a.teamName.trim()}은(는) 이미 ${fmt(a.used ?? 0)}을 사용해`).join(', ')} 그보다 작게 배분할 수 없어요. 팀 배분 금액을 사용액 이상으로 입력해 주세요.`
+        : '';
 
   const select = (p: Project) => {
     if (!p.isMine) return;
