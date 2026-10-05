@@ -393,7 +393,7 @@
 .alloc-reclaim.is-ready { background: var(--primary-50); border: 1px solid var(--primary-200); }
 .alloc-reclaim .btn { gap: 5px; }
 
-/* 체크리스트 공개(눈) / 비공개(자물쇠) 전환 */
+/* 체크리스트 공개(눈) / 비공개(눈 사선) 전환 */
 .vis-toggle { width: 32px; height: 32px; border-radius: var(--r-sm); border-color: var(--line-input); color: var(--primary-600); }
 .vis-toggle.is-private { background: var(--text); color: var(--surface); }
 /* PC: 누를 자리를 좌우로 넓히고, 마우스를 올리거나 누른 줄은 버튼을 강조색으로 (32px 정사각형은 작아 잘못 누르기 쉬움) */

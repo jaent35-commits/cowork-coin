@@ -70,7 +70,7 @@
   .check-row.has-actions .check-row__body { flex-basis: calc(100% - 30px); }
   .check-row.has-actions .check-row__actions { margin-left: auto; }
 }
-/* 비공개 표시 (자물쇠) */
+/* 비공개 표시 (눈 사선 — 자물쇠는 체크 후 잠금 전용) */
 .check-row__vis { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--text); color: var(--surface); flex-shrink: 0; }
 /* 방금 체크한 항목 — 저장 전 (금액·집행일을 고칠 수 있는 순간) */
 .check-row.is-pending { background: var(--primary-25); box-shadow: inset 3px 0 0 var(--primary-400, var(--primary)); }

@@ -14,7 +14,7 @@ import {
   Alert, AmountInput, Badge, Btn, Card, Checkbox, ConfirmLayer, DateField, IconBtn, Divider, EmptyState, Input, PageHead, ProgressBar, SectionHead, Segmented, Select, TableWrap, Tabs, Toast, cx, progVariant,
 } from '@/components/ui';
 import { MonthField } from '@/components/ui/MonthField';
-import { IconClose, IconEdit, IconEye, IconLock, IconMove, IconPlus, IconRestore, IconSave } from '@/components/icons';
+import { IconClose, IconEdit, IconEye, IconEyeOff, IconMove, IconPlus, IconRestore, IconSave } from '@/components/icons';
 import YearPicker, { YearBar } from '@/components/layout/YearPicker';
 import Donut from '@/components/Donut';
 import ProjectChecklist, { resetChecklistFilters } from './ProjectChecklist';
@@ -677,12 +677,12 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
                   onExec={(id, patch) => dispatch({ type: 'SET_CHECK_EXEC', id, patch })}
                   empty={<div className="soft-empty">등록된 항목이 없습니다</div>}
                   actions={selected.isMine ? item => (<>
-                    {/* 공개(눈) ↔ 비공개(자물쇠) — 누르면 전환 */}
+                    {/* 공개(눈) ↔ 비공개(눈 사선) — 누르면 전환 (자물쇠는 체크 후 잠금 전용) */}
                     <IconBtn className={cx('vis-toggle', !isPublicCheck(item) && 'is-private')} aria-pressed={!isPublicCheck(item)}
                       aria-label={`${item.title} ${isPublicCheck(item) ? '공개' : '비공개'} — 누르면 ${isPublicCheck(item) ? '비공개' : '공개'}로`}
                       title={isPublicCheck(item) ? '공개: 배분받은 코웍 팀 모두 (누르면 비공개)' : '비공개: 주관 팀만 (누르면 공개)'}
                       onClick={() => dispatch({ type: 'SET_CHECK_VISIBILITY', id: item.id, visibility: isPublicCheck(item) ? 'private' : 'public' })}>
-                      {isPublicCheck(item) ? <IconEye size={15} /> : <IconLock size={15} />}
+                      {isPublicCheck(item) ? <IconEye size={15} /> : <IconEyeOff size={15} />}
                     </IconBtn>
                     {editMode && (
                       <IconBtn className="icon-btn--remove" aria-label={`${item.title} 삭제`} title="항목 삭제"

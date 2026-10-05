@@ -167,7 +167,7 @@
   font-size: calc(12px * var(--fs)); font-weight: 700; color: var(--faint);
   transition: all 0.15s;
 }
-.segmented__btn.is-active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-xs); }
+.segmented__btn.is-active { background: var(--segment-thumb); color: var(--text); box-shadow: var(--shadow-xs); }
 
 /* ── Form ── */
 .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }

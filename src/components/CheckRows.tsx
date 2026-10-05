@@ -4,7 +4,7 @@ import { fmt, parseAmt } from '@/lib/format';
 import { TODAY_ISO } from '@/lib/date';
 import { checkDateOf, isPublicCheck } from '@/store/selectors';
 import { Badge, Checkbox, DateField, EmptyState, cx } from './ui';
-import { IconLock, IconUnlock } from './icons';
+import { IconEyeOff, IconLock, IconUnlock } from './icons';
 import './CheckRows.css';
 
 export { checkDateOf };
@@ -197,7 +197,7 @@ export default function CheckRows({ items, projects, onToggle, onExec, empty, hi
                 {!hideProject && <span className="check-row__proj">{proj?.name}</span>}
                 {item.category && <Badge variant="tint" size="sm" color={color}>{item.category}</Badge>}
                 {!isPublicCheck(item) && !actions && (
-                  <span className="check-row__vis" title="비공개: 주관 팀만 볼 수 있음" aria-label="비공개" role="img"><IconLock size={12} /></span>
+                  <span className="check-row__vis" title="비공개: 주관 팀만 볼 수 있음" aria-label="비공개" role="img"><IconEyeOff size={12} /></span>
                 )}
                 {shown.checked
                   ? <span className="check-row__date is-exec">
