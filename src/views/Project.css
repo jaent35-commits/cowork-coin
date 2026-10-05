@@ -401,3 +401,6 @@
 /* 배분·My 경비 초과 — 붉은 글씨로 눈에 띄게 */
 .alloc-sum__over { display: inline-flex; align-items: baseline; gap: 4px; padding: 1px 8px; border-radius: var(--r-pill); background: var(--danger-50); color: var(--danger-600); font-weight: 800; }
 .alloc-sum .alloc-sum__over b { color: var(--danger-600); font-weight: 900; }
+
+/* 편집 저장 막힘 안내 — 팀 배분 합계가 배분 가능 금액을 넘을 때 */
+.proj-save-block { margin: 12px 0 0; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--danger-200); background: var(--danger-50); color: var(--danger-600); font-size: calc(13px * var(--fs)); font-weight: 700; line-height: 1.5; }

@@ -205,7 +205,11 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
   const shareOf = (amount: number) => { const v = totalAlloc > 0 ? (amount / totalAlloc) * 100 : 0; return `${Number.isInteger(v) ? v : +v.toFixed(1)}%`; };
   // 팀 배분: 같은 팀은 한 번만 — 앞 줄에서 이미 쓴 팀명이면 중복
   const dupAllocIds = new Set(editAllocs.filter((a, i) => a.teamName.trim() && editAllocs.slice(0, i).some(b => b.teamName.trim() === a.teamName.trim())).map(a => a.id));
-  const canSaveEdit = draftReady(editData) && dupAllocIds.size === 0;
+  // 팀 배분 합계 > 배분 가능 금액이면 서버(DB 트리거)가 거절 → 저장 전에 막음 (배분 가능 금액을 줄인 경우 포함)
+  const canSaveEdit = draftReady(editData) && dupAllocIds.size === 0 && !overAlloc;
+  const overAllocMsg = editMode && overAlloc
+    ? `팀 배분 합계(${fmt(totalAlloc)})가 배분 가능 금액(${fmt(pool)})보다 ${fmt(totalAlloc - pool)} 많아 저장할 수 없어요. 팀 배분 금액을 줄이거나 배분 가능 금액을 늘려 주세요.`
+    : '';
 
   const select = (p: Project) => {
     if (!p.isMine) return;
@@ -448,6 +452,7 @@ export default function ProjectView({ onNavigate, sheet = false }: { onNavigate:
                   </div>
                 )}
                 <ProjectForm draft={editData} onChange={setEditData} poolLabel="코웍 팀 배분 가능 금액" />
+                {overAllocMsg && <p className="proj-save-block" role="alert">{overAllocMsg}</p>}
               </>) : (
                 <>
                   {/* 상세 화면은 헤더에 프로젝트명이 있으므로 생략 */}
