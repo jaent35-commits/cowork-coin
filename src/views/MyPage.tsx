@@ -3,6 +3,7 @@ import { useAppState, useDispatch } from '@/store/StoreContext';
 import { useToast } from '@/hooks/useToast';
 import { Alert, Avatar, Btn, Card, Divider, Field, Input, PageHead, PasswordInput, Segmented, Toast } from '@/components/ui';
 import { useFontMode } from '@/lib/fontScale';
+import { useFontFamily, type FontFamily } from '@/lib/fontFamily';
 import { useTheme, setThemePref, type ThemePref } from '@/lib/theme';
 import { CUR_YEAR } from '@/lib/date';
 import { MIN_PASSWORD_LENGTH } from '@/lib/password';
@@ -30,6 +31,7 @@ export default function MyPage({ section }: { section: 'password' | 'display' })
   const dispatch = useDispatch();
   const [toast, showToast] = useToast();
   const [font, setFont] = useFontMode();
+  const [fontFamily, setFontFamily] = useFontFamily();
   const { pref: themePref, theme } = useTheme();
   const [cur, setCur] = useState('');
   const [next, setNext] = useState('');
@@ -90,6 +92,11 @@ export default function MyPage({ section }: { section: 'password' | 'display' })
           <div className="row row--between row--wrap mb-14">
             <span className="text-muted">글씨 크기</span>
             <Segmented options={[{ value: 'sm', label: '작은 글씨' }, { value: 'lg', label: '큰 글씨' }]} value={font} onChange={setFont} label="글씨 크기" />
+          </div>
+          <div className="row row--between row--wrap mb-14">
+            <span className="text-muted">글꼴</span>
+            <Segmented<FontFamily> options={[{ value: 'default', label: '기본 폰트' }, { value: 'pretendard', label: '프리텐다드 폰트' }]}
+              value={fontFamily} onChange={setFontFamily} label="글꼴" />
           </div>
           <div className="row row--between row--wrap">
             <span className="text-muted">

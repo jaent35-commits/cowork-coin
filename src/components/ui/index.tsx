@@ -82,8 +82,19 @@ export function IconBtn({ className, badge, ...rest }: ButtonHTMLAttributes<HTML
 
 /* ── Checkbox / Switch ── */
 /** tone: success = 완료 체크(체크리스트), primary = 선택 체크(표 행 선택·옵션) */
+/**
+ * 체크박스 — 보이는 크기는 18px, 누르는 영역은 48px (.checkbox-hit::after)
+ * 넓힌 영역을 누르면 체크박스를 대신 누름 — 이미 <label> 안이면 label 이 처리하므로 건너뜀(두 번 토글 방지)
+ */
 export function Checkbox({ tone = 'primary', className, ...rest }: Omit<ComponentProps<'input'>, 'type'> & { tone?: 'primary' | 'success' }) {
-  return <input type="checkbox" className={cx('checkbox', `checkbox--${tone}`, className)} {...rest} />;
+  return (
+    <span className="checkbox-hit" onClick={e => {
+      if (e.target !== e.currentTarget || e.currentTarget.closest('label')) return;
+      e.currentTarget.querySelector('input')?.click();
+    }}>
+      <input type="checkbox" className={cx('checkbox', `checkbox--${tone}`, className)} {...rest} />
+    </span>
+  );
 }
 
 /** 켜기/끄기 토글 — text: 오른쪽 상태 글자 (예: ON/OFF, 관리자/일반) */

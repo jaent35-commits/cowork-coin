@@ -280,3 +280,9 @@
   --inverse-bg: var(--text);             /* 새하얀 대신 따뜻한 밝은 색 */
   --hover-dim: brightness(1.12);         /* 어두운 바탕에서는 밝아지게 */
 }
+
+/* 글꼴: 프리텐다드 (마이페이지 > 화면 설정, src/lib/fontFamily.ts — 고른 기기만 CDN 에서 내려받음) */
+:root[data-font-family="pretendard"] {
+  --font-body: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  --font-display: 'Pretendard Variable', Pretendard, 'Malgun Gothic', sans-serif;
+}

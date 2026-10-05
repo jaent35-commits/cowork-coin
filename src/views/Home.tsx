@@ -47,6 +47,7 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
   const total = ov.total + workBudget;
   const used = ov.used + workUsed;
   const q = currentQuarter(state);
+  const projects = myActiveProjects(state);
   // 알림 카드: 이번 분기 팀 인원(회의비 산정 기준)이 비어 있을 때만
   const curQMissing = q.headcounts.some(h => h === 0);
 
@@ -61,17 +62,33 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
     const qStart = ymOf(y, qi * 3);
     const qd = y === CUR_YEAR ? state.quarters[qi] : state.plannedQuarters[String(y)]?.[qi];
     const sumRec = (pred: (r: (typeof state.records)[number]) => boolean) => state.records.filter(pred).reduce((s, r) => s + r.total, 0);
-    const meetBudget = qd?.budget ?? 0;
-    const meetUsed = sumRec(r => r.type === 'meeting' && r.month >= qStart && r.month <= m);
-    const wb = workBudgetOf(state, m).amount, wu = workUsedOf(state, m);
+    const meeting = {
+      budget: qd?.budget ?? 0, used: sumRec(r => r.type === 'meeting' && r.month >= qStart && r.month <= m),
+      label: qd?.label ?? `${qi + 1}분기`, headcount: qd?.headcounts[mi % 3] ?? 0,
+    };
+    const work = { budget: workBudgetOf(state, m).amount, used: workUsedOf(state, m) };
     const live = state.projects.filter(p => p.isMine && p.startDate.slice(0, 7) <= m && (p.endDate || p.startDate).slice(0, 7) >= m);
-    const projBudget = live.reduce((s, p) => s + p.allocPool, 0);
-    const projUsed = sumRec(r => r.type === 'project' && r.month <= m && live.some(p => p.id === r.projectId));
-    return { total: meetBudget + wb + projBudget, used: meetUsed + wu + projUsed };
+    const project = {
+      budget: live.reduce((s, p) => s + p.allocPool, 0),
+      used: sumRec(r => r.type === 'project' && r.month <= m && live.some(p => p.id === r.projectId)), count: live.length,
+    };
+    return { meeting, work, project, total: meeting.budget + work.budget + project.budget, used: meeting.used + work.used + project.used };
   };
   const isCurMonth = month === CUR_YYYYMM;
-  // 이번 달은 지금까지 쓰던 계산(카드 아래 통계와 같은 값), 다른 달은 그 달 기준으로 다시 계산
-  const hero = isCurMonth ? { total, used } : heroOf(month);
+  /**
+   * 예산 현황 카드와 아래 3개 카드는 같은 달 기준 — 이번 달은 지금까지 쓰던 계산, 다른 달은 그 달 기준으로 다시 계산
+   * (소멸 예정·사용 가능 안내는 이번 달에만)
+   */
+  const cards = isCurMonth
+    ? {
+      meeting: { budget: q.budget, used: q.used, label: q.label, headcount: q.headcounts[Math.min(2, CUR_MONTH - Q_START)] ?? 0 },
+      work: { budget: workBudget, used: workUsed },
+      project: { budget: ov.projBudget, used: ov.projUsed, count: projects.length },
+      total, used,
+    }
+    : heroOf(month);
+  const hero = cards;
+  const monthLabel = `${isCurMonth || month.startsWith(`${CUR_YEAR}-`) ? '' : `${month.slice(0, 4)}년 `}${Number(month.slice(5, 7))}월`;
   const heroUsed = hero.used;
   const heroPct = pct(heroUsed, hero.total);
   /** 이동 범위 — 집행·프로젝트가 있는 가장 이른 달 ~ 다음 해 12월 */
@@ -83,7 +100,6 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
     return v < firstMonth || v > lastMonth ? m : v;
   });
 
-  const projects = myActiveProjects(state);
   // 홈: 이번 달 예정 · 미체크 · 예정일 없는 항목만 (전체 목록은 프로젝트 운영 > 체크리스트)
   // 주관 프로젝트는 전부, 배분받은 참여 프로젝트는 공개 항목만
   const projById = new Map(state.projects.map(p => [p.id, p]));
@@ -148,21 +164,21 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
       {/* Stat cards */}
       <div className="grid-3 mb-20">
         <StatCard
-          accent="var(--coral)" label="팀 회의비" value={fmt(q.budget - q.used)}
-          sub={`${q.label} 잔액 · ${q.headcounts[Math.min(2, CUR_MONTH - Q_START)] ?? 0}명 × ${fmtMan(state.meetingRate)}원`}
-          budget={q.budget} used={q.used} expiring={exp.meeting}
+          accent="var(--coral)" label="팀 회의비" value={fmt(cards.meeting.budget - cards.meeting.used)}
+          sub={`${isCurMonth ? '' : `${monthLabel} · `}${cards.meeting.label} 잔액 · ${cards.meeting.headcount}명 × ${fmtMan(state.meetingRate)}원`}
+          budget={cards.meeting.budget} used={cards.meeting.used} expiring={isCurMonth ? exp.meeting : 0}
           action={{ label: '회의비 관리 →', onClick: () => { openTeamTab('팀 회의비'); onNavigate('meeting'); } }}
         />
         <StatCard
-          accent="var(--sage)" label="프로젝트 경비" value={fmt(ov.projBudget - ov.projUsed)}
-          sub={`잔액 · ${projects.length}건 진행 중`}
-          budget={ov.projBudget} used={ov.projUsed} expiring={exp.project}
+          accent="var(--sage)" label="프로젝트 경비" value={fmt(cards.project.budget - cards.project.used)}
+          sub={`${isCurMonth ? '' : `${monthLabel} 말 `}잔액 · ${cards.project.count}건 진행 중`}
+          budget={cards.project.budget} used={cards.project.used} expiring={isCurMonth ? exp.project : 0}
           action={{ label: '목록 보기 →', onClick: () => onNavigate('project') }}
         />
         <StatCard
-          accent="var(--violet)" label="팀 업무비" value={fmt(workRemain)}
-          sub={`${CUR_MONTH + 1}월 잔액 · 월 예산 ${fmtMan(workBudget)}원`}
-          budget={workBudget} used={workUsed} expiring={0} available={exp.work}
+          accent="var(--violet)" label="팀 업무비" value={fmt(cards.work.budget - cards.work.used)}
+          sub={`${monthLabel} 잔액 · 월 예산 ${fmtMan(cards.work.budget)}원`}
+          budget={cards.work.budget} used={cards.work.used} expiring={0} available={isCurMonth ? exp.work : undefined}
           action={{ label: '업무비 관리 →', onClick: () => { openTeamTab('팀 업무비'); onNavigate('meeting'); } }}
         />
       </div>

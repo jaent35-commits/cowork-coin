@@ -340,7 +340,7 @@
 /* 탭 (공통): 균등 폭 밑줄탭 — PC 는 탭당 최소 폭, 모바일은 화면 폭 균등 분할 */
 .tabs { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 18px; overflow-x: auto; }
 .tabs__tab {
-  flex: 0 0 auto; min-width: calc(140px * var(--fs)); margin-bottom: -1px; padding: 11px 16px; white-space: nowrap; text-align: center;
+  flex: 0 0 auto; min-width: calc(140px * var(--fs)); min-height: 48px; margin-bottom: -1px; padding: 11px 16px; white-space: nowrap; text-align: center;
   border-bottom: 3px solid transparent;
   font-size: calc(14px * var(--fs)); font-weight: 700; color: var(--faint);
   transition: color 0.15s, border-color 0.15s;
@@ -493,3 +493,20 @@
 .sbox__grp:not(:first-child) { margin-top: 4px; border-top: 1px solid var(--line-soft); padding-top: 10px; }
 .sbox__list .sbox__grp ~ .sbox__opt { padding-left: 18px; }
 .sbox__group { margin-right: 5px; font-size: 0.88em; font-weight: 600; color: var(--faint); }
+
+/* ── 누르는 영역 최소 48px — 보이는 크기는 그대로, 투명한 ::after 로 누르는 영역만 넓힘 ──
+ *   :where() 로 position 을 약하게 걸어, 원래 absolute 인 버튼(비밀번호 보기·입력 지우기 등)은 그대로 둠
+ *   이전/다음 같은 좁은 버튼(step-nav)은 옆 칸을 덮지 않게 위아래로만 넓힘 */
+:where(.btn, .icon-btn, .chip, .segmented__btn, .step-nav__btn, .step-nav__value, .home-check__tab, .exec-sort, .exec-sum__toggle, button.select,
+  .pw-input__toggle, .input-clear__btn, .hsearch__clear, .install-sheet__close, .app-header__team, .app-header__brand, .tabs__tab, .exec-filter__checks) {
+  position: relative;
+}
+:where(.btn, .icon-btn, .chip, .segmented__btn, .step-nav__value, .home-check__tab, .exec-sort, .exec-sum__toggle, button.select,
+  .pw-input__toggle, .input-clear__btn, .hsearch__clear, .install-sheet__close, .app-header__team, .app-header__brand, .tabs__tab, .exec-filter__checks)::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 48px); height: max(100%, 48px); transform: translate(-50%, -50%);
+}
+:where(.step-nav__btn)::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: max(100%, 48px); transform: translateY(-50%); }
+/* 체크박스 (Checkbox 컴포넌트가 감쌈) — 입력칸이 넓힌 영역 위에 오게 */
+.checkbox-hit { position: relative; display: inline-flex; flex-shrink: 0; vertical-align: middle; cursor: pointer; }
+.checkbox-hit::after { content: ''; position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; transform: translate(-50%, -50%); }
+.checkbox-hit > .checkbox { position: relative; z-index: 1; }

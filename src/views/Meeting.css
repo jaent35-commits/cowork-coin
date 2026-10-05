@@ -14,12 +14,12 @@
 .hc-row__unit { width: 24px; flex-shrink: 0; text-align: right; font-size: calc(12.5px * var(--fs)); color: var(--faint); }
 
 .stepper {
-  flex: 1; display: flex; align-items: stretch; height: 40px; overflow: hidden;
+  flex: 1; display: flex; align-items: stretch; height: 48px; overflow: hidden; /* +·− 버튼 누르는 영역 48px */
   border: 1.5px solid var(--line-input); border-radius: var(--r-md); background: var(--surface);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .stepper:focus-within { border-color: var(--primary); box-shadow: var(--ring); }
-.stepper button { width: 44px; flex-shrink: 0; font-size: calc(18px * var(--fs)); color: var(--faint); transition: background 0.1s; }
+.stepper button { width: 48px; flex-shrink: 0; font-size: calc(18px * var(--fs)); color: var(--faint); transition: background 0.1s; }
 .stepper button:hover { background: var(--bg); color: var(--primary-600); }
 .stepper input {
   flex: 1; min-width: 0; border: 0; outline: none; text-align: center;
@@ -31,8 +31,11 @@
 .sim__label { margin-bottom: 8px; font-size: calc(11px * var(--fs)); font-weight: 700; letter-spacing: 0.06em; color: var(--primary-700); }
 .sim__value { font-size: calc(32px * var(--fs)); color: var(--primary-600); }
 .sim__sub { margin-top: 4px; font-size: calc(12px * var(--fs)); color: var(--primary-700); }
-.sim__formula { margin-bottom: 16px; padding: 12px 14px; border-radius: var(--r-md); background: var(--surface-muted); font-size: calc(13px * var(--fs)); line-height: 1.7; color: var(--text-3); }
+.sim__formula { text-align: center; margin-bottom: 16px; padding: 12px 14px; border-radius: var(--r-md); background: var(--surface-muted); font-size: calc(13px * var(--fs)); line-height: 1.7; color: var(--text-3); }
 .sim__formula strong { color: var(--primary-600); }
+/* 괄호 묶음·곱셈 부분은 각각 한 덩어리 — 넓으면 한 줄, 좁으면 두 덩어리로 줄바꿈 */
+.sim__formula-part { display: inline-block; }
+.sim__formula-part + .sim__formula-part { white-space: nowrap; }
 
 @media (max-width: 480px) {
   .sim__value { font-size: calc(26px * var(--fs)); }
