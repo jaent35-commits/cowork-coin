@@ -494,7 +494,6 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
           <div className="report-bar">
             <div>
               <h2 className="report-bar__title">운영일지</h2>
-              <span className="report-bar__mdesc">{year}년 + 예산 배분 · − 집행</span>
             </div>
             <Segmented label="운영일지 단위" value={calView} onChange={v => { setCalView(v); setSelDay(null); }}
               options={[{ value: 'day', label: '일' }, { value: 'month', label: '월' }, { value: 'year', label: '년' }]} />
@@ -509,7 +508,6 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
           <div className="report-bar">
             <div>
               <h2 className="report-bar__title">차트</h2>
-              <span className="report-bar__mdesc">예산 · 집행 추이</span>
             </div>
             <Segmented label="차트 기간" value={period} onChange={setPeriod}
               options={[{ value: 'month', label: '월' }, { value: 'quarter', label: '분기' }, { value: 'year', label: '년' }]} />

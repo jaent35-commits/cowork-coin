@@ -139,11 +139,10 @@
   .cal-day { min-height: 34px; }
 }
 
-/* 카드 상단: 제목(PC)·설명 + 보기 전환 */
+/* 카드 상단: 제목(PC · 모바일은 탭이 제목이라 숨김) + 보기 전환 — 설명 문구는 PC·모바일 모두 없음 */
 .report-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
 .report-bar__title { font-family: var(--font-display); font-size: calc(14.5px * var(--fs)); font-weight: 800; }
 .report-bar span { display: block; margin-top: 2px; font-size: calc(12.5px * var(--fs)); font-weight: 600; color: var(--faint); }
-.report-bar__mdesc { display: none !important; }
 .report-tabs { display: none; }
 /* 모바일: 탭으로 한 카드씩 */
 @media (max-width: 1024px) {
@@ -152,7 +151,10 @@
   .report-sec { margin-bottom: 0; animation: fade-up 0.22s ease both; }
   .report-bar { align-items: center; }
   .report-bar__title { display: none; }
-  .report-bar span, .report-bar__mdesc { display: block !important; margin-top: 0; }
+  .report-bar span { margin-top: 0; }
+  /* 제목만 있던 칸은 통째로 숨김 (빈 칸이 자리·간격을 차지하지 않게) → 보기 전환은 오른쪽 */
+  .report-bar > div:has(> .report-bar__title:only-child) { display: none; }
+  .report-bar > .segmented { margin-left: auto; }
 }
 
 /* 큰 글씨 + 모바일: 코인·일자 목록 이름은 말줄임 대신 줄바꿈 */
