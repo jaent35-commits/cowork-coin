@@ -40,7 +40,6 @@ export default function App() {
   const [gnbCollapsed, setGnbCollapsed] = useState(readCollapsed);
   const session = state.session;
 
-  // 모바일 플로팅 + 버튼: 아래로 스크롤 중이면 숨김, 위로 스크롤·맨 위면 표시
   // Supabase 반영 실패 안내 (화면은 서버 값으로 되돌아감)
   const [syncToast, showSync] = useToast(4000);
   useEffect(() => {
@@ -48,19 +47,6 @@ export default function App() {
     window.addEventListener(SYNC_ERROR_EVENT, onError);
     return () => window.removeEventListener(SYNC_ERROR_EVENT, onError);
   }, [showSync]);
-  const [fabAway, setFabAway] = useState(false);
-  useEffect(() => {
-    let lastY = window.scrollY;
-    const onScroll = () => {
-      const y = window.scrollY, d = y - lastY;
-      if (Math.abs(d) < 8) return;
-      setFabAway(d > 0 && y > 80);
-      lastY = y;
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-  useEffect(() => { setFabAway(false); }, [view]);
   // 메뉴(화면)를 옮기면 새 화면이 그려진 뒤 맨 위(main 시작)로 — 이전 화면의 스크롤 위치가 남지 않게
   useLayoutEffect(() => { window.scrollTo({ top: 0 }); }, [view]);
 
@@ -148,7 +134,7 @@ export default function App() {
 
       {/* 모바일: 공통 집행 등록 플로팅 버튼 (등록·관리자 화면에서는 숨김) */}
       {!backTo && view !== 'admin' && (
-        <button type="button" className={fabAway ? 'fab is-away' : 'fab'} onClick={() => navigate('exec-new')} aria-label="집행 등록" title="집행 등록">
+        <button type="button" className="fab" onClick={() => navigate('exec-new')} aria-label="집행 등록" title="집행 등록">
           <IconPlus size={24} />
         </button>
       )}

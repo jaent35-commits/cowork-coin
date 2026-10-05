@@ -59,7 +59,7 @@
 .alloc-team__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary-300); flex-shrink: 0; }
 .alloc-team.is-mine { color: var(--primary-700); }
 .alloc-team.is-mine .alloc-team__dot { background: var(--primary-600); box-shadow: 0 0 0 3px var(--primary-50); }
-.alloc-team__mine { padding: 1px 7px; border-radius: 999px; background: var(--primary-50); color: var(--primary-600); font-size: calc(11px * var(--fs)); font-weight: 700; }
+.alloc-team__mine { padding: 1px 7px; border-radius: var(--r-pill); background: var(--primary-50); color: var(--primary-600); font-size: calc(11px * var(--fs)); font-weight: 700; }
 .alloc-table td.alloc-table__left { color: var(--success-600); }
 .alloc-table td.alloc-table__left.is-over { color: var(--danger-600); }
 .alloc-table tfoot td { padding-top: 12px; border-bottom: 0; border-top: 1.5px solid var(--line); font-weight: 800; }
@@ -108,6 +108,8 @@
   .deactivate .month-field { width: 100%; }
   .proj-detail__actions { width: 100%; }
   .proj-detail__actions .btn { flex: 1; }
+  /* 비활성 처리는 주요 동작이 아니므로 화면 폭을 다 차지하지 않게 오른쪽 작은 버튼으로 */
+  .proj-detail__actions .btn--danger { flex: 0 1 auto; margin-left: auto; }
 }
 
 /* 큰 글씨 + 좁은 화면: 배분액·사용액·잔액을 [이름표 ··· 금액] 줄로 세로 배치 */
@@ -236,14 +238,14 @@
   .proj-table { border-collapse: separate; }
   .proj-table tbody { display: flex; flex-direction: column; gap: 10px; }
   .proj-table tbody tr:not(.proj-table__new) {
-    position: relative; overflow: hidden; padding: 16px 16px 14px 18px;
+    position: relative; overflow: hidden; padding: 18px 16px 14px;
     border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface);
     box-shadow: var(--shadow-soft);
   }
   .proj-table tbody tr:last-child { border-bottom: 1px solid var(--line); }
-  /* 왼쪽 강조선 */
+  /* 위쪽 강조 띠 (홈 통계 카드와 같은 3px) */
   .proj-table tbody tr[data-proj]::before {
-    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--primary);
+    content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--primary);
   }
   /* 우측 상단 MY 띠 */
   .proj-table tbody tr[data-proj]::after {

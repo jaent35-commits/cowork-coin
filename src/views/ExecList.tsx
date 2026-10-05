@@ -495,10 +495,10 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
       )}
 
       <p className="exec-hint">
-        <span className="hide-mobile">목록에서 수정할 리스트를 선택하고, 수정 항목을 한 번 더 누르면 쉽고 빠른 수정이 가능합니다.</span>
+        <span className="hide-mobile">수정: 행을 선택한 뒤 고칠 칸을 한 번 더 누르세요. · 삭제: 체크박스로 선택한 뒤 [선택 삭제]</span>
         <span className="show-mobile">{selectMode
           ? '선택 모드: 행을 누를 때마다 선택·해제됩니다. [완료]로 끝냅니다.'
-          : <>수정 : 목록 선택 후 수정 항목을 클릭<br />삭제 : 목록을 꾹- 눌러 선택 후 삭제</>}</span>
+          : <>수정: 행을 누른 뒤 고칠 칸을 누르세요.<br />삭제: 행을 길게 눌러 선택한 뒤 삭제하세요.</>}</span>
       </p>
 
       {/* 모바일 선택 모드 바 — 화면 위쪽에 붙어 따라옴 */}

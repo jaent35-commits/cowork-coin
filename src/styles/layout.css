@@ -158,6 +158,11 @@
   transition: background 0.15s, color 0.15s;
 }
 .sidebar__item svg { flex-shrink: 0; }
+/* 큰 글씨: 글자가 1.4배라 40px 높이에선 위아래 여백이 거의 없음 → 버튼·간격을 함께 키움 */
+:root[data-font="lg"] .sidebar__nav, :root[data-font="lg"] .sidebar__group { gap: 4px; }
+:root[data-font="lg"] .sidebar__group + .sidebar__group { margin-top: 18px; }
+:root[data-font="lg"] .sidebar__group-title { padding-bottom: 8px; }
+:root[data-font="lg"] .sidebar__item { height: 52px; }
 .sidebar__text { flex: 1; min-width: 0; overflow: hidden; transition: opacity 0.15s ease; }
 .sidebar__item:hover { background: var(--primary-50); color: var(--text); }
 .sidebar__item.is-active { background: var(--primary-50); color: var(--text); font-weight: 700; }
@@ -216,9 +221,6 @@
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .fab:active { transform: scale(0.94); }
-/* 아래로 스크롤하는 동안은 내려가 숨고(목록 가림 방지), 위로 스크롤하면 다시 */
-.fab.is-away { transform: translateY(calc(100% + var(--bottom-nav-h))); opacity: 0; pointer-events: none; }
-.fab { transition: transform 0.22s ease, opacity 0.22s ease, box-shadow 0.15s ease; }
 .fab svg { stroke-width: 2.4; }
 
 /* PWA prompt */
@@ -426,7 +428,7 @@
 .install-sheet__dim { position: absolute; inset: 0; background: var(--dim); animation: fade-in 0.2s ease both; }
 .install-sheet__panel {
   position: relative; width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 12px;
-  padding: 10px 20px calc(20px + var(--safe-bottom)); border-radius: 24px 24px 0 0;
+  padding: 10px 20px calc(20px + var(--safe-bottom)); border-radius: var(--r-3xl) var(--r-3xl) 0 0;
   background: var(--surface-raised); box-shadow: var(--shadow-sheet);
   animation: install-sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }

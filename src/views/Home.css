@@ -39,7 +39,8 @@
 .hero__expire b { font-size: calc(14px * var(--fs)); }
 
 /* Stat cards */
-.stat { position: relative; overflow: hidden; padding: 24px 20px 20px; }
+/* 세로 배치 — 한 줄에 놓인 카드들의 [관리 →] 버튼이 아래쪽에 나란히 맞도록 */
+.stat { position: relative; overflow: hidden; display: flex; flex-direction: column; padding: 24px 20px 20px; }
 .stat::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--accent); }
 /* 가이드: 카드별 강조색으로 집행 막대 표시 */
 .stat .progress__bar { background: var(--accent); }
@@ -58,7 +59,8 @@
   background: var(--success-50); font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--success-600);
 }
 .stat__avail b { color: var(--success-600); font-weight: 900; }
-.stat__action { margin-top: 10px; }
+.stat__action { margin-top: auto; }
+.stat > :has(+ .stat__action) { margin-bottom: 10px; }
 
 /* 모바일: 잔여 금액 강조 (라이트는 토큰이 기본 히어로와 같아 변화 없음 · 다크만 웜 틴트) */
 @media (max-width: 1024px) {

@@ -47,7 +47,7 @@
 .check-row__spentline { display: inline-flex; align-items: center; gap: 6px; }
 .check-row__lock {
   display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; flex-shrink: 0;
-  border: 0; border-radius: 7px; background: transparent; color: var(--faint); cursor: pointer;
+  border: 0; border-radius: var(--r-sm); background: transparent; color: var(--faint); cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 .check-row__lock:hover { background: var(--surface-alt); color: var(--muted); }
@@ -59,7 +59,7 @@
 /* 집행일 (예정일 자리) — 풀린 상태면 달력 입력 */
 .check-row__date.is-exec { color: var(--muted); font-weight: 600; }
 .check-row__datelabel { font-weight: 800; color: var(--success, var(--muted)); }
-.check-row__datefield .month-field__btn { padding: 3px 8px; gap: 6px; border-radius: 6px; font-size: calc(12px * var(--fs)); }
+.check-row__datefield .month-field__btn { padding: 3px 8px; gap: 6px; border-radius: var(--r-xs); font-size: calc(12px * var(--fs)); }
 /* 풀린(수정 중) 줄 표시 */
 .check-row.is-editing .check-row__title { color: var(--muted); }
 /* 편집 버튼(공개 전환·삭제): 줄 오른쪽 끝 */
@@ -71,7 +71,10 @@
   .check-row.has-actions .check-row__actions { margin-left: auto; }
 }
 /* 비공개 표시 (눈 사선 — 자물쇠는 체크 후 잠금 전용) */
-.check-row__vis { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--text); color: var(--surface); flex-shrink: 0; }
+.check-row__vis {
+  display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; padding: 1px 7px; border: 1px solid var(--line-input); border-radius: var(--r-xs);
+  font-size: calc(11px * var(--fs)); font-weight: 700; color: var(--muted);
+}
 /* 방금 체크한 항목 — 저장 전 (금액·집행일을 고칠 수 있는 순간) */
 .check-row.is-pending { background: var(--primary-25); box-shadow: inset 3px 0 0 var(--primary-400, var(--primary)); }
 .check-row__pending { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 6px 0 0; font-size: calc(12px * var(--fs)); color: var(--muted); }

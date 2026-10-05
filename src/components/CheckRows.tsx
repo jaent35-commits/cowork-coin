@@ -197,7 +197,7 @@ export default function CheckRows({ items, projects, onToggle, onExec, empty, hi
                 {!hideProject && <span className="check-row__proj">{proj?.name}</span>}
                 {item.category && <Badge variant="tint" size="sm" color={color}>{item.category}</Badge>}
                 {!isPublicCheck(item) && !actions && (
-                  <span className="check-row__vis" title="비공개: 주관 팀만 볼 수 있음" aria-label="비공개" role="img"><IconEyeOff size={12} /></span>
+                  <span className="check-row__vis" title="비공개: 주관 팀만 볼 수 있음"><IconEyeOff size={12} />비공개</span>
                 )}
                 {shown.checked
                   ? <span className="check-row__date is-exec">

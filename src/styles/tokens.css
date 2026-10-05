@@ -40,6 +40,7 @@
   --log-minus: #3b6fe0;     /* 운영일지 프로젝트(−) — 파란색 */
   --log-plus-text: #c02f35; /* 운영일지 금액 글자 — 연한 배경 대비 5.2+ */
   --log-minus-text: #2f5fc9;
+  --chart-exec: var(--primary-600); /* 차트 집행 선 — 예산(노랑)과 구분 (다크에서는 밝은 무채색) */
 
   /* ── Coin brand (앱 아이콘: 노랑 그라데이션 + 다크브라운 라인) ── */
   --coin-yellow: #ffd35e;
@@ -143,6 +144,13 @@
   --glass-on-ink: rgba(255, 255, 255, 0.12); /* 잉크 바 위 보조 버튼 */
   --deco-1: rgba(255, 255, 255, 0.35);      /* 히어로 장식 원 */
   --deco-2: rgba(255, 255, 255, 0.2);
+  /* 앱 안 카메라 — 라이트·다크 모두 검정 화면 */
+  --camera-bg: #000000;
+  --camera-fg: #ffffff;
+  --camera-line: rgba(255, 255, 255, 0.55);
+  --camera-ring: rgba(255, 255, 255, 0.45);
+  --camera-focus: #ffd54a;
+  --camera-text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 
   /* ── 상태별 버튼·바 (다크에서 뒤집힘) ── */
   --btn-danger-bg: var(--danger-50);
@@ -165,6 +173,7 @@
   --z-prompt: 250;
   --z-toast: 300;
   --z-splash: 500;
+  --z-camera: 1000;
 
   /* ── Layout ── */
   --header-h: 56px;
@@ -208,6 +217,7 @@
   --log-minus: #5b8af0;
   --log-plus-text: #ff8a8e;
   --log-minus-text: #93b3ff;
+  --chart-exec: #ece6e0;    /* 앰버 텍스트(primary-600)는 다크에서 예산 노랑과 겹쳐 보임 */
 
   --success-50: #18201c;
   --success-100: #1d2621;

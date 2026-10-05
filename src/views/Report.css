@@ -100,18 +100,18 @@
 .line-chart__cursor { stroke: var(--primary); stroke-width: 1; stroke-dasharray: 3 2; opacity: 0.4; }
 .line-chart__remain, .line-chart__exec { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .line-chart__remain { stroke: var(--budget); }
-.line-chart__exec { stroke: var(--primary-600); }
+.line-chart__exec { stroke: var(--chart-exec); }
 .line-chart .dot { fill: var(--surface); stroke-width: 1.8; cursor: pointer; }
 .line-chart .dot--remain { stroke: var(--budget); }
-.line-chart .dot--exec { stroke: var(--primary-600); }
+.line-chart .dot--exec { stroke: var(--chart-exec); }
 .line-chart .dot--remain.is-sel { fill: var(--budget); }
-.line-chart .dot--exec.is-sel { fill: var(--primary-600); }
+.line-chart .dot--exec.is-sel { fill: var(--chart-exec); }
 .line-chart__label { font-size: calc(7.5px * var(--fs)); fill: var(--faint); cursor: pointer; font-family: var(--font-body); }
 .line-chart__label.is-sel { fill: var(--primary); font-weight: 700; }
 
 .chart-legend { display: flex; gap: 14px; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line-soft); font-size: calc(11px * var(--fs)); color: var(--faint-2); }
 .chart-legend i { display: inline-block; width: 16px; height: 2px; margin-right: 5px; border-radius: 2px; vertical-align: middle; }
-.chart-legend .is-exec { background: var(--primary-600); }
+.chart-legend .is-exec { background: var(--chart-exec); }
 .chart-legend .is-remain { background: var(--budget); }
 .chart-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
 .chart-card { padding: 11px 14px; border-radius: var(--r-lg); }
@@ -122,7 +122,7 @@
 .chart-card--remain b { color: var(--text); }
 .chart-card--exec { background: var(--primary-50); border: 1px solid var(--primary-200); }
 .chart-card--exec span { color: var(--primary-700); }
-.chart-card--exec b { color: var(--primary-600); }
+.chart-card--exec b { color: var(--chart-exec); }
 .chart-card small { display: block; margin-top: 2px; font-size: calc(11px * var(--fs)); color: var(--faint); }
 .chart-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .chart-filter__select { max-width: 100%; }
