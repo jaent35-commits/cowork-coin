@@ -256,8 +256,11 @@ v2에서 비밀번호 관련 키(`admin_password_hash`, `reset_password_hash`)�
 | 컬럼 | 타입 | 필수 | 키 | 설명 |
 |---|---|:-:|:-:|---|
 | id | smallint (identity) | ● | PK | |
-| name | varchar(20) | ● | UK | 식비 · 교통비 · 자재비 · 숙박비 · 기타 |
+| name | varchar(20) | ● | UK* | 공통: 회의비(원가) · 업무비(원가) · 일반교통비(원가) · 기타(원가) / 팀이 만든 구분 |
 | sort_order | smallint | ● | | 표시 순서 |
+| team_id | bigint | | FK→teams | 없음 = 모든 팀 공통 구분, 값 = 그 팀이 만든 구분 (v2.5) |
+
+* v2.6([`migrations/20261005_expense_category_team_scope.sql`](migrations/20261005_expense_category_team_scope.sql)): 이름 중복 금지는 공통 구분끼리 · 같은 팀 안에서만 — 팀마다 같은 이름을 따로 가질 수 있음. 읽기 = 공통 · 우리 팀 구분 + 볼 수 있는 체크리스트 항목이 쓰는 구분(코웍 팀도 주관 팀 구분 이름이 보임).
 
 ### checklist_items — 경비 집행 체크리스트 (공개 / 비공개)
 주관 팀이 만들고 공개 범위를 정합니다. 금액 기준은 **주관 팀의 My 경비 배분 금액**(project_allocations 중 주관 팀 행)이며, 참여 팀의 배분 예산과는 별개입니다. **공개** = 주관 팀 + 배분받은 코웍 팀이 보고 체크, **비공개** = 주관 팀만. 생성·삭제·공개 범위 변경은 주관 팀만.
