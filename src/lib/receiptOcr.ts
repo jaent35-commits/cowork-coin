@@ -243,15 +243,18 @@ function findDate(text: string): string | null {
   const add = (y: number, m: number, d: number) => { if (y >= 2000 && ok(m, d)) found.push(`${year(y)}-${pad(m)}-${pad(d)}`); };
   // 2026-09-24 · 2026.09.24 · 2026/9/24 · 2026년 9월 24일 · 2018넌01월18일(오인식) · 2026:09-19
   // 감열지 긴 하이픈 오인식: 2026--10-04 · 2026–10–04 · 2026~10~04 · 2026_10_04
-  for (const m of t.matchAll(/(20\d{2})\s*(?:[.\-/:~_=‐-―−]{1,2}|[가-힣])\s*(\d{1,2})\s*(?:[.\-/~_=‐-―−]{1,2}|[가-힣])\s*(\d{1,2})(?!\d)/g)) add(+m[1], +m[2], +m[3]);
+  // 날짜 뒤에 시각이 붙어 읽힌 경우도 (2026-06-1117:09:30 · 26/09/1015:34:13 — 날짜와 시각 사이 공백을 못 읽음)
+  for (const m of t.matchAll(/(20\d{2})\s*(?:[.\-/:~_=‐-―−]{1,2}|[가-힣])\s*(\d{1,2})\s*(?:[.\-/~_=‐-―−]{1,2}|[가-힣])\s*(\d{1,2})(?:(?!\d)|(?=(?:[01]\d|2[0-3]):[0-5]\d))/g)) add(+m[1], +m[2], +m[3]);
   // 점 하나가 공백으로 읽힌 경우 (2018.12 19 · 2018 12.19)
   for (const m of t.matchAll(/(?<!\d)(20\d{2})(?:\.\s?|\s)(\d{1,2})(?:\.\s?|\s)(\d{1,2})(?=\s+\d{1,2}\s*[:.;]+\s*\d{2})/g)) add(+m[1], +m[2], +m[3]);
   // 승인일자: 2501010000000 (YYMMDD + 시각) — '승인·거래·결제 일자/일시' 표기 뒤에서만
   for (const m of t.matchAll(/(?:승인|거래|결제|매출)\s?일[자시][^\d]{0,4}(\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{0,7}(?!\d)/g)) add(2000 + +m[1], +m[2], +m[3]);
   // 구분자 없는 8자리 (이마트 바코드 아래 '20260919/61347102/…' 등)
   for (const m of t.matchAll(/(?<!\d)(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?!\d)/g)) add(+m[1], +m[2], +m[3]);
-  // 26-09-24 · 26.09.24 (전화번호와 헷갈리지 않게 앞뒤가 숫자가 아닌 경우만)
-  for (const m of t.matchAll(/(?<!\d)(\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})(?!\d)/g)) add(2000 + +m[1], +m[2], +m[3]);
+  // 구분자 없는 날짜+시각 14자리 (승인일시 : 20260605091610)
+  for (const m of t.matchAll(/(?<!\d)(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?:[01]\d|2[0-3])[0-5]\d[0-5]\d(?!\d)/g)) add(+m[1], +m[2], +m[3]);
+  // 26-09-24 · 26.09.24 (전화번호와 헷갈리지 않게 앞뒤가 숫자가 아닌 경우만 — 뒤에 붙어 읽힌 시각은 허용)
+  for (const m of t.matchAll(/(?<!\d)(\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})(?:(?!\d)|(?=(?:[01]\d|2[0-3]):[0-5]\d))/g)) add(2000 + +m[1], +m[2], +m[3]);
   // 연도 앞자리가 깨진 경우 (0025-09-19 → 올해) — 다른 날짜가 하나도 없을 때만
   if (!found.length) for (const m of t.matchAll(/(?<!\d)\d{4}\s*[.\-/:]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})(?!\d)/g)) add(now, +m[1], +m[2]);
   if (!found.length) return null;
@@ -362,7 +365,12 @@ function findTotal(lines: string[]): { value: number | null; sure: boolean } {
   if (supply != null && vat != null && Math.abs(supply / 10 - vat) <= 2) {
     const sum = supply + vat;
     const hit = [key, rep].find(n => n != null && Math.abs(n - sum) <= 1);
-    return { value: hit ?? sum, sure: true };
+    if (hit != null) return { value: hit, sure: true };
+    // 할인이 있으면 과세물품가액 + 부가세 − 할인 = 결제 금액 (75,000 − 1,000 = 74,000)
+    const offAt = flat.findIndex(f => /할인/.test(f) && !/전|후/.test(f));
+    const off = offAt >= 0 ? amountsIn(lines[offAt].replace(/[-−–]\s?(?=\d)/g, ' ')).at(-1) ?? null : null; // '-1,000' 의 빼기 기호는 떼고
+    const paid = off != null ? [key, rep].find(n => n != null && Math.abs(n - (sum - off)) <= 1) : undefined;
+    return { value: paid ?? sum, sure: true };
   }
   // 앞자리 잡음이 붙은 금액('65,000' → 5,000) 후보
   const trim = (n: number) => (n >= 10_000 ? Number(String(n).slice(1)) : null);
@@ -399,9 +407,12 @@ function findTotal(lines: string[]): { value: number | null; sure: boolean } {
  * 상호명 — ① '상호:' 표기 ② 윗부분에서 'OO점' (지점명) ③ 윗부분의 첫 한글 줄
  * 줄 끝에 붙은 전화·사업자번호·대표자는 잘라내고 판단 (예: '이마트 계양점 T:(032)717-1234' → '이마트 계양점')
  */
-const STORE_KEYS = /(상호명|상호|가맹점명|가맹점|매장명|점포명|업체명)\s*[:：]?\s*/;
-const NOT_STORE = /[영엄염]수\s?[증중]|감사|이용해|전표|고객용|카드|사업자|등록번호|대표|전화|TEL|주소|일시|번호|승인|결제|합계|금액|단가|수량|품명|POS|No\.|교환|환불|반품|상품|이내|한함|지참|광역시|특별시|[시군구]\s|[로길동]\s?\d/i;
-const TAIL = /\s*(?:T\s?[:.]|TEL|☎|전화|대표|사업자|\(?\d{2,4}[-)]\d{3,4}|\d{3}-\d{2}-\d{5}).*$/i;
+/** 상호 표기 — 글자 사이 공백도 허용 (점 포 명 · 상 호) */
+const STORE_KEYS = /(상\s*호\s*명|상\s*호|가\s*맹\s*점\s*명|가\s*맹\s*점|매\s*장\s*명|점\s*포\s*명|업\s*체\s*명)\s*[:：\]]?\s*/;
+/** '가맹점 번호 · 가맹점No · 가맹점코드' 는 상호가 아님 */
+const NOT_STORE_VALUE = /^(?:번\s?호|No|NO|코\s?드|ID)/;
+const NOT_STORE = /[영엄염]수\s?[증중]|감사|이용해|전표|고객용|카드|사업자|등록번호|대표|전화|TEL|주소|일시|번호|승인|결제|합계|금액|단가|수량|품명|POS|No\.|교환|환불|반품|상품|이내|한함|지참|테이블|매출|신고|안내|협회|광역시|특별시|[시군구]\s|[로길동]\s?\d/i;
+const TAIL = /\s*(?:T\s?[:.]|TEL|TID|☎|전화|대표|사업자|\(?\d{2,4}[-)]\d{3,4}|\d{3}-\d{2}-\d{5}).*$/i;
 
 const cleanStore = (s: string) =>
   s.replace(/[ㄱ-ㅣ]+/g, ' ').replace(TAIL, '').replace(/^\(?주\)?\s*(?=\S)|\(주\)|㈜/g, '').replace(/[^\p{L}\p{N}\s&·\-]/gu, '').replace(/\s{2,}/g, ' ').trim().slice(0, 24);
@@ -411,6 +422,16 @@ const CHAIN = '이마트24|이마트|홈플러스|롯데마트|트레이더스|�
 const CHAIN_BRANCH = new RegExp(`(${CHAIN})\\s?([가-힣]{1,6}점)`);
 /** 'OO점' 지점명 — 앞뒤 인식 잡음은 버리고 '상호 지점' 두 단어만 */
 const BRANCH = /(?:^|\s)([가-힣A-Za-z0-9&]{2,})\s?([가-힣]{1,6}점)(?=\s|$)/;
+/**
+ * 'OO점' 지점명이 든 상호 — 지점명이 앞에 오는 표기도 (보라매대교점 매머드익스프레스 → 매머드익스프레스 보라매대교점)
+ * 뒤에 붙은 한두 글자 잡음은 무시
+ */
+function branchOf(s: string): string | null {
+  const lead = s.match(/^([가-힣]{2,8}점)\s+([가-힣A-Za-z0-9&]{2,}(?:\s[가-힣A-Za-z0-9&]{2,})?)(?:\s\S{1,2})*$/);
+  if (lead) return `${lead[2]} ${lead[1]}`;
+  const m = s.match(BRANCH);
+  return m ? `${m[1]} ${m[2]}` : null;
+}
 /** 이마트 첫 글자 누락·오인식 보정 (마트·미마트·0마트 계양점 → 이마트 계양점) */
 const fixEmart = (s: string) => s.replace(/(^|\s)[미이0O○]?마트(?=\s?[가-힣]{1,6}점)/, '$1이마트');
 
@@ -418,13 +439,16 @@ function findStore(lines: string[]): { value: string | null; sure: boolean } {
   for (const l of lines) {
     const m = l.match(STORE_KEYS);
     if (!m) continue;
-    const rest = cleanStore(l.slice((m.index ?? 0) + m[0].length));
+    const after = l.slice((m.index ?? 0) + m[0].length);
+    if (NOT_STORE_VALUE.test(after.trim())) continue;
+    const rest = cleanStore(after);
     if (/[가-힣A-Za-z]{2,}/.test(rest)) return { value: rest, sure: true };
   }
   for (const l of lines.slice(0, 8)) {
     const m = l.match(/^\[([^\]]{3,30})\]?/);
     const v = m && cleanStore(m[1]);
-    if (v && /[가-힣A-Za-z]{2,}/.test(v) && !NOT_STORE.test(v.replace(/\s/g, '')) && !/구매|매출|판매|반품|결제/.test(v)) return { value: v, sure: true };
+    // 한글 상호만 — [ShinhanMChipAdv] 같은 카드 단말 표기는 제외
+    if (v && /[가-힣]{2,}/.test(v) && !NOT_STORE.test(v.replace(/\s/g, '')) && !/구매|매출|판매|반품|결제/.test(v)) return { value: v, sure: true };
   }
   const top = lines.slice(0, 12).map(l => fixEmart(cleanStore(l)));
   for (const s of top) {
@@ -432,8 +456,21 @@ function findStore(lines: string[]): { value: string | null; sure: boolean } {
     if (m) return { value: `${m[1]} ${m[2]}`, sure: true };
   }
   for (const s of top) {
-    const m = s.match(BRANCH);
-    if (m && !NOT_STORE.test(s)) return { value: `${m[1]} ${m[2]}`, sure: true };
+    if (NOT_STORE.test(s)) continue;
+    const b = branchOf(s);
+    if (b) return { value: b, sure: true };
+  }
+  // 사업자번호 · 대표자 줄 바로 윗줄 = 상호 (카츠97(KATUS97) / 사업자번호 : …)
+  const bizAt = lines.slice(0, 12).findIndex(l => /사업자|대표자/.test(l.replace(/\s/g, '')));
+  if (bizAt > 0) {
+    const v = cleanStore(lines[bizAt - 1]);
+    if (/[가-힣]{2,}/.test(v) && !NOT_STORE.test(v.replace(/\s/g, '')) && !/^\d/.test(v)) return { value: v, sure: false };
+  }
+  // 카드 단말 전표는 상호가 아래쪽 '가맹점/사업자' 뒤에 찍힘 (오피스넥스 관악동작점) — 전체 줄에서 'OO점'
+  for (const l of lines) {
+    const s = l.replace(/[^\p{L}\p{N}\s&]/gu, ' ').replace(/\s{2,}/g, ' ').trim();
+    const b = branchOf(s);
+    if (b && !NOT_STORE.test(b.replace(/\s/g, ''))) return { value: b, sure: false };
   }
   const hangulRatio = (s: string) => (s.match(/[가-힣]/g)?.length ?? 0) / Math.max(1, s.replace(/\s/g, '').length);
   return { value: top.find(s => /[가-힣]{3,}/.test(s) && hangulRatio(s) >= 0.6 && !NOT_STORE.test(s.replace(/\s/g, '')) && !/\d{3,}/.test(s)) ?? null, sure: false };

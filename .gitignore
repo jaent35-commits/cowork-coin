@@ -32,3 +32,6 @@ skills-lock.json
 *.local.md
 *.local.sql
 backend/.ocr-debug/
+
+# OCR 측정용 영수증 (개인정보 포함 — 저장소에 올리지 않음)
+ocr-samples/
