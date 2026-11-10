@@ -131,6 +131,27 @@ li:last-child > .notif { border-bottom: 0; }
 .notif-set__desc { margin-top: 2px; font-size: calc(12px * var(--fs)); color: var(--faint); line-height: 1.45; }
 .notif-set .switch { flex-shrink: 0; }
 .notif-set .switch__text { min-width: 26px; }
+.notif-set__kinds-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 4px; }
+.notif-set__kinds-title .notif-set__desc { margin-top: 0; font-weight: 500; }
+
+/* 슬랙 DM 알림 — 받는 사람 목록 */
+.slack-set { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
+.slack-set > .btn { align-self: flex-start; }
+.slack-set__people { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); }
+.slack-set__people.is-off { opacity: 0.6; }
+.slack-set__count { margin-left: 4px; font-weight: 600; color: var(--faint); }
+.slack-set__list { display: flex; flex-direction: column; }
+.slack-set__item { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.slack-set__item + .slack-set__item { border-top: 1px solid var(--line-soft); }
+.slack-set__email { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: calc(13px * var(--fs)); color: var(--text); }
+.slack-set__state {
+  flex-shrink: 0; max-width: 46%; padding: 2px 8px; border-radius: var(--r-sm); text-align: right;
+  font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--muted); background: var(--surface-alt); line-height: 1.4;
+}
+.slack-set__state.is-ok { color: var(--success-600); background: var(--tag-green-bg); }
+.slack-set__state.is-err { color: var(--danger-600); background: var(--tag-red-bg); }
+.slack-set__add { display: flex; gap: 8px; align-items: center; }
+.slack-set__add > :first-child { flex: 1; min-width: 0; }
 
 /* 검색 이동으로 찾아간 영역 제목 강조 */
 @keyframes anchor-flash { 0%, 40% { background: var(--primary-50); box-shadow: 0 0 0 6px var(--primary-50); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }

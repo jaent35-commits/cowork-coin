@@ -1,0 +1,24 @@
+# 코웍-코인 알림 봇 — api.slack.com/apps → Create New App → From a manifest 에 붙여 넣기 (deploy/SLACK.md)
+display_information:
+  name: 코웍-코인
+  description: 코웍-코인 프로젝트 예산 알림 (배분 · 기한 임박 · 예산 경고)
+  background_color: "#33201a"
+features:
+  bot_user:
+    display_name: 코웍-코인
+    always_online: true
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: true
+oauth_config:
+  scopes:
+    bot:
+      - chat:write          # DM 보내기
+      - im:write            # DM 대화방 열기
+      - users:read          # 사용자 조회 (users:read.email 에 필요)
+      - users:read.email    # 회사 이메일 → 슬랙 계정 찾기
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

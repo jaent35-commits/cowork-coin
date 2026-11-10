@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.admin-delete-team]
 verify_jwt = false
+
+[functions.notify-slack]
+verify_jwt = false

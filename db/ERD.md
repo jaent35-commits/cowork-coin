@@ -1,5 +1,7 @@
 # 코웍-코인 DB 설계 (PostgreSQL · Supabase)
 
+> **v2.8 (2026-11-10)** — **슬랙 개인 DM 알림**. `notification_prefs.slack_enabled`(팀별 on/off) · `slack_recipients`(팀별 받는 사람 회사 이메일 → 슬랙 계정은 서버가 찾아 저장, 팀당 20명) · notifications INSERT → Database Webhook → Edge Function `notify-slack` → 슬랙 DM. 종류별 on/off 는 push_* 공통. [`migrations/20261110_slack_dm.sql`](migrations/20261110_slack_dm.sql) · 설정 [`deploy/SLACK.md`](../deploy/SLACK.md).
+>
 > **v2.7 (2026-10-05)** — **알림 남기기 규칙**. 알림 표 직접 쓰기 금지(앱은 `notify_add`, 비밀번호 알림은 Edge Function) · `notify_add` 는 배분 알림 = 우리 팀 주관 프로젝트에 배분된 팀 앞, 예산 경고·기한 임박 = 우리 팀 앞만(그 밖의 종류·모든 팀 대상 거절) · `dedupe_key` 중복 금지는 받는 팀마다. [`migrations/20261005b_notification_insert_rules.sql`](migrations/20261005b_notification_insert_rules.sql)(SQL Editor 에서 실행).
 >
 > **v2.5 (2026-10-04)** — **앱 데이터 연동**. 로그인한 팀은 프로젝트·배분·체크리스트·집행·팀 인원·업무비·회의비 단가·알림을 Supabase 에서 읽고 씁니다 (`src/lib/dataApi.ts`). 읽기 = 팀별 RLS(주관·배분받은 프로젝트만, 참여 팀은 공개 체크리스트만, 집행은 우리 팀 건 + 주관 프로젝트에 들어온 건), 쓰기 = 권한을 검사하는 서버 함수(`save_project` · `checklist_*` · `exec_*` · `set_meeting_rate` · `notify_add`). 컬럼 추가: `projects.memo` · `project_allocations.use_end_date` · `expense_categories.team_id`(팀이 만든 구분). [`migrations/20261004_app_data_v2_5.sql`](migrations/20261004_app_data_v2_5.sql) + 삭제가 들어간 함수 [`20261004b_…`](migrations/20261004b_app_data_v2_5_delete_functions.sql)(SQL Editor 에서 실행).
