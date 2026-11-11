@@ -32,7 +32,7 @@
 | `APP_URL` | `https://cw-coin.duckdns.org` |
 
 ## 4. Database Webhook (앱 알림 → DM)
-**Supabase 대시보드 → Database → Webhooks** (처음이면 **Enable webhooks**) → **Create a new hook**
+**Supabase 대시보드 → Integrations → Database Webhooks** (예전 화면: Database → Webhooks · 처음이면 **Enable webhooks**) → **Create a new hook**
 - Table `public.notifications` · Events **Insert** 만
 - Type **Supabase Edge Functions** → `notify-slack` · `POST` · Timeout **5000ms**
 - HTTP Headers: `x-webhook-secret` = 3단계 `SLACK_WEBHOOK_SECRET`
