@@ -18,6 +18,7 @@
 2. [`slack-app-manifest.yml`](slack-app-manifest.yml) 붙여 넣기 → **Create**
 3. **Install App** → 설치 (관리자 승인 요청이 가면 승인 후 설치)
 4. **OAuth & Permissions** → **Bot User OAuth Token**(`xoxb-…`) — 3단계 비밀값으로만 넣음
+5. **Basic Information** → **Display Information** → App icon 에 [`slack-app-icon.png`](slack-app-icon.png) (512×512) 올리기
 
 ## 2. DB · 함수 배포
 [MEMBERS.md](MEMBERS.md) 전환 순서의 SQL · `npx supabase functions deploy` 로 함께 배포됩니다.
