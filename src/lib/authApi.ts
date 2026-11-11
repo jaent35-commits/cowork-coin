@@ -113,7 +113,17 @@ export async function manageableTeamIds(): Promise<string[]> {
 }
 
 // ── 비밀번호 ──
-export const changePassword = (current: string, next: string) => invoke<{ ok: true }>('change-password', { current, next });
+/**
+ * 비밀번호 변경 — 서버가 비밀번호를 바꾸면 이 계정의 로그인 세션이 모두 끝나므로(지금 기기 포함)
+ * 새 비밀번호로 곧바로 다시 로그인해 지금 기기의 세션을 이어 감
+ */
+export async function changePassword(current: string, next: string) {
+  const email = (await client().auth.getSession()).data.session?.user.email;
+  await invoke<{ ok: true }>('change-password', { current, next });
+  if (!email) return;
+  const { error } = await client().auth.signInWithPassword({ email, password: next });
+  if (error) throw new AuthApiError('unauthorized', '비밀번호는 바뀌었습니다. 새 비밀번호로 다시 로그인하세요');
+}
 
 // ── 사용자 관리 (관리자 · 부서장 이상) ──
 export interface MemberAdminRow extends MemberInfo {

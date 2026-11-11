@@ -1,7 +1,7 @@
 // 비밀번호 변경 — 본인 (첫 로그인 강제 변경 · 마이페이지)
 //   body: { current, next }  →  { ok: true }
-//   현재 비밀번호 확인 → 새 비밀번호 저장 → 초기 비밀번호 상태 해제 → 내 다른 기기 로그인 끊기 → 변경 안내 DM
-import { HttpError, admin, anonClient, assertPassword, bearer, caller, dmMember, json, serve } from '../_shared/mod.ts';
+//   현재 비밀번호 확인 → 새 비밀번호 저장(이 계정의 모든 로그인 세션이 끝남 — 앱이 새 비밀번호로 다시 로그인) → 초기 비밀번호 상태 해제 → 변경 안내 DM
+import { HttpError, admin, anonClient, assertPassword, caller, dmMember, json, serve } from '../_shared/mod.ts';
 
 serve(async (req, body) => {
   const me = await caller(req);
@@ -18,8 +18,6 @@ serve(async (req, body) => {
   const { error: se } = await admin.rpc('set_password_state', { p_member_id: me.id, p_initial: false });
   if (se) throw new HttpError(500, 'server', '비밀번호 상태를 저장하지 못했습니다');
 
-  // 지금 기기는 유지, 내 계정의 다른 기기 로그인은 끊음
-  await admin.auth.admin.signOut(bearer(req), 'others').catch(() => undefined);
   // 본인이 바꾼 게 아니면 알아챌 수 있게 (실패해도 변경은 완료)
   await dmMember(me, '비밀번호가 변경되었습니다. 본인이 바꾸지 않았다면 관리자에게 알려 주세요.', '코웍-코인 비밀번호 변경').catch(() => false);
   return json({ ok: true });

@@ -38,3 +38,6 @@ ocr-samples/
 
 # 사용자 명단 등 개인정보 (저장소에 올리지 않음)
 private/
+
+# Supabase CLI 로컬 상태 (로그인 · 링크 정보)
+supabase/.temp/

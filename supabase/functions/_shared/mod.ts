@@ -186,7 +186,10 @@ async function slack(method: string, params: Record<string, string>, get = false
  * 실패 이유는 members.slack_error 에 남김 (메시지 내용은 남기지 않음). 보냈으면 true
  */
 export async function dmMember(m: Pick<MemberRow, 'id' | 'email' | 'slack_user_id'>, text: string, title?: string): Promise<boolean> {
-  if (!SLACK_TOKEN) return false;
+  if (!SLACK_TOKEN) {
+    await admin.from('members').update({ slack_error: '서버에 슬랙 봇 토큰(SLACK_BOT_TOKEN)이 설정되지 않았습니다' }).eq('id', m.id);
+    return false;
+  }
   if (!m.email) { await admin.from('members').update({ slack_error: '회사 이메일이 없습니다' }).eq('id', m.id); return false; }
   let user = m.slack_user_id;
   if (!user) {
