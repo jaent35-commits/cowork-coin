@@ -6,6 +6,7 @@
 --   흐름: notifications 에 새 알림 저장 → Database Webhook → Edge Function notify-slack
 --         → 받는 팀의 슬랙 DM 설정 · 종류별 on/off 확인 → 등록된 받는 사람에게 슬랙 DM
 --   (설정 방법: deploy/SLACK.md)
+--   ※ v3.0(20261111b_org_members.sql)에서 slack_recipients 를 없애고 사용자 회사 이메일로 DM — 이 표는 쓰지 않음
 --
 --   변경
 --   1. notification_prefs.slack_enabled — 팀별 슬랙 DM on/off (기본 꺼짐)
