@@ -68,7 +68,7 @@ function withTeamView(s: AppState): AppState {
 
 /** 서버에 반영하지 않는 동작 — 로그인·팀 계정은 Edge Function, 구분은 체크리스트 추가 때 서버가 만듦 */
 const LOCAL_ONLY = new Set<Action['type']>([
-  'INITIALIZE', 'LOGIN', 'LOGOUT', 'HYDRATE', 'SYNC_TEAMS', 'TOGGLE_TEAM', 'ADD_TEAM', 'RENAME_TEAM', 'DELETE_TEAM',
+  'INITIALIZE', 'LOGIN', 'LOGOUT', 'HYDRATE', 'SYNC_TEAMS', 'SET_SESSION', 'TOGGLE_TEAM', 'ADD_TEAM', 'RENAME_TEAM', 'DELETE_TEAM',
   'SET_TEAM_ADMIN', 'SET_TEAM_PASSWORD', 'ADD_CATEGORY',
 ]);
 /**
@@ -86,10 +86,11 @@ function withIds(a: Action): Action {
 export const SYNC_ERROR_EVENT = 'cowork-sync-error';
 const syncError = (e: unknown) =>
   window.dispatchEvent(new CustomEvent(SYNC_ERROR_EVENT, { detail: e instanceof SyncError ? e.message : '서버에 저장하지 못했습니다. 네트워크를 확인하세요' }));
-/** 서버 팀 id 를 가진 로그인 팀 (브라우저 저장본 로그인이면 없음) */
+/** 서버 조직 id 를 가진 로그인 조직 (브라우저 저장본 로그인 · 초기 비밀번호 상태면 없음) */
 const remoteTeam = (s: AppState) => {
   const t = s.teams.find(x => x.name === s.session?.team);
-  return t && /^\d+$/.test(t.id) && !t.mustChangePassword ? t : null;
+  const mustChange = s.session?.member ? s.session.member.mustChangePassword : t?.mustChangePassword;
+  return t && /^\d+$/.test(t.id) && !mustChange ? t : null;
 };
 
 export function StoreProvider({ children }: { children: ReactNode }) {

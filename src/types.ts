@@ -14,10 +14,29 @@ export type View =
   | 'admin'
   | 'search';
 
+/** 로그인한 사용자 (Supabase 로그인 — 1인 1계정, 사번 로그인 · db/migrations/20261111b_org_members.sql) */
+export interface MemberInfo {
+  id: string;
+  employeeNo: string;
+  name: string;
+  position: string | null;
+  email: string | null;
+  /** 초기 비밀번호 상태 — 첫 로그인 때 변경 필수 */
+  mustChangePassword: boolean;
+}
+
 export interface Session {
+  /** 소속 조직(팀) 이름 — 예산 · 집행 · 프로젝트는 조직 단위 */
   team: string;
   isAdmin: boolean;
+  /** 사용자 · 조직 관리 권한 (관리자 또는 부서장 이상) — Supabase 로그인만 */
+  canManage?: boolean;
+  /** Supabase 로그인한 사용자 — 브라우저 저장본 로그인(팀 계정)이면 없음 */
+  member?: MemberInfo;
 }
+
+/** 조직 구분 — 상위 조직은 항상 더 높은 구분 */
+export type UnitLevel = '본부' | '부서' | '파트';
 
 export interface Team {
   id: string;
@@ -25,10 +44,13 @@ export interface Team {
   password: string;
   /** false = 휴면 (로그인 팀 선택에서 제외) */
   active: boolean;
-  /** 팀 로그인만으로 관리자 메뉴 접근 */
+  /** 팀 로그인만으로 관리자 메뉴 접근 (브라우저 저장본 모드) */
   isAdmin?: boolean;
   /** 임시 비밀번호 상태 — 팀 추가·관리자 초기화 때 true, 팀이 직접 바꾸면 false (true 면 로그인 후 변경 필수) */
   mustChangePassword?: boolean;
+  /** 조직 구분 · 상위 조직 (Supabase 로그인) */
+  level?: UnitLevel;
+  parentId?: string;
 }
 
 export interface Project {
@@ -131,6 +153,8 @@ export interface NotifItem {
 export interface NotifPrefs {
   push: boolean;
   kinds: Record<PushKind, boolean>;
+  /** 슬랙 개인 DM (Supabase 로그인 · 회사 이메일) — 없으면 켜짐 */
+  slack?: boolean;
 }
 
 export interface MonthlyExec {

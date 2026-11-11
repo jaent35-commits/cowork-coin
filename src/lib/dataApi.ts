@@ -46,7 +46,7 @@ interface UsageRow { project_id: number; team_id: number; used: number }
 interface CheckRow { id: number; project_id: number; title: string; amount: number; due_date: string | null; visibility: 'public' | 'private'; is_checked: boolean; spent_amount: number | null; spent_date: string | null; checked_by_team_id: number | null; category: { name: string } | null }
 interface RecRow { id: number; team_id: number; budget_type: BudgetType; project_id: number | null; use_date: string; registered_at: string; exec_items: { line_no: number; name: string; amount: number }[] }
 interface NotifRow { id: number; type: NotifType; title: string; body: string; target_team_id: number | null; dedupe_key: string | null; created_at: string }
-interface PrefRow { push_enabled: boolean; push_exec: boolean; push_setting: boolean; push_alloc: boolean; push_deadline: boolean }
+interface PrefRow { push_enabled: boolean; slack_enabled: boolean; push_exec: boolean; push_setting: boolean; push_alloc: boolean; push_deadline: boolean }
 
 /** 한국 시간 날짜 'YYYY-MM-DD' */
 const kstDate = (ts: string) => new Date(ts).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
@@ -92,7 +92,7 @@ export async function loadRemote(me: Team): Promise<RemoteData & { teams: Team[]
     c.from('expense_categories').select('name, team_id'),
     c.from('notifications').select('id, type, title, body, target_team_id, dedupe_key, created_at').order('created_at', { ascending: false }).limit(200),
     c.from('notification_reads').select('notification_id'),
-    c.from('notification_prefs').select('push_enabled, push_exec, push_setting, push_alloc, push_deadline').maybeSingle(),
+    c.from('notification_prefs').select('push_enabled, slack_enabled, push_exec, push_setting, push_alloc, push_deadline').maybeSingle(),
   ]);
   const myId = Number(me.id);
   const nameOf = (id: number | null) => teams.find(t => t.id === String(id))?.name ?? `팀 ${id}`;
@@ -166,7 +166,7 @@ export async function loadRemote(me: Team): Promise<RemoteData & { teams: Team[]
   }));
   const pref = must(prefRes as Res<PrefRow>, '알림 설정 조회');
   const notifPrefs: Record<string, NotifPrefs> = pref
-    ? { [me.name]: { push: pref.push_enabled, kinds: { exec: pref.push_exec, setting: pref.push_setting, alloc: pref.push_alloc, deadline: pref.push_deadline } } }
+    ? { [me.name]: { push: pref.push_enabled, slack: pref.slack_enabled, kinds: { exec: pref.push_exec, setting: pref.push_setting, alloc: pref.push_alloc, deadline: pref.push_deadline } } }
     : {};
 
   return {
@@ -243,6 +243,7 @@ const pushedKeys = new Set<string>();
 export async function pushAction(action: Action, before: AppState, after: AppState, me: Team): Promise<boolean> {
   const c = db();
   const myId = Number(me.id);
+  const memberId = Number(after.session?.member?.id);
   let pushed = false;
   switch (action.type) {
     case 'ADD_PROJECT':
@@ -322,17 +323,20 @@ export async function pushAction(action: Action, before: AppState, after: AppSta
     case 'READ_NOTIF': case 'READ_ALL_NOTIF': {
       const newly = after.notifications.filter(n => n.read && !before.notifications.find(b => b.id === n.id)?.read && /^\d+$/.test(n.id));
       if (newly.length) {
-        must(await c.from('notification_reads').upsert(newly.map(n => ({ notification_id: Number(n.id), team_id: myId })), { onConflict: 'notification_id,team_id', ignoreDuplicates: true }) as Res<null>, '알림 읽음');
+        // 읽음은 사람별 (같은 조직이어도 각자)
+        must(await c.from('notification_reads').upsert(newly.map(n => ({ notification_id: Number(n.id), member_id: memberId })), { onConflict: 'notification_id,member_id', ignoreDuplicates: true }) as Res<null>, '알림 읽음');
         pushed = true;
       }
       break;
     }
-    case 'SET_PUSH': case 'SET_PUSH_KIND': {
+    case 'SET_PUSH': case 'SET_PUSH_KIND': case 'SET_SLACK': {
+      // 알림 설정은 사람별 (기기 푸시 · 슬랙 DM · 종류별)
       const pr = after.notifPrefs[me.name];
       if (!pr) break;
       must(await c.from('notification_prefs').upsert({
-        team_id: myId, push_enabled: pr.push, push_exec: pr.kinds.exec, push_setting: pr.kinds.setting, push_alloc: pr.kinds.alloc, push_deadline: pr.kinds.deadline,
-      }, { onConflict: 'team_id' }) as Res<null>, '알림 설정 저장');
+        member_id: memberId, push_enabled: pr.push, slack_enabled: pr.slack ?? true,
+        push_exec: pr.kinds.exec, push_setting: pr.kinds.setting, push_alloc: pr.kinds.alloc, push_deadline: pr.kinds.deadline,
+      }, { onConflict: 'member_id' }) as Res<null>, '알림 설정 저장');
       pushed = true;
       break;
     }

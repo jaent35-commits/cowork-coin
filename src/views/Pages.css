@@ -134,25 +134,6 @@ li:last-child > .notif { border-bottom: 0; }
 .notif-set__kinds-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 4px; }
 .notif-set__kinds-title .notif-set__desc { margin-top: 0; font-weight: 500; }
 
-/* 슬랙 DM 알림 — 받는 사람 목록 */
-.slack-set { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
-.slack-set > .btn { align-self: flex-start; }
-.slack-set__people { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); }
-.slack-set__people.is-off { opacity: 0.6; }
-.slack-set__count { margin-left: 4px; font-weight: 600; color: var(--faint); }
-.slack-set__list { display: flex; flex-direction: column; }
-.slack-set__item { display: flex; align-items: center; gap: 8px; min-height: 40px; }
-.slack-set__item + .slack-set__item { border-top: 1px solid var(--line-soft); }
-.slack-set__email { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: calc(13px * var(--fs)); color: var(--text); }
-.slack-set__state {
-  flex-shrink: 0; max-width: 46%; padding: 2px 8px; border-radius: var(--r-sm); text-align: right;
-  font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--muted); background: var(--surface-alt); line-height: 1.4;
-}
-.slack-set__state.is-ok { color: var(--success-600); background: var(--tag-green-bg); }
-.slack-set__state.is-err { color: var(--danger-600); background: var(--tag-red-bg); }
-.slack-set__add { display: flex; gap: 8px; align-items: center; }
-.slack-set__add > :first-child { flex: 1; min-width: 0; }
-
 /* 검색 이동으로 찾아간 영역 제목 강조 */
 @keyframes anchor-flash { 0%, 40% { background: var(--primary-50); box-shadow: 0 0 0 6px var(--primary-50); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
 [data-search-anchor].is-flash { border-radius: var(--r-sm); animation: anchor-flash 1.8s ease both; }
@@ -193,3 +174,40 @@ li:last-child > .notif { border-bottom: 0; }
 .search-item__text small { font-size: calc(12px * var(--fs)); color: var(--faint); overflow-wrap: anywhere; }
 .search-item__text mark { background: var(--primary-200); color: inherit; border-radius: 3px; padding: 0 1px; }
 .search-item__meta { flex-shrink: 0; font-size: calc(12.5px * var(--fs)); font-weight: 800; color: var(--muted); white-space: nowrap; }
+
+/* ── 내 정보 (Supabase 로그인) ── */
+.profile__pos { margin-left: 4px; font-family: var(--font-body); font-size: calc(13px * var(--fs)); font-weight: 600; color: var(--faint); }
+.profile-info { display: grid; gap: 10px; margin: 0; }
+.profile-info > div { display: grid; grid-template-columns: 88px 1fr; gap: 10px; align-items: baseline; }
+.profile-info dt { font-size: calc(13px * var(--fs)); color: var(--faint); }
+.profile-info dd { margin: 0; font-size: calc(14px * var(--fs)); font-weight: 600; word-break: break-all; }
+.profile-info__note { margin-top: 12px; font-size: calc(12px * var(--fs)); color: var(--faint); }
+
+/* ── 사용자 관리 (Supabase 로그인) ── */
+.row--end { justify-content: flex-end; }
+.text-link { margin-left: 6px; text-decoration: underline; font-weight: 700; color: inherit; }
+.form-note { margin: 12px 0; font-size: calc(12.5px * var(--fs)); color: var(--faint); }
+label.btn { cursor: pointer; }
+label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
+.member-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; }
+.member-form__switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.member-form__err { grid-column: 1 / -1; color: var(--danger-600); font-size: calc(12.5px * var(--fs)); }
+.member-form__btns { grid-column: 1 / -1; margin-top: 8px; }
+.member-toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
+.member-toolbar > * { flex: 1; min-width: 0; max-width: 320px; }
+.member-table th, .member-table td { white-space: nowrap; }
+.member-table tr.is-dormant .member-table__name { color: var(--faint); }
+.member-table__org { color: var(--muted); }
+.org-tree { margin: 0; padding: 6px 0; list-style: none; }
+.org-tree__row { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 16px; border-bottom: 1px solid var(--line-soft); }
+.org-tree__row:last-child { border-bottom: 0; }
+.org-tree__row.is-dormant .org-tree__name { color: var(--faint); }
+.org-tree__name { font-weight: 700; }
+.org-tree__count { font-size: calc(12.5px * var(--fs)); }
+.org-tree__acts { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+@media (max-width: 640px) {
+  .member-form { grid-template-columns: 1fr; }
+  .member-toolbar { flex-direction: column; }
+  .member-toolbar > * { max-width: none; }
+  .org-tree__row { flex-wrap: wrap; }
+}

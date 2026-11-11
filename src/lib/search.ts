@@ -61,9 +61,9 @@ const MENUS: { title: string; view: View; sub: string; kw: string; tab?: string;
   { title: '코웍-코인 리포트', view: 'report', sub: '보유 코웍-코인 · 운영일지 · 차트', kw: '리포트 보유 코인 운영일지 차트 통계 달력' },
   { title: '알림', view: 'notification', sub: '받은 알림 목록', kw: '알림 소식' },
   { title: '알림 설정', view: 'notification', tab: '알림 설정', sub: '알림 · 푸시 알림 켜기/끄기', kw: '푸시 알림 설정 끄기 켜기' },
-  { title: '비밀번호 변경', view: 'mypage', anchor: 'password', sub: '계정 메뉴', kw: '마이페이지 비밀번호 암호 계정' },
+  { title: '내 정보 · 비밀번호 변경', view: 'mypage', anchor: 'password', sub: '계정 메뉴', kw: '마이페이지 내정보 성명 직위 사번 소속 비밀번호 암호 계정' },
   { title: '화면 설정 (글씨 크기 · 화면 모드)', view: 'settings', anchor: 'display', sub: '계정 메뉴', kw: '마이페이지 글씨 크기 큰글씨 폰트 화면 다크 모드 라이트 테마 어둡게 밝게 야간' },
-  { title: '관리자 메뉴', view: 'admin', sub: '팀(사용자) 추가·수정·비밀번호 초기화', kw: '관리자 팀 사용자 추가 휴면 권한 초기화', admin: true },
+  { title: '사용자 관리', view: 'admin', sub: '사용자 · 조직 추가·수정·비밀번호 초기화', kw: '관리자 메뉴 팀 조직 파트 사용자 회원 가입 등록 엑셀 추가 휴면 권한 초기화', admin: true },
 ];
 
 /** 검색 — limit: 묶음별 최대 건수 (count 는 자르기 전 전체 건수) */
@@ -78,7 +78,7 @@ export function searchAll(q: string, state: AppState, limit = 8): SearchResult {
 
   // 메뉴 바로가기
   for (const m of MENUS) {
-    if (m.admin && !state.session?.isAdmin) continue;
+    if (m.admin && !state.session?.isAdmin && !state.session?.canManage) continue;
     if (!has(m.title) && !has(m.kw) && !has(m.sub)) continue;
     out.menu.push({ key: `m-${m.title}`, kind: 'menu', group: 'menu', view: m.view, id: m.title, title: m.title, sub: m.sub, tab: m.tab, anchor: m.anchor });
   }

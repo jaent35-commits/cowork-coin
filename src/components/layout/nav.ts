@@ -34,7 +34,7 @@ export const BOTTOM_NAV: NavItem[] = BOTTOM_ORDER.map(v => {
   return v === 'exec' ? { ...item, match: [...(item.match ?? []), 'cowork'] } : item;
 });
 
-export const ADMIN_NAV: NavItem = { view: 'admin', label: '관리자 메뉴', short: '관리자', icon: IconShield };
+export const ADMIN_NAV: NavItem = { view: 'admin', label: '사용자 관리', short: '관리', icon: IconShield };
 
 /** 모바일(≤1024) 상단 헤더에 표시할 화면 제목 — 코웍 체크리스트는 모바일에서 집행 현황 안의 화면이므로 '집행 현황' */
 const MOBILE_TITLE: Record<View, string> = {

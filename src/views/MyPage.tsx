@@ -41,6 +41,11 @@ export default function MyPage({ section }: { section: 'password' | 'display' })
 
   const teamName = session?.team ?? '';
   const team = teams.find(t => t.name === teamName);
+  const member = REMOTE_AUTH ? session?.member : undefined;
+  // 소속 — 본부 › 부서 › 파트 (상위 조직을 따라 올라감)
+  const orgPath: string[] = [];
+  for (let t = team, guard = 0; t && guard < 5; t = teams.find(x => x.id === t!.parentId), guard++) orgPath.unshift(t.name);
+  const role = session?.isAdmin ? '관리자' : session?.canManage ? `${team?.level ?? '조직'}장 · 하위 조직 관리` : '';
 
   const save = async () => {
     if (!team || saving) return;
@@ -67,22 +72,45 @@ export default function MyPage({ section }: { section: 'password' | 'display' })
   return (
     <div className="view-enter">
       <Toast msg={toast} />
-      <PageHead title={section === 'password' ? '비밀번호 변경' : '화면 설정'} />
+      <PageHead title={section === 'password' ? (member ? '내 정보' : '비밀번호 변경') : '화면 설정'} />
 
       <div className="narrow">
         {section === 'password' && (
         <Card pad className="mb-16">
-          <div className="profile">
-            <Avatar name={teamName} size="lg" />
-            <div>
-              <div className="profile__name">{teamName}</div>
-              <div className="profile__sub">{session?.team === '관리자' ? '관리자 계정' : `팀 계정${session?.isAdmin ? ' · 관리자 권한' : ''} · ${CUR_YEAR}년 업무 진행 중`}</div>
-            </div>
-          </div>
-          <Divider />
-          <Field label="팀명" htmlFor="my-team">
-            <Input id="my-team" className="input--lg" value={teamName} disabled />
-          </Field>
+          {member ? (
+            <>
+              <div className="profile">
+                <Avatar name={member.name} size="lg" />
+                <div>
+                  <div className="profile__name">{member.name}{member.position && <span className="profile__pos"> {member.position}</span>}</div>
+                  <div className="profile__sub">{teamName}{role && ` · ${role}`}</div>
+                </div>
+              </div>
+              <Divider />
+              <dl className="profile-info" data-search-anchor="profile">
+                <div><dt>성명</dt><dd>{member.name}</dd></div>
+                <div><dt>직위</dt><dd>{member.position || '—'}</dd></div>
+                <div><dt>사번</dt><dd>{member.employeeNo}</dd></div>
+                <div><dt>소속</dt><dd>{orgPath.join(' › ') || teamName}</dd></div>
+                <div><dt>회사 이메일</dt><dd>{member.email || '등록되지 않음 — 슬랙 DM 을 받으려면 관리자에게 요청하세요'}</dd></div>
+              </dl>
+              <p className="profile-info__note">성명 · 직위 · 소속 · 이메일은 부서장 또는 관리자가 바꿀 수 있어요.</p>
+            </>
+          ) : (
+            <>
+              <div className="profile">
+                <Avatar name={teamName} size="lg" />
+                <div>
+                  <div className="profile__name">{teamName}</div>
+                  <div className="profile__sub">{session?.team === '관리자' ? '관리자 계정' : `팀 계정${session?.isAdmin ? ' · 관리자 권한' : ''} · ${CUR_YEAR}년 업무 진행 중`}</div>
+                </div>
+              </div>
+              <Divider />
+              <Field label="팀명" htmlFor="my-team">
+                <Input id="my-team" className="input--lg" value={teamName} disabled />
+              </Field>
+            </>
+          )}
         </Card>
         )}
 
@@ -116,7 +144,7 @@ export default function MyPage({ section }: { section: 'password' | 'display' })
           ) : (
             <form onSubmit={e => { e.preventDefault(); void save(); }}>
               {error && <div className="mb-14"><Alert variant={ERR[error].v}>{ERR[error].msg}</Alert></div>}
-              <input type="text" name="username" value={teamName} autoComplete="username" readOnly hidden />
+              <input type="text" name="username" value={member?.employeeNo ?? teamName} autoComplete="username" readOnly hidden />
               <Field label="현재 비밀번호" htmlFor="pw-cur">
                 <PasswordInput id="pw-cur" value={cur} onChange={edit(setCur)} autoComplete="current-password" />
               </Field>

@@ -10,7 +10,7 @@ import PwaPrompt from './components/PwaPrompt';
 import { usePushDelivery } from './lib/push';
 import { IconPlus } from './components/icons';
 import { REMOTE_AUTH, supabase } from './lib/supabase';
-import { hasSession, listTeams, myTeam, signOut } from './lib/authApi';
+import { hasSession, listTeams, manageableTeamIds, myMember, signOut } from './lib/authApi';
 import Home from './views/Home';
 import Meeting from './views/Meeting';
 import ProjectView, { readDetailId } from './views/Project';
@@ -23,6 +23,7 @@ import MyPage from './views/MyPage';
 import Notification from './views/Notification';
 import Search from './views/Search';
 import Admin from './views/Admin';
+import AdminLocal from './views/AdminLocal';
 import { SYNC_ERROR_EVENT } from './store/StoreContext';
 import { useToast } from './hooks/useToast';
 import { Toast } from './components/ui';
@@ -55,10 +56,11 @@ export default function App() {
     return !v;
   });
 
-  // 관리자 전용 화면 보호
+  // 관리 화면 보호 — 관리자 · 부서장 이상(관리 범위가 있는 사용자)만
+  const canAdmin = !!session && (session.isAdmin || !!session.canManage);
   useEffect(() => {
-    if (session && view === 'admin' && !session.isAdmin) navigate('home');
-  }, [session, view, navigate]);
+    if (session && view === 'admin' && !canAdmin) navigate('home');
+  }, [session, canAdmin, view, navigate]);
 
   // Supabase 로그인: 앱 세션과 Auth 세션을 맞춤 (시작할 때 한 번 + 다른 곳에서 로그아웃되면)
   useEffect(() => {
@@ -70,11 +72,20 @@ export default function App() {
       if (!session) { if (authed) await signOut(); return; } // '로그인 정보 저장' 안 함 → 새로 열면 로그아웃
       if (!authed) { dispatch({ type: 'LOGOUT' }); return; }
       try {
-        const me = await myTeam();
+        // 내 정보 · 소속 조직 · 관리 권한을 서버 값으로 (다른 사람이 바꾼 소속 · 권한 · 초기화 반영)
+        const me = await myMember();
         if (!alive) return;
         if (!me || !me.active) { await signOut(); dispatch({ type: 'LOGOUT' }); return; }
-        dispatch({ type: 'SYNC_TEAMS', teams: me.mustChangePassword ? [me] : await listTeams() });
-      } catch { /* 네트워크 오류 — 저장된 팀 목록으로 계속 */ }
+        if (me.member.mustChangePassword) {
+          dispatch({ type: 'SYNC_TEAMS', teams: [me.team] });
+          dispatch({ type: 'SET_SESSION', patch: { team: me.team.name, isAdmin: me.isAdmin, canManage: false, member: me.member } });
+          return;
+        }
+        const [list, manage] = await Promise.all([listTeams(), manageableTeamIds()]);
+        if (!alive) return;
+        dispatch({ type: 'SYNC_TEAMS', teams: list });
+        dispatch({ type: 'SET_SESSION', patch: { team: me.team.name, isAdmin: me.isAdmin, canManage: manage.length > 0, member: me.member } });
+      } catch { /* 네트워크 오류 — 저장된 정보로 계속 */ }
     })();
     const { data } = supabase!.auth.onAuthStateChange(event => { if (event === 'SIGNED_OUT') dispatch({ type: 'LOGOUT' }); });
     return () => { alive = false; data.subscription.unsubscribe(); };
@@ -85,12 +96,14 @@ export default function App() {
   // 로그인(팀 전환)·프로젝트 변경 시 다음 달 종료 프로젝트 기한 임박 알림 확인 (중복은 key 로 방지)
   useEffect(() => { if (session?.team) dispatch({ type: 'CHECK_DEADLINES' }); }, [session?.team, state.projects]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 임시 비밀번호 상태인 팀 세션(이전 로그인·관리자 초기화 후 새로고침 등)은 변경 단계부터
-  const mustChangePw = !!session && !!state.teams.find(t => t.name === session.team)?.mustChangePassword;
+  // 초기(임시) 비밀번호 상태인 세션(관리자 초기화 후 새로고침 등)은 변경 단계부터
+  const mustChangePw = !!session && (REMOTE_AUTH
+    ? !!session.member?.mustChangePassword
+    : !!state.teams.find(t => t.name === session.team)?.mustChangePassword);
   if (!session || mustChangePw) {
     return (
       <>
-        <Login key={mustChangePw ? 'change' : 'login'} pendingTeam={mustChangePw ? session?.team : undefined} />
+        <Login key={mustChangePw ? 'change' : 'login'} pendingName={mustChangePw ? (session?.member?.name ?? session?.team) : undefined} />
         <PwaPrompt />
       </>
     );
@@ -107,10 +120,10 @@ export default function App() {
   const backTo = sheetBack[view];
   return (
     <div className={['app', gnbCollapsed && 'is-gnb-collapsed', backTo && 'is-sheet'].filter(Boolean).join(' ')}>
-      <Header view={view} teamName={session.team} isAdmin={session.isAdmin} unread={unreadCount(state)} onNavigate={navigate} onLogout={logout}
+      <Header view={view} teamName={session.member?.name ?? session.team} isAdmin={canAdmin} unread={unreadCount(state)} onNavigate={navigate} onLogout={logout}
         onBack={backTo ? () => navigate(backTo) : undefined}
         title={view === 'project-detail' ? state.projects.find(p => p.id === readDetailId())?.name : undefined} />
-      <Sidebar view={view} isAdmin={session.isAdmin} collapsed={gnbCollapsed} onToggle={toggleGnb} onNavigate={navigate} />
+      <Sidebar view={view} isAdmin={canAdmin} collapsed={gnbCollapsed} onToggle={toggleGnb} onNavigate={navigate} />
 
       <Toast msg={syncToast} />
       <main className="app-main">
@@ -128,7 +141,7 @@ export default function App() {
           {view === 'settings' && <MyPage section="display" />}
           {view === 'notification' && <Notification />}
           {view === 'search' && <Search onNavigate={navigate} />}
-          {view === 'admin' && session.isAdmin && <Admin />}
+          {view === 'admin' && canAdmin && (REMOTE_AUTH ? <Admin /> : <AdminLocal />)}
         </div>
       </main>
 

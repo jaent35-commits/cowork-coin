@@ -1,13 +1,18 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import type { Team } from '@/types';
 import { useAppState, useDispatch } from '@/store/StoreContext';
 import { MIN_PASSWORD_LENGTH, passwordError } from '@/lib/password';
 import { getLastTeam, getRemember, saveLoginPrefs } from '@/lib/remember';
 import { holdLightTheme } from '@/lib/theme';
 import { REMOTE_AUTH } from '@/lib/supabase';
-import { AuthApiError, bootstrapAdmin, changePassword, listTeams, loginTeams, myTeam, needsSetup, signIn, signOut, type LoginTeam } from '@/lib/authApi';
+import {
+  AuthApiError, changePassword, importMembers, listTeams, manageableTeamIds, myMember, needsSetup, signIn, signOut,
+  type ImportResult, type ImportRow,
+} from '@/lib/authApi';
+import { readMemberSheet, unitPath } from '@/lib/memberSheet';
 import { IconEye } from '@/components/icons';
 import { Select } from '@/components/ui';
+import ImportResults from '@/components/ImportResults';
 import kowokIcon from '@/assets/kowok-icon.png';
 import wave from '@/assets/login/wave.svg';
 import featureIcon from '@/assets/login/feature-icon.svg';
@@ -56,33 +61,34 @@ function LgPassword({ id, label, value, onChange, placeholder, autoComplete, hin
 
 /**
  * 로그인 화면.
- * 임시 비밀번호(팀 추가·관리자 초기화 때 관리자가 받은 8자, mustChangePassword)로 로그인하면 바로 들어가지 않고
- * '비밀번호 변경' 단계를 거쳐야 앱에 진입합니다. 변경 전에는 세션을 만들지 않습니다.
- * pendingTeam: 이미 로그인된 세션이 임시 비밀번호 상태인 경우(App 에서 전달) 변경 단계부터 시작.
+ * Supabase: 사번 + 비밀번호 (1인 1계정). 초기 비밀번호(가입 · 초기화 때 슬랙 DM 으로 받은 8자)로 로그인하면
+ * '비밀번호 변경' 단계를 거쳐야 앱에 진입. 사용자가 없으면 '처음 시작하기' 에서 사용자 엑셀로 첫 등록.
+ * 브라우저 저장본(Supabase 없음): 예전처럼 팀 선택 + 팀 비밀번호.
+ * pendingName: 이미 로그인된 세션이 초기 비밀번호 상태인 경우(App 에서 전달) 변경 단계부터 시작.
  */
-export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
+export default function Login({ pendingName }: { pendingName?: string } = {}) {
   const { teams } = useAppState();
   const dispatch = useDispatch();
 
-  // ── 팀 목록: Supabase 로그인이면 login_teams() (활성 팀 이름·내부 이메일), 아니면 브라우저 저장본 ──
-  const [remote, setRemote] = useState<{ teams: LoginTeam[]; setup: boolean } | null>(null);
+  // ── Supabase: 첫 설치 여부 ──
+  const [remote, setRemote] = useState<{ setup: boolean } | null>(null);
   const [remoteError, setRemoteError] = useState('');
   const loadRemote = () => {
     setRemoteError('');
-    Promise.all([needsSetup(), loginTeams()])
-      .then(([setup, list]) => setRemote({ setup, teams: list }))
+    needsSetup()
+      .then(setup => setRemote({ setup }))
       .catch((e: unknown) => setRemoteError(e instanceof AuthApiError ? e.message : '서버에 연결할 수 없습니다.'));
   };
   useEffect(() => { if (REMOTE_AUTH) loadRemote(); }, []);
-  const activeTeams = REMOTE_AUTH ? (remote?.teams ?? []).map(t => t.name) : teams.filter(t => t.active).map(t => t.name);
+  const activeTeams = REMOTE_AUTH ? [] : teams.filter(t => t.active).map(t => t.name);
   const needSetup = REMOTE_AUTH ? !!remote?.setup : teams.length === 0;
 
-  const [team, setTeam] = useState('');
-  // 목록이 준비되면 마지막 로그인 팀(없으면 첫 팀) 선택
+  // 아이디: Supabase = 사번 입력, 브라우저 저장본 = 팀 선택 (마지막 로그인 값 기억)
+  const [loginId, setLoginId] = useState(() => (REMOTE_AUTH ? getLastTeam() ?? '' : ''));
   useEffect(() => {
-    if (activeTeams.includes(team)) return;
+    if (REMOTE_AUTH || activeTeams.includes(loginId)) return;
     const last = getLastTeam();
-    setTeam(activeTeams.find(n => n === last) ?? activeTeams[0] ?? '');
+    setLoginId(activeTeams.find(n => n === last) ?? activeTeams[0] ?? '');
   }, [activeTeams.join('\n')]); // eslint-disable-line react-hooks/exhaustive-deps
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -95,11 +101,19 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
   // 로그인 화면은 Figma 라이트 전용 디자인(고정 색 일러스트) — 다크 모드에서도 라이트로 보임
   useEffect(() => holdLightTheme(), []);
 
-  const errText = (e: unknown) => (e instanceof AuthApiError ? e.message : '요청을 처리하지 못했습니다. 잠시 후 다시 시도하세요.');
+  const errText = (e: unknown) => (e instanceof AuthApiError || e instanceof Error ? e.message : '요청을 처리하지 못했습니다. 잠시 후 다시 시도하세요.');
 
-  /** 로그인 완료 — Supabase 팀 목록을 앱에 맞추고 세션 시작 */
-  const enter = async (me: Team) => {
-    if (REMOTE_AUTH) dispatch({ type: 'SYNC_TEAMS', teams: await listTeams() });
+  /** Supabase 로그인 완료 — 조직 목록 · 내 정보 · 관리 권한으로 세션 시작 */
+  const enterRemote = async () => {
+    const me = await myMember();
+    if (!me) throw new AuthApiError('not_member', '사용자 정보를 불러오지 못했습니다.');
+    const [list, manage] = await Promise.all([listTeams(), manageableTeamIds()]);
+    dispatch({ type: 'SYNC_TEAMS', teams: list });
+    saveLoginPrefs(remember, me.member.employeeNo);
+    dispatch({ type: 'LOGIN', session: { team: me.team.name, isAdmin: me.isAdmin, canManage: manage.length > 0, member: me.member } });
+  };
+  /** 브라우저 저장본 로그인 완료 */
+  const enterLocal = (me: Team) => {
     saveLoginPrefs(remember, me.name);
     dispatch({ type: 'LOGIN', session: { team: me.name, isAdmin: !!me.isAdmin } });
   };
@@ -107,25 +121,24 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
   const submit = async (e?: FormEvent) => {
     e?.preventDefault();
     if (loading) return;
+    if (REMOTE_AUTH && !loginId.trim()) { setError('사번을 입력하세요.'); return; }
     if (!password) { setError('비밀번호를 입력하세요.'); return; }
     setLoading(true);
     try {
       if (REMOTE_AUTH) {
-        const email = remote?.teams.find(t => t.name === team)?.login_email;
-        if (!email) { setError('팀을 선택하세요.'); return; }
-        await signIn(email, password);
-        const me = await myTeam();
-        if (!me || !me.active) { await signOut(); setError('로그인할 수 없는 팀입니다. 관리자에게 문의하세요.'); return; }
-        if (me.mustChangePassword) { tempPw.current = password; setPassword(''); setError(''); setChangeFor(me.name); return; }
-        await enter(me);
+        await signIn(loginId, password);
+        const me = await myMember();
+        if (!me || !me.active) { await signOut(); setError('로그인할 수 없는 계정입니다. 관리자에게 문의하세요.'); return; }
+        if (me.member.mustChangePassword) { tempPw.current = password; setPassword(''); setError(''); setChangeFor(me.member.name); return; }
+        await enterRemote();
         return;
       }
       // 브라우저 저장본 로그인 — 짧은 지연으로 흐름만 재현
       await new Promise(r => window.setTimeout(r, 300));
-      const found = teams.find(t => t.active && t.name === team && t.password === password);
+      const found = teams.find(t => t.active && t.name === loginId && t.password === password);
       if (!found) { setError('팀 또는 비밀번호가 일치하지 않습니다.'); return; }
       if (found.mustChangePassword) { setPassword(''); setError(''); setChangeFor(found.name); return; }
-      await enter(found);
+      enterLocal(found);
     } catch (err) {
       setError(errText(err));
     } finally {
@@ -134,40 +147,38 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
   };
 
   // ── 초기 비밀번호 변경 단계 ──
-  const [changeFor, setChangeFor] = useState(pendingTeam ?? '');
+  const [changeFor, setChangeFor] = useState(pendingName ?? '');
   const [next, setNext] = useState('');
   const [next2, setNext2] = useState('');
-  // 방금 로그인에 쓴 임시 비밀번호 (Supabase 변경 요청에 필요) — 새로고침 등으로 없으면 입력칸을 보여 줌
+  // 방금 로그인에 쓴 초기 비밀번호 (Supabase 변경 요청에 필요) — 새로고침 등으로 없으면 입력칸을 보여 줌
   const tempPw = useRef('');
   const [curInput, setCurInput] = useState('');
-  const changeTeam = changeFor ? (teams.find(t => t.name === changeFor) ?? (REMOTE_AUTH ? { name: changeFor } as Team : undefined)) : undefined;
+  const localChangeTeam = !REMOTE_AUTH && changeFor ? teams.find(t => t.name === changeFor) : undefined;
   const askCurrent = REMOTE_AUTH && !tempPw.current;
 
   const submitChange = async (e: FormEvent) => {
     e.preventDefault();
-    if (!changeTeam || loading) return;
+    if (!changeFor || loading) return;
     if (!REMOTE_AUTH) {
+      if (!localChangeTeam) return;
       // 임시 비밀번호를 그대로 다시 쓰는 것도 막음
-      const err = passwordError(next, next2, changeTeam.password);
+      const err = passwordError(next, next2, localChangeTeam.password);
       if (err) { setError(err); return; }
-      dispatch({ type: 'SET_TEAM_PASSWORD', teamName: changeTeam.name, password: next, by: 'self' });
-      await enter(changeTeam);
+      dispatch({ type: 'SET_TEAM_PASSWORD', teamName: localChangeTeam.name, password: next, by: 'self' });
+      enterLocal(localChangeTeam);
       return;
     }
     const current = tempPw.current || curInput;
-    if (!current) { setError('관리자에게 받은 임시 비밀번호를 입력하세요.'); return; }
+    if (!current) { setError('슬랙 DM 으로 받은 초기 비밀번호를 입력하세요.'); return; }
     const err = passwordError(next, next2, current);
     if (err) { setError(err); return; }
     setLoading(true);
     try {
       await changePassword(current, next);
       tempPw.current = '';
-      const me = await myTeam();
-      if (!me) throw new AuthApiError('not_team', '팀 정보를 불러오지 못했습니다.');
-      await enter(me);
-      dispatch({ type: 'SET_TEAM_PASSWORD', teamName: me.name, by: 'self' }); // 알림만 (비밀번호는 서버에)
+      await enterRemote();
     } catch (err) {
-      setError(err instanceof AuthApiError && err.code === 'wrong_password' ? '임시 비밀번호가 일치하지 않습니다.' : errText(err));
+      setError(err instanceof AuthApiError && err.code === 'wrong_password' ? '초기 비밀번호가 일치하지 않습니다.' : errText(err));
     } finally {
       setLoading(false);
     }
@@ -176,32 +187,52 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
   const cancelChange = () => {
     setChangeFor(''); setNext(''); setNext2(''); setCurInput(''); setError(''); tempPw.current = '';
     if (REMOTE_AUTH) void signOut();
-    if (pendingTeam) dispatch({ type: 'LOGOUT' });
+    if (pendingName) dispatch({ type: 'LOGOUT' });
   };
   const editChange = (fn: (v: string) => void) => (v: string) => { fn(v); setError(''); };
 
-  const submitSetup = async (e: FormEvent) => {
+  // ── 처음 시작하기 ──
+  // 브라우저 저장본: 첫 관리자 팀 만들기
+  const submitSetup = (e: FormEvent) => {
     e.preventDefault();
-    if (loading) return;
     const name = setupName.trim();
     if (!name) return setError('관리자 팀 이름을 입력하세요.');
     const err = passwordError(setupPassword, setupConfirm);
     if (err) return setError(err);
-    if (!REMOTE_AUTH) { dispatch({ type: 'INITIALIZE', name, password: setupPassword }); return; }
+    dispatch({ type: 'INITIALIZE', name, password: setupPassword });
+  };
+  // Supabase: 사용자 엑셀로 첫 사용자 등록 → 각자 슬랙 DM 으로 초기 비밀번호
+  const [sheet, setSheet] = useState<{ file: string; rows: ImportRow[]; problems: string[] } | null>(null);
+  const [imported, setImported] = useState<ImportResult[] | null>(null);
+  const pickSheet = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setError(''); setSheet(null);
+    try {
+      const r = await readMemberSheet(file);
+      setSheet({ file: file.name, ...r });
+    } catch (err) {
+      setError(errText(err));
+    }
+  };
+  const submitImport = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!sheet || loading) return;
+    if (sheet.problems.length) return setError('엑셀의 빈 칸을 고친 뒤 다시 올리세요.');
+    if (!sheet.rows.some(r => r.isAdmin)) return setError('관리자 여부 열에 관리자를 1명 이상 지정하세요.');
     setLoading(true);
     try {
-      const { team: created } = await bootstrapAdmin(name, setupPassword);
-      await signIn(created.login_email, setupPassword);
-      const me = await myTeam();
-      if (!me) throw new AuthApiError('not_team', '팀 정보를 불러오지 못했습니다.');
-      await enter(me);
+      const r = await importMembers(sheet.rows);
+      setImported(r.results);
     } catch (err) {
-      if (err instanceof AuthApiError && err.code === 'already_setup') loadRemote();
+      if (err instanceof AuthApiError && (err.code === 'unauthorized' || err.code === 'forbidden')) loadRemote(); // 그사이 누군가 먼저 등록
       setError(errText(err));
     } finally {
       setLoading(false);
     }
   };
+  const finishImport = () => { setImported(null); setSheet(null); loadRemote(); };
 
   return (
     <div className="lg">
@@ -260,24 +291,24 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
         </div>
 
         <div className="lg-sheet">
-          {changeTeam ? (
+          {changeFor ? (
           <form key="change" className="lg-form view-enter" onSubmit={submitChange} noValidate>
             <div className="lg-welcome">
               <h1>비밀번호 변경</h1>
               <p>
-                <b className="lg-welcome__team">{changeTeam.name}</b>
-                <span className="lg-only-desk">은(는) 임시 비밀번호로 로그인했어요. 안전을 위해 새 비밀번호로 바꾼 뒤 시작합니다.</span>
-                <span className="lg-only-mob">은(는) 임시 비밀번호로 로그인했어요.<br />새 비밀번호로 바꾼 뒤 시작합니다.</span>
+                <b className="lg-welcome__team">{changeFor}</b>
+                <span className="lg-only-desk">{REMOTE_AUTH ? '님은 초기 비밀번호로 로그인했어요.' : '은(는) 임시 비밀번호로 로그인했어요.'} 안전을 위해 새 비밀번호로 바꾼 뒤 시작합니다.</span>
+                <span className="lg-only-mob">{REMOTE_AUTH ? '님은 초기 비밀번호로 로그인했어요.' : '은(는) 임시 비밀번호로 로그인했어요.'}<br />새 비밀번호로 바꾼 뒤 시작합니다.</span>
               </p>
             </div>
 
             {error && <div className="lg-error" role="alert"><span aria-hidden="true">⚠️</span>{error}</div>}
 
-            <input type="text" name="username" value={changeTeam.name} autoComplete="username" readOnly hidden />
+            <input type="text" name="username" value={REMOTE_AUTH ? loginId : changeFor} autoComplete="username" readOnly hidden />
             <div className="lg-fields">
               {askCurrent && (
-                <LgPassword id="login-pw-temp" label="임시 비밀번호" value={curInput} onChange={editChange(setCurInput)}
-                  placeholder="관리자에게 받은 임시 비밀번호" autoComplete="current-password" />
+                <LgPassword id="login-pw-temp" label="초기 비밀번호" value={curInput} onChange={editChange(setCurInput)}
+                  placeholder="슬랙 DM 으로 받은 초기 비밀번호" autoComplete="current-password" />
               )}
               <LgPassword id="login-pw-new" label="새 비밀번호" hint={`${MIN_PASSWORD_LENGTH}자 이상`} value={next} onChange={editChange(setNext)}
                 placeholder="새 비밀번호를 입력하세요" autoComplete="new-password" />
@@ -289,15 +320,47 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
 
             <hr className="lg-divider" />
             <p className="lg-recovery">
-              바꾼 비밀번호는 팀 이름 메뉴 › 비밀번호 변경에서 다시 바꿀 수 있어요.{' '}
-              <button type="button" className="lg-link" onClick={cancelChange}>다른 팀으로 로그인</button>
+              바꾼 비밀번호는 오른쪽 위 이름 메뉴 › 비밀번호 변경에서 다시 바꿀 수 있어요.{' '}
+              <button type="button" className="lg-link" onClick={cancelChange}>{REMOTE_AUTH ? '다른 사번으로 로그인' : '다른 팀으로 로그인'}</button>
             </p>
+          </form>
+          ) : needSetup && REMOTE_AUTH ? (
+          <form key="import" className="lg-form view-enter" onSubmit={submitImport} noValidate>
+            <div className="lg-welcome">
+              <h1>처음 시작하기</h1>
+              <p>사용자 엑셀을 올리면 조직과 계정을 만들고, 각자 슬랙 DM 으로 초기 비밀번호를 보내요.</p>
+            </div>
+            {error && <div className="lg-error" role="alert"><span aria-hidden="true">⚠️</span>{error}</div>}
+            {imported ? (
+              <>
+                <ImportResults results={imported} />
+                <button type="button" className="lg-submit" onClick={finishImport}>로그인하러 가기</button>
+              </>
+            ) : (
+              <>
+                <div className="lg-field">
+                  <label htmlFor="setup-file">사용자 엑셀 (.xlsx)<span className="lg-field__hint"> · 본부 · 부서 · 파트 · 사원번호 · 성명 · 직위 · 이메일 · 관리자 여부</span></label>
+                  <input id="setup-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={e => { void pickSheet(e); }} />
+                </div>
+                {sheet && (
+                  <div className="import-preview">
+                    <b>{sheet.file}</b> · {sheet.rows.length}명 · 관리자 {sheet.rows.filter(r => r.isAdmin).length}명
+                    <ul>
+                      {sheet.rows.slice(0, 8).map(r => <li key={r.employeeNo}>{r.name} ({r.employeeNo}) · {unitPath(r)}{r.isAdmin ? ' · 관리자' : ''}</li>)}
+                      {sheet.rows.length > 8 && <li>… 외 {sheet.rows.length - 8}명</li>}
+                    </ul>
+                    {sheet.problems.length > 0 && <ul className="import-preview__problems">{sheet.problems.map(p => <li key={p}>{p}</li>)}</ul>}
+                  </div>
+                )}
+                <button type="submit" className="lg-submit" disabled={loading || !sheet || !sheet.rows.length}>{loading ? '등록 중...' : '등록하고 DM 보내기'}</button>
+              </>
+            )}
           </form>
           ) : needSetup ? (
           <form key="setup" className="lg-form view-enter" onSubmit={submitSetup} noValidate>
             <div className="lg-welcome">
               <h1>처음 시작하기</h1>
-              <p>첫 관리자 팀을 등록하세요.{!REMOTE_AUTH && ' 데이터는 이 브라우저에 저장됩니다.'}</p>
+              <p>첫 관리자 팀을 등록하세요. 데이터는 이 브라우저에 저장됩니다.</p>
             </div>
             {error && <div className="lg-error" role="alert"><span aria-hidden="true">⚠️</span>{error}</div>}
             <div className="lg-fields">
@@ -310,7 +373,7 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
               <LgPassword id="setup-password" label="비밀번호" hint={`${MIN_PASSWORD_LENGTH}자 이상`} value={setupPassword} onChange={editChange(setSetupPassword)} placeholder="비밀번호를 입력하세요" autoComplete="new-password" />
               <LgPassword id="setup-confirm" label="비밀번호 확인" value={setupConfirm} onChange={editChange(setSetupConfirm)} placeholder="한 번 더 입력하세요" autoComplete="new-password" />
             </div>
-            <button type="submit" className="lg-submit" disabled={loading}>{loading ? '만드는 중...' : '관리자 팀 만들기'}</button>
+            <button type="submit" className="lg-submit">관리자 팀 만들기</button>
           </form>
           ) : (
           <form key="login" className="lg-form view-enter" onSubmit={submit} noValidate>
@@ -321,7 +384,7 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
               </h1>
               <p>
                 <span className="lg-only-desk">코웍-코인에 로그인해 오늘도 맛있게 이어가세요.</span>
-                <span className="lg-only-mob">소속 팀을 선택하고 비밀번호를 입력하세요</span>
+                <span className="lg-only-mob">{REMOTE_AUTH ? '사번과 비밀번호를 입력하세요' : '소속 팀을 선택하고 비밀번호를 입력하세요'}</span>
               </p>
             </div>
 
@@ -331,15 +394,25 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
             )}
 
             <div className="lg-fields">
-              <div className="lg-field">
-                <label htmlFor="login-team">팀 선택</label>
-                <div className="lg-input">
-                  <Select bare hideChevron id="login-team" className="lg-select" value={team} onChange={e => { setTeam(e.target.value); setError(''); }}>
-                    {activeTeams.map(n => <option key={n} value={n}>{n}</option>)}
-                  </Select>
-                  <span className="lg-input__icon" aria-hidden="true"><DualIcon desk={chevronDown} mob={chevronDownM} /></span>
+              {REMOTE_AUTH ? (
+                <div className="lg-field">
+                  <label htmlFor="login-id">사번</label>
+                  <div className="lg-input">
+                    <input id="login-id" value={loginId} placeholder="사번을 입력하세요" inputMode="numeric" autoComplete="username"
+                      onChange={e => { setLoginId(e.target.value.trim()); setError(''); }} />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="lg-field">
+                  <label htmlFor="login-team">팀 선택</label>
+                  <div className="lg-input">
+                    <Select bare hideChevron id="login-team" className="lg-select" value={loginId} onChange={e => { setLoginId(e.target.value); setError(''); }}>
+                      {activeTeams.map(n => <option key={n} value={n}>{n}</option>)}
+                    </Select>
+                    <span className="lg-input__icon" aria-hidden="true"><DualIcon desk={chevronDown} mob={chevronDownM} /></span>
+                  </div>
+                </div>
+              )}
 
               <div className="lg-field">
                 <label htmlFor="login-pw">비밀번호</label>
@@ -365,7 +438,7 @@ export default function Login({ pendingTeam }: { pendingTeam?: string } = {}) {
             </button>
 
             <hr className="lg-divider" />
-            <p className="lg-recovery">비밀번호를 잊으셨나요? 관리자에게 초기화를 요청하세요.</p>
+            <p className="lg-recovery">비밀번호를 잊으셨나요? {REMOTE_AUTH ? '부서장 또는 관리자에게 초기화를 요청하면 슬랙 DM 으로 새 비밀번호가 와요.' : '관리자에게 초기화를 요청하세요.'}</p>
 
           </form>
           )}

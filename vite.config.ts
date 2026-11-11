@@ -63,6 +63,7 @@ export default defineConfig(({ mode }) => ({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   // /api → 영수증 OCR 백엔드(FastAPI, backend/main.py). 운영은 VITE_OCR_API_URL 로 주소 지정
-  server: { port: 5176, host: true, proxy: { '/api': 'http://127.0.0.1:8000' } },
+  // 개인정보 폴더(사용자 엑셀 · 영수증 샘플)는 개발 서버가 내보내지 않음 — host: true 라 같은 네트워크에서 접속 가능
+  server: { port: 5176, host: true, proxy: { '/api': 'http://127.0.0.1:8000' }, fs: { deny: ['.env', '.env.*', '*.{crt,pem}', '**/private/**', '**/ocr-samples/**'] } },
   preview: { port: 4176, host: true, proxy: { '/api': 'http://127.0.0.1:8000' } },
 }));

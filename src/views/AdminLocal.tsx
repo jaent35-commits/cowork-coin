@@ -1,0 +1,270 @@
+import { Fragment, useState, type FormEvent } from 'react';
+import type { Team } from '@/types';
+import { useAppState, useDispatch } from '@/store/StoreContext';
+import { makeTempPassword } from '@/lib/password';
+import { useToast } from '@/hooks/useToast';
+import { Badge, Btn, Card, ConfirmLayer, Input, PageHead, Segmented, Switch, TableWrap, Toast, cx } from '@/components/ui';
+import { IconEdit, IconPlus, IconTrash } from '@/components/icons';
+import './Pages.css';
+
+type Confirm = { kind: 'reset' | 'delete'; id: string } | null;
+/** 방금 만든 임시 비밀번호 — 이 창에서 한 번만 보여 줌 (닫으면 다시 볼 수 없음) */
+type Issued = { team: string; password: string; kind: 'add' | 'reset' } | null;
+/** 모바일 펼침 편집 초안 — 저장을 눌러야 반영 */
+type Draft = { id: string; name: string; active: boolean; isAdmin: boolean };
+
+/** 관리자 메뉴 — 팀 관리 (브라우저 저장본 모드 전용 · Supabase 로그인은 MembersAdmin) */
+export default function AdminLocal() {
+  const { teams, session, records, allocs, projects } = useAppState();
+  const dispatch = useDispatch();
+  const [toast, showToast] = useToast();
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [confirm, setConfirm] = useState<Confirm>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [issued, setIssued] = useState<Issued>(null);
+  const [copied, setCopied] = useState(false);
+  const busy = false;
+  const setActive = async (t: Team, active: boolean) => {
+    const msg = `${t.name}이(가) ${active ? '활성' : '휴면'} 처리되었습니다.`;
+    dispatch({ type: 'TOGGLE_TEAM', id: t.id }); showToast(msg); return true;
+  };
+  const setAdmin = async (t: Team, isAdmin: boolean) => {
+    const msg = `${t.name} 관리자 권한 ${isAdmin ? '부여' : '해제'}`;
+    dispatch({ type: 'SET_TEAM_ADMIN', id: t.id, isAdmin }); showToast(msg); return true;
+  };
+  // 집행·배분·주관 프로젝트 이력이 있는 팀은 삭제 대신 휴면 (DB 에서도 외래키로 막힘 — db/ERD.md §5-6)
+  const hasHistory = (name: string) =>
+    records.some(r => r.team === name) || projects.some(p => p.ownerTeam === name)
+    || Object.values(allocs).some(rows => rows.some(a => a.teamName === name));
+  const issue = (team: string, kind: 'add' | 'reset') => {
+    const password = makeTempPassword();
+    setCopied(false);
+    setIssued({ team, password, kind });
+    return password;
+  };
+  const copyIssued = async () => {
+    if (!issued) return;
+    try { await navigator.clipboard.writeText(issued.password); setCopied(true); } catch { /* 복사 불가 — 화면에서 보고 전달 */ }
+  };
+
+  const isSelf = (name: string) => session?.team === name;
+  const nameError = (name: string, exceptId?: string) => {
+    const n = name.trim();
+    if (!n) return '팀명을 입력하세요';
+    if (teams.some(t => t.id !== exceptId && t.name === n)) return '이미 등록된 팀명입니다';
+    return '';
+  };
+  const target = confirm && teams.find(t => t.id === confirm.id);
+
+  const addTeam = async (e?: FormEvent) => {
+    e?.preventDefault();
+    const name = newName.trim();
+    if (nameError(newName)) return;
+    dispatch({ type: 'ADD_TEAM', name, password: issue(name, 'add') });
+    setNewName('');
+    setAdding(false);
+  };
+  const saveEdit = async (id: string) => {
+    if (nameError(editName, id)) return;
+    dispatch({ type: 'RENAME_TEAM', id, name: editName.trim() });
+    showToast('팀명이 수정되었습니다.');
+    setEditId(null);
+  };
+  // 모바일: [수정] → 아래로 펼쳐 팀명·상태·관리자 권한·삭제를 한 번에 편집
+  const openDraft = (t: Team) => setDraft(d => (d?.id === t.id ? null : { id: t.id, name: t.name, active: t.active, isAdmin: !!t.isAdmin }));
+  const saveDraft = async (t: Team) => {
+    if (!draft || nameError(draft.name, t.id)) return;
+    const name = draft.name.trim();
+    if (name !== t.name) dispatch({ type: 'RENAME_TEAM', id: t.id, name });
+    if (draft.active !== t.active) dispatch({ type: 'TOGGLE_TEAM', id: t.id });
+    if (draft.isAdmin !== !!t.isAdmin) dispatch({ type: 'SET_TEAM_ADMIN', id: t.id, isAdmin: draft.isAdmin });
+    showToast(`${name} 정보가 저장되었습니다.`);
+    setDraft(null);
+  };
+  const askReset = (id: string) => setConfirm({ kind: 'reset', id });
+
+  const keepTeam = (t: Team) => hasHistory(t.name);
+  const runConfirm = async () => {
+    if (!confirm || !target || busy) return;
+    if (confirm.kind === 'reset') {
+      dispatch({ type: 'SET_TEAM_PASSWORD', teamName: target.name, password: issue(target.name, 'reset'), by: 'reset' });
+    } else if (keepTeam(target)) {
+      // 이력 있는 팀: 삭제 대신 휴면 (이미 휴면이면 안내만)
+      if (target.active && !(await setActive(target, false))) return;
+      if (draft?.id === target.id) setDraft(null);
+    } else {
+      dispatch({ type: 'DELETE_TEAM', id: target.id });
+      showToast(`${target.name}이(가) 삭제되었습니다.`);
+      if (draft?.id === target.id) setDraft(null);
+    }
+    setConfirm(null);
+  };
+
+  return (
+    <div className="view-enter">
+      <Toast msg={toast} />
+      <PageHead title="관리자"
+        actions={<Btn onClick={() => { setAdding(true); setEditId(null); }} disabled={adding}><IconPlus size={14} />사용자 추가</Btn>} />
+
+      {confirm && target && (() => {
+        const keep = confirm.kind === 'delete' && keepTeam(target);
+        return keep ? (
+          <ConfirmLayer title="삭제할 수 없는 팀" confirmLabel={target.active ? '휴면 처리' : '확인'}
+            cancelLabel={target.active ? '취소' : '닫기'} onConfirm={runConfirm} onCancel={() => setConfirm(null)}>
+            <b>{target.name}</b>은(는) 집행·배분 이력이 있어 삭제하면 기록이 끊깁니다.{' '}
+            {target.active ? '대신 휴면 처리하면 로그인 목록에서 빠지고 기록은 남습니다.' : '이미 휴면 상태라 로그인 목록에 보이지 않습니다.'}
+          </ConfirmLayer>
+        ) : (
+          <ConfirmLayer tone={confirm.kind === 'delete' ? 'danger' : 'default'}
+            title={confirm.kind === 'reset' ? '비밀번호 초기화' : '팀 삭제'}
+            confirmLabel={confirm.kind === 'reset' ? '초기화' : '삭제'} onConfirm={runConfirm} onCancel={() => setConfirm(null)}>
+            {confirm.kind === 'reset'
+              ? <><b>{target.name}</b> 비밀번호를 새 임시 비밀번호로 초기화할까요? 지금 비밀번호는 더 이상 쓸 수 없습니다.</>
+              : <><b>{target.name}</b>을(를) 삭제할까요? 로그인 목록에서 사라집니다.</>}
+          </ConfirmLayer>
+        );
+      })()}
+
+      {/* 임시 비밀번호: 한 번만 보여 줌 — 팀에 전달하면 첫 로그인 때 새 비밀번호로 바꿈 */}
+      {issued && (
+        <ConfirmLayer title={issued.kind === 'add' ? `${issued.team} 추가 완료` : `${issued.team} 비밀번호 초기화`}
+          confirmLabel={copied ? '닫기' : '복사하고 닫기'} cancelLabel="닫기"
+          onConfirm={async () => { if (!copied) await copyIssued(); setIssued(null); }} onCancel={() => setIssued(null)}>
+          임시 비밀번호 <code className="temp-pw">{issued.password}</code>
+          <span className="temp-pw__note">이 창을 닫으면 다시 볼 수 없어요. 팀에 전달하면 첫 로그인 때 새 비밀번호로 바꿉니다.</span>
+        </ConfirmLayer>
+      )}
+
+      <Card className="card--clip">
+        <TableWrap>
+          <table className="table team-table">
+            <thead>
+              <tr>
+                <th className="team-table__no">순번</th><th>팀명</th><th>상태</th><th>관리자 권한</th>
+                <th>비밀번호 초기화</th><th className="t-center">수정</th><th className="t-center">삭제</th>
+              </tr>
+            </thead>
+            <tbody>
+              {teams.map((t, i) => {
+                const editing = editId === t.id;
+                const err = editing ? nameError(editName, t.id) : '';
+                const open = draft?.id === t.id;
+                const dErr = open ? nameError(draft.name, t.id) : '';
+                const self = isSelf(t.name);
+                return (
+                  <Fragment key={t.id}>
+                  <tr className={cx(!t.active && 'is-dormant', open && 'is-open')}>
+                    <td className="team-table__no t-muted">{i + 1}</td>
+                    <td className="team-table__name">
+                      {editing ? (
+                        <form className="team-edit" onSubmit={e => { e.preventDefault(); void saveEdit(t.id); }}>
+                          <Input value={editName} onChange={e => setEditName(e.target.value)} aria-label="팀명" autoFocus
+                            aria-invalid={!!err} onKeyDown={e => { if (e.key === 'Escape') setEditId(null); }} />
+                          <Btn size="sm" type="submit" disabled={!!err}>저장</Btn>
+                          <Btn size="sm" variant="secondary" onClick={() => setEditId(null)}>취소</Btn>
+                          {err && editName.trim() && <small className="team-edit__err">{err}</small>}
+                        </form>
+                      ) : (
+                        <span className="t-strong t-nowrap">{t.name}{isSelf(t.name) && <Badge variant="amber" size="sm" className="team-table__me">나</Badge>}</span>
+                      )}
+                    </td>
+                    <td data-label="상태">
+                      <Badge variant={t.active ? 'green' : 'gray'} size="lg" pressed={t.active}
+                        title={isSelf(t.name) ? '로그인한 팀은 휴면 처리할 수 없습니다' : `${t.active ? '휴면' : '활성'}으로 변경`}
+                        disabled={isSelf(t.name) && t.active}
+                        onClick={() => { void setActive(t, !t.active); }}>
+                        ● {t.active ? '활성' : '휴면'}
+                      </Badge>
+                    </td>
+                    <td data-label="관리자 권한">
+                      <Switch checked={!!t.isAdmin} disabled={isSelf(t.name)} label={`${t.name} 관리자 권한`} text={t.isAdmin ? '관리자' : '일반'}
+                        title={isSelf(t.name) ? '로그인한 팀의 권한은 변경할 수 없습니다' : undefined}
+                        onChange={v => { void setAdmin(t, v); }} />
+                    </td>
+                    <td data-label="비밀번호">
+                      <Btn size="sm" variant="secondary" onClick={() => askReset(t.id)}>초기화</Btn>
+                    </td>
+                    <td className="t-center team-table__act">
+                      <button type="button" className="icon-btn icon-btn--sm icon-btn--primary" title="수정" aria-label={`${t.name} 수정`}
+                        onClick={() => { setEditId(t.id); setEditName(t.name); setConfirm(null); }} disabled={editing}>
+                        <IconEdit size={14} />
+                      </button>
+                    </td>
+                    <td className="t-center team-table__act">
+                      <button type="button" className="icon-btn icon-btn--sm icon-btn--red" aria-label={`${t.name} 삭제`}
+                        title={isSelf(t.name) ? '로그인한 팀은 삭제할 수 없습니다' : '삭제'} disabled={isSelf(t.name)}
+                        onClick={() => setConfirm({ kind: 'delete', id: t.id })}>
+                        <IconTrash size={14} />
+                      </button>
+                    </td>
+                    {/* 모바일 전용: 펼쳐서 편집 */}
+                    <td className="team-table__m-edit">
+                      <Btn size="sm" variant={open ? 'primary' : 'secondary'} onClick={() => openDraft(t)} aria-expanded={open}>
+                        <IconEdit size={13} />수정
+                      </Btn>
+                    </td>
+                  </tr>
+                  {open && (
+                    <tr className="team-table__panel">
+                      <td colSpan={8}>
+                        <div className="team-panel fade-in">
+                          <label className="team-panel__field">
+                            <span className="label">팀명</span>
+                            <Input value={draft.name} aria-invalid={!!dErr} onChange={e => setDraft(d => (d ? { ...d, name: e.target.value } : d))} />
+                            {dErr && draft.name.trim() && <small className="team-edit__err">{dErr}</small>}
+                          </label>
+                          <div className="team-panel__row">
+                            <span className="label">상태</span>
+                            <Segmented label="상태" value={draft.active ? 'on' : 'off'}
+                              options={[{ value: 'on', label: '● 활성' }, { value: 'off', label: '휴면' }]}
+                              onChange={v => { if (self && v === 'off') return; setDraft(d => (d ? { ...d, active: v === 'on' } : d)); }} />
+                          </div>
+                          {self && <small className="team-panel__note">로그인한 팀은 휴면·권한 변경·삭제를 할 수 없습니다</small>}
+                          <div className="team-panel__row">
+                            <span className="label">관리자 권한</span>
+                            <Switch checked={draft.isAdmin} disabled={self} label={`${t.name} 관리자 권한`} text={draft.isAdmin ? '관리자' : '일반'}
+                              onChange={v => setDraft(d => (d ? { ...d, isAdmin: v } : d))} />
+                          </div>
+                          <div className="team-panel__actions">
+                            <Btn size="sm" variant="danger" disabled={self} onClick={() => setConfirm({ kind: 'delete', id: t.id })}>
+                              <IconTrash size={13} />삭제
+                            </Btn>
+                            <div className="row">
+                              <Btn size="sm" variant="secondary" onClick={() => setDraft(null)}>취소</Btn>
+                              <Btn size="sm" onClick={() => { void saveDraft(t); }} disabled={!!dErr || busy}>저장</Btn>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
+                );
+              })}
+
+              {adding && (
+                <tr className="team-table__new">
+                  <td className="team-table__no t-muted">{teams.length + 1}</td>
+                  <td colSpan={6}>
+                    <form className="team-edit" onSubmit={e => { void addTeam(e); }}>
+                      <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="팀명 입력" aria-label="새 팀명" autoFocus
+                        onKeyDown={e => { if (e.key === 'Escape') setAdding(false); }} />
+                      <Btn size="sm" type="submit" disabled={!!nameError(newName) || busy}>추가</Btn>
+                      <Btn size="sm" variant="secondary" onClick={() => { setAdding(false); setNewName(''); }}>취소</Btn>
+                      <small className={cx('team-edit__hint', newName.trim() && nameError(newName) && 'is-err')}>
+                        {newName.trim() && nameError(newName) ? nameError(newName) : '임시 비밀번호가 자동으로 만들어집니다 · 활성 · 일반 권한으로 추가'}
+                      </small>
+                    </form>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </TableWrap>
+      </Card>
+    </div>
+  );
+}

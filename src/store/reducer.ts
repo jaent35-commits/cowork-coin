@@ -35,7 +35,7 @@ export interface AppState {
   quartersYear: number;
 }
 
-export const DEFAULT_PREFS: NotifPrefs = { push: false, kinds: { exec: true, setting: true, alloc: true, deadline: true } };
+export const DEFAULT_PREFS: NotifPrefs = { push: false, slack: true, kinds: { exec: true, setting: true, alloc: true, deadline: true } };
 
 export function seedState(): AppState {
   return structuredClone({
@@ -63,6 +63,8 @@ export type Action =
   /** Supabase 에서 읽은 팀 데이터로 교체 (src/lib/dataApi.ts) */
   | { type: 'HYDRATE'; data: Partial<AppState> }
   | { type: 'LOGIN'; session: Session }
+  /** 로그인 상태 그대로 사용자 정보 · 권한만 새로 (Supabase 로그인 — 다른 기기 변경 · 관리자 지정 반영) */
+  | { type: 'SET_SESSION'; patch: Partial<Session> }
   | { type: 'LOGOUT' }
   | { type: 'TOGGLE_TEAM'; id: string }
   | { type: 'ADD_TEAM'; name: string; password: string }
@@ -105,7 +107,9 @@ export type Action =
   | { type: 'READ_ALL_NOTIF' }
   | { type: 'CHECK_DEADLINES' }
   | { type: 'SET_PUSH'; team: string; push: boolean }
-  | { type: 'SET_PUSH_KIND'; team: string; kind: PushKind; on: boolean };
+  | { type: 'SET_PUSH_KIND'; team: string; kind: PushKind; on: boolean }
+  /** 슬랙 개인 DM on/off (Supabase 로그인 — 사람별) */
+  | { type: 'SET_SLACK'; team: string; on: boolean };
 
 const sumItems = (r: Pick<ExecRecord, 'items'>) => r.items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
@@ -191,6 +195,8 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     case 'HYDRATE':
       return { ...state, ...action.data };
+    case 'SET_SESSION':
+      return state.session ? { ...state, session: { ...state.session, ...action.patch } } : state;
     case 'LOGIN':
       return { ...state, session: action.session };
     case 'LOGOUT':
@@ -223,8 +229,9 @@ export function reducer(state: AppState, action: Action): AppState {
         const prev = s.teams.find(x => x.id === t.id);
         if (prev && prev.name !== t.name) s = reducer(s, { type: 'RENAME_TEAM', id: t.id, name: t.name });
       }
+      // 관리자 권한: 팀 계정(브라우저 저장본)은 팀에, 사용자 계정(Supabase)은 사용자에 있음 — 사용자 로그인이면 그대로
       const me = action.teams.find(t => t.name === s.session?.team);
-      return { ...s, teams: action.teams, session: s.session && me ? { ...s.session, isAdmin: !!me.isAdmin } : s.session };
+      return { ...s, teams: action.teams, session: s.session && me && !s.session.member ? { ...s.session, isAdmin: !!me.isAdmin } : s.session };
     }
     case 'DELETE_TEAM':
       return { ...state, teams: state.teams.filter(t => t.id !== action.id) };
@@ -405,6 +412,10 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'SET_PUSH': {
       const cur = state.notifPrefs[action.team] ?? DEFAULT_PREFS;
       return { ...state, notifPrefs: { ...state.notifPrefs, [action.team]: { ...cur, push: action.push } } };
+    }
+    case 'SET_SLACK': {
+      const cur = state.notifPrefs[action.team] ?? DEFAULT_PREFS;
+      return { ...state, notifPrefs: { ...state.notifPrefs, [action.team]: { ...cur, slack: action.on } } };
     }
     case 'SET_PUSH_KIND': {
       const cur = state.notifPrefs[action.team] ?? DEFAULT_PREFS;

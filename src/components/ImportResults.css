@@ -1,0 +1,18 @@
+/* 사용자 엑셀 미리보기 · 일괄 등록 결과 (로그인 '처음 시작하기' · 사용자 관리 공용) */
+.import-preview { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: rgba(127, 127, 127, 0.08); font-size: calc(13px * var(--fs, 1)); line-height: 1.5; }
+.import-preview ul { margin: 0; padding-left: 18px; }
+.import-preview__problems { color: #d64545; font-weight: 600; }
+
+.import-results { display: flex; flex-direction: column; gap: 6px; margin: 0 0 12px; padding: 0; list-style: none; font-size: calc(13px * var(--fs, 1)); }
+.import-results__row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 9px 12px; border-radius: 10px; background: rgba(127, 127, 127, 0.08); }
+.import-results__who { font-weight: 700; }
+.import-results__who small { font-weight: 500; opacity: 0.7; }
+.import-results__state { margin-left: auto; font-weight: 700; }
+.import-results__row.is-created .import-results__state { color: #1f9d55; }
+.import-results__row.is-exists .import-results__state { opacity: 0.7; }
+.import-results__row.is-error .import-results__state { color: #d64545; }
+.import-results__msg, .import-results__pw { flex-basis: 100%; font-size: 0.92em; opacity: 0.85; }
+.import-results__pw code {
+  padding: 2px 8px; border-radius: 6px; background: rgba(255, 184, 62, 0.22);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-weight: 800; letter-spacing: 0.1em; user-select: all;
+}
