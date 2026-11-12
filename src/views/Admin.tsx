@@ -1,31 +1,38 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import type { Team, UnitLevel } from '@/types';
 import { useAppState, useDispatch } from '@/store/StoreContext';
 import {
   AuthApiError, createMember, deleteMember, importMembers, listMembers, listTeams, manageableTeamIds, removeTeam,
   resetMemberPassword, saveTeam, updateMember, type ImportResult, type ImportRow, type MemberAdminRow,
 } from '@/lib/authApi';
-import { readMemberSheet, unitPath } from '@/lib/memberSheet';
+import { readMemberSheet } from '@/lib/memberSheet';
 import { useToast } from '@/hooks/useToast';
-import { Alert, Badge, Btn, Card, ConfirmLayer, EmptyState, Field, Input, PageHead, Switch, TableWrap, Toast, cx } from '@/components/ui';
+import { Alert, Badge, Btn, Card, ConfirmLayer, EmptyState, Field, Input, PageHead, Switch, TableWrap, Tabs, Toast, cx } from '@/components/ui';
 import { Select } from '@/components/ui/SelectBox';
 import { IconEdit, IconPlus, IconTrash } from '@/components/icons';
 import ImportResults from '@/components/ImportResults';
+import MemberImportDialog from '@/components/MemberImportDialog';
 import './Pages.css';
 
-type Tab = 'members' | 'orgs';
+const TABS = ['사용자', '조직'] as const;
+type Tab = typeof TABS[number];
 /** 사용자 추가 · 수정 폼 (id 가 있으면 수정) */
 type MemberDraft = { id?: string; employeeNo: string; name: string; position: string; email: string; teamId: string; isAdmin: boolean };
 type OrgDraft = { id?: string; name: string; level: UnitLevel; parentId?: string; active: boolean };
 type Confirm =
   | { kind: 'reset' | 'delete'; member: MemberAdminRow }
+  | { kind: 'move'; member: MemberAdminRow; team: Team }
   | { kind: 'delete-org'; team: Team }
   | null;
 /** DM 을 못 보내 화면에 한 번 보여 주는 초기 비밀번호 */
 type Issued = { name: string; password: string } | null;
+/** 조직 트리 — 관리 범위의 조직만, 범위 밖 상위 조직은 건너뛰고 아래 조직을 끌어올림 */
+type OrgNode = { team: Team; children: OrgNode[] };
 
 const LEVELS: UnitLevel[] = ['본부', '부서', '파트'];
 const CHILD_LEVEL: Partial<Record<UnitLevel, UnitLevel>> = { 본부: '부서', 부서: '파트' };
+const levelOf = (t: Team): UnitLevel => t.level ?? '파트';
+const byName = (a: Team, b: Team) => a.name.localeCompare(b.name, 'ko');
 const errMsg = (e: unknown, fallback = '처리하지 못했습니다. 잠시 후 다시 시도하세요.') => (e instanceof AuthApiError ? e.message : fallback);
 
 /**
@@ -41,7 +48,7 @@ export default function Admin() {
   const isAdmin = !!session?.isAdmin;
   const myId = session?.member?.id;
 
-  const [tab, setTab] = useState<Tab>('members');
+  const [tab, setTab] = useState<Tab>('사용자');
   const [members, setMembers] = useState<MemberAdminRow[] | null>(null);
   const [scope, setScope] = useState<Set<string>>(new Set());
   const [loadError, setLoadError] = useState('');
@@ -85,44 +92,57 @@ export default function Admin() {
     for (let t = id ? byId.get(id) : undefined, n = 0; t && n < 5; t = t.parentId ? byId.get(t.parentId) : undefined, n++) names.unshift(t.name);
     return names.join(' › ');
   }, [byId]);
-  /** 본부 › 부서 › 파트 순서로 펼친 조직 (관리 범위만) */
-  const tree = useMemo(() => {
-    const out: { team: Team; depth: number }[] = [];
-    const walk = (parent: string | undefined, depth: number) => {
-      teams.filter(t => t.parentId === parent).sort((a, b) => a.name.localeCompare(b.name, 'ko')).forEach(t => {
-        if (scope.has(t.id)) out.push({ team: t, depth });
-        walk(t.id, depth + 1);
-      });
-    };
-    walk(undefined, 0);
-    // 상위가 목록에 없는(관리 범위 밖) 조직의 들여쓰기 맞춤
-    const minDepth = Math.min(...out.map(o => o.depth));
-    return out.map(o => ({ ...o, depth: o.depth - (Number.isFinite(minDepth) ? minDepth : 0) }));
+  /** teamId 가 ancestorId 이거나 그 아래 조직인지 */
+  const within = useCallback((teamId: string, ancestorId: string) => {
+    for (let t = byId.get(teamId), n = 0; t && n < 5; t = t.parentId ? byId.get(t.parentId) : undefined, n++) if (t.id === ancestorId) return true;
+    return false;
+  }, [byId]);
+  const roots = useMemo(() => {
+    const build = (parent?: string): OrgNode[] => teams.filter(t => t.parentId === parent).sort(byName)
+      .flatMap(t => (scope.has(t.id) ? [{ team: t, children: build(t.id) }] : build(t.id)));
+    return build(undefined);
   }, [teams, scope]);
-  const scopeTeams = tree.map(o => o.team);
-  const memberCount = (teamId: string) => members?.filter(m => m.teamId === teamId).length ?? 0;
+  /** 본부 › 부서 › 파트 순서로 펼친 관리 범위 조직 */
+  const scopeTeams = useMemo(() => {
+    const out: Team[] = [];
+    const walk = (ns: OrgNode[]) => ns.forEach(n => { out.push(n.team); walk(n.children); });
+    walk(roots);
+    return out;
+  }, [roots]);
   /** 이 조직을 내가 바꿀 수 있는지 — 관리자: 전부, 부서장 이상: 관리 범위의 파트 */
   const canEditOrg = (t: Team) => isAdmin || (scope.has(t.id) && t.level === '파트');
   /** 이 조직 아래 하위 조직을 만들 수 있는지 — 관리자: 본부 · 부서 아래, 부서장 이상: 관리 범위의 부서 아래 파트 */
-  const canAddChild = (t: Team) => !!CHILD_LEVEL[t.level ?? '파트'] && (isAdmin || (scope.has(t.id) && t.level === '부서'));
+  const canAddChild = (t: Team) => !!CHILD_LEVEL[levelOf(t)] && (isAdmin || (scope.has(t.id) && t.level === '부서'));
 
   // ── 사용자 ──
-  const [filter, setFilter] = useState('');
-  const [query, setQuery] = useState('');
-  const visible = useMemo(() => (members ?? [])
-    .filter(m => scope.has(m.teamId) || m.id === myId)
-    .filter(m => !filter || m.teamId === filter)
-    .filter(m => !query.trim() || [m.name, m.employeeNo, m.position ?? '', m.email ?? ''].some(v => v.toLowerCase().includes(query.trim().toLowerCase())))
-    .sort((a, b) => pathOf(a.teamId).localeCompare(pathOf(b.teamId), 'ko') || a.name.localeCompare(b.name, 'ko')),
-  [members, scope, filter, query, myId, pathOf]);
+  /** 화면에 보이는 사용자 — 관리 범위 + 나 */
+  const shown = useMemo(() => (members ?? []).filter(m => scope.has(m.teamId) || m.id === myId), [members, scope, myId]);
   /** 이 사용자를 내가 바꿀 수 있는지 — 관리자 계정은 관리자만 */
   const canEditMember = (m: MemberAdminRow) => isAdmin || (scope.has(m.teamId) && !m.isAdmin);
+
+  // 조직 필터 — 본부 · 부서 · 파트 따로 (위를 바꾸면 아래는 '전체'로)
+  const [hq, setHq] = useState('');
+  const [dept, setDept] = useState('');
+  const [part, setPart] = useState('');
+  const hqOpts = scopeTeams.filter(t => t.level === '본부');
+  const deptOpts = scopeTeams.filter(t => t.level === '부서' && (!hq || within(t.id, hq)));
+  const partOpts = scopeTeams.filter(t => levelOf(t) === '파트' && (dept ? within(t.id, dept) : !hq || within(t.id, hq)));
+  const orgFilter = part || dept || hq;
+  const [query, setQuery] = useState('');
+  const visible = useMemo(() => shown
+    .filter(m => !orgFilter || within(m.teamId, orgFilter))
+    .filter(m => !query.trim() || [m.name, m.employeeNo, m.position ?? '', m.email ?? ''].some(v => v.toLowerCase().includes(query.trim().toLowerCase())))
+    .sort((a, b) => pathOf(a.teamId).localeCompare(pathOf(b.teamId), 'ko') || a.name.localeCompare(b.name, 'ko')),
+  [shown, orgFilter, query, within, pathOf]);
 
   const [draft, setDraft] = useState<MemberDraft | null>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [issued, setIssued] = useState<Issued>(null);
 
-  const openNew = () => setDraft({ employeeNo: '', name: '', position: '', email: '', teamId: filter || scopeTeams[0]?.id || '', isAdmin: false });
+  const openNew = () => setDraft({
+    employeeNo: '', name: '', position: '', email: '', isAdmin: false,
+    teamId: (orgFilter && scope.has(orgFilter) ? orgFilter : '') || scopeTeams[0]?.id || '',
+  });
   const openEdit = (m: MemberAdminRow) => setDraft({
     id: m.id, employeeNo: m.employeeNo, name: m.name, position: m.position ?? '', email: m.email ?? '', teamId: m.teamId, isAdmin: m.isAdmin,
   });
@@ -167,6 +187,11 @@ export default function Admin() {
       if (await run(() => removeTeam(t.id), `${t.name}을(를) 삭제했어요.`)) setConfirm(null);
       return;
     }
+    if (confirm.kind === 'move') {
+      const { member: m, team: t } = confirm;
+      if (await run(() => updateMember(m.id, { teamId: t.id }), `${m.name}을(를) ${pathOf(t.id)}(으)로 옮겼어요.`)) setConfirm(null);
+      return;
+    }
     if (confirm.kind === 'reset') {
       const m = confirm.member;
       const ok = await run(async () => {
@@ -181,9 +206,10 @@ export default function Admin() {
     }
   };
 
-  // ── 엑셀 일괄 등록 ──
+  // ── 엑셀 일괄 등록 (팝업에서 등록할 사람만 골라서) ──
   const [sheet, setSheet] = useState<{ file: string; rows: ImportRow[]; problems: string[] } | null>(null);
   const [imported, setImported] = useState<ImportResult[] | null>(null);
+  const registeredNos = useMemo(() => new Set((members ?? []).map(m => m.employeeNo.trim())), [members]);
   const pickSheet = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -196,9 +222,9 @@ export default function Admin() {
       showToast(errMsg(err, err instanceof Error ? err.message : '엑셀을 읽지 못했습니다.'), 'warn');
     }
   };
-  const runImport = async () => {
-    if (!sheet || !sheet.rows.length) return;
-    const rows = isAdmin ? sheet.rows : sheet.rows.map(r => ({ ...r, isAdmin: false }));
+  const runImport = async (picked: ImportRow[]) => {
+    if (!picked.length) return;
+    const rows = isAdmin ? picked : picked.map(r => ({ ...r, isAdmin: false }));
     await run(async () => {
       const r = await importMembers(rows);
       setImported(r.results);
@@ -215,13 +241,96 @@ export default function Admin() {
     if (ok) setOrg(null);
   };
 
+  // ── 조직 트리: 펼치기 · 접기 (처음엔 맨 위 조직만 펼침) ──
+  const [expanded, setExpanded] = useState<Set<string> | null>(null);
+  const openSet = expanded ?? new Set(roots.map(n => n.team.id));
+  const toggleOrg = (id: string) => setExpanded(() => { const s = new Set(openSet); if (s.has(id)) s.delete(id); else s.add(id); return s; });
+  const membersOf = useMemo(() => {
+    const map = new Map<string, MemberAdminRow[]>();
+    for (const m of [...shown].sort((a, b) => a.name.localeCompare(b.name, 'ko'))) map.set(m.teamId, [...(map.get(m.teamId) ?? []), m]);
+    return map;
+  }, [shown]);
+
+  // ── 사용자 끌어서 조직 옮기기 ──
+  const [dragging, setDragging] = useState<MemberAdminRow | null>(null);
+  const [dropId, setDropId] = useState<string | null>(null);
+  const canDropTo = (t: Team) => !!dragging && dragging.teamId !== t.id && t.active && scope.has(t.id);
+  const endDrag = () => { setDragging(null); setDropId(null); };
+  const dropProps = (t: Team) => ({
+    onDragOver: (e: DragEvent) => { if (!canDropTo(t)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dropId !== t.id) setDropId(t.id); },
+    onDragLeave: (e: DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null) && dropId === t.id) setDropId(null); },
+    onDrop: (e: DragEvent) => {
+      e.preventDefault();
+      if (dragging && canDropTo(t)) setConfirm({ kind: 'move', member: dragging, team: t });
+      endDrag();
+    },
+  });
+
+  const renderOrg = (n: OrgNode, depth: number): ReactNode => {
+    const t = n.team;
+    const people = membersOf.get(t.id) ?? [];
+    const hasBody = n.children.length > 0 || people.length > 0;
+    const isOpen = hasBody && openSet.has(t.id);
+    const indent = 12 + depth * 22;
+    return (
+      <li key={t.id} className="org-tree__node">
+        <div className={cx('org-tree__row', !t.active && 'is-dormant', dropId === t.id && 'is-drop')} style={{ paddingLeft: indent }} {...dropProps(t)}>
+          {hasBody
+            ? <button type="button" className="org-tree__toggle" aria-expanded={isOpen} aria-label={`${t.name} ${isOpen ? '접기' : '펼치기'}`} onClick={() => toggleOrg(t.id)}>{isOpen ? '−' : '+'}</button>
+            : <span className="org-tree__toggle org-tree__toggle--empty" aria-hidden="true" />}
+          <Badge variant={t.level === '본부' ? 'blue' : t.level === '부서' ? 'amber' : 'gray'} size="sm">{t.level ?? '조직'}</Badge>
+          <span className="org-tree__name">{t.name}</span>
+          <span className="t-muted org-tree__count">{people.length}명{!t.active && ' · 비활성'}</span>
+          <span className="org-tree__acts">
+            {canAddChild(t) && (
+              <Btn size="sm" variant="secondary" disabled={!!org} onClick={() => setOrg({ name: '', level: CHILD_LEVEL[levelOf(t)]!, parentId: t.id, active: true })}>
+                <IconPlus size={12} />{CHILD_LEVEL[levelOf(t)]}
+              </Btn>
+            )}
+            {canEditOrg(t) && (
+              <>
+                <button type="button" className="icon-btn icon-btn--sm icon-btn--primary" aria-label={`${t.name} 수정`} title="수정" disabled={!!org}
+                  onClick={() => setOrg({ id: t.id, name: t.name, level: levelOf(t), parentId: t.parentId, active: t.active })}><IconEdit size={14} /></button>
+                <button type="button" className="icon-btn icon-btn--sm icon-btn--red" aria-label={`${t.name} 삭제`} title="삭제"
+                  onClick={() => setConfirm({ kind: 'delete-org', team: t })}><IconTrash size={14} /></button>
+              </>
+            )}
+          </span>
+        </div>
+        {isOpen && (
+          <ul className="org-tree__body">
+            {people.map(m => {
+              const movable = canEditMember(m) && !busy;
+              return (
+                <li key={m.id} className={cx('org-tree__member', !m.active && 'is-dormant', dragging?.id === m.id && 'is-dragging')}
+                  style={{ paddingLeft: indent + 34 }} draggable={movable}
+                  title={movable ? '다른 조직으로 끌어 놓으면 소속을 옮겨요' : undefined}
+                  onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', m.id); setDragging(m); }}
+                  onDragEnd={endDrag}>
+                  {movable && <span className="org-tree__grip" aria-hidden="true">⠿</span>}
+                  <span className="t-strong">{m.name}</span>
+                  {m.position && <span className="t-muted">{m.position}</span>}
+                  <span className="t-muted org-tree__no">{m.employeeNo}</span>
+                  {m.id === myId && <Badge variant="amber" size="sm">나</Badge>}
+                  {m.isAdmin && <Badge variant="outline" size="sm">관리자</Badge>}
+                  {!m.active && <Badge variant="gray" size="sm">휴면</Badge>}
+                </li>
+              );
+            })}
+            {n.children.map(c => renderOrg(c, depth + 1))}
+          </ul>
+        )}
+      </li>
+    );
+  };
+
   const teamOptions = scopeTeams.map(t => <option key={t.id} value={t.id}>{pathOf(t.id)}</option>);
 
   return (
     <div className="view-enter">
       <Toast msg={toast} />
       <PageHead title="사용자 관리"
-        actions={tab === 'members'
+        actions={tab === '사용자'
           ? <>
               <label className={cx('btn btn--secondary', (busy || !scopeTeams.length) && 'is-disabled')}>
                 엑셀로 등록
@@ -232,11 +341,7 @@ export default function Admin() {
             </>
           : isAdmin && <Btn onClick={() => setOrg({ name: '', level: '본부', active: true })} disabled={!!org}><IconPlus size={14} />본부 추가</Btn>} />
 
-      <div className="pill-tabs" role="tablist">
-        {([['members', '사용자'], ['orgs', '조직']] as const).map(([k, label]) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} className={cx('pill-tabs__tab', tab === k && 'is-active')} onClick={() => setTab(k)}>{label}</button>
-        ))}
-      </div>
+      <Tabs tabs={TABS} active={tab} onSelect={setTab} />
 
       {loadError && <div className="mb-14"><Alert variant="danger">{loadError} <button type="button" className="text-link" onClick={() => { void reload(); }}>다시 시도</button></Alert></div>}
       {!isAdmin && (
@@ -245,10 +350,12 @@ export default function Admin() {
 
       {/* 확인 창 */}
       {confirm && (
-        <ConfirmLayer tone={confirm.kind === 'reset' ? 'default' : 'danger'}
-          title={confirm.kind === 'reset' ? '비밀번호 초기화' : confirm.kind === 'delete' ? '사용자 삭제' : '조직 삭제'}
-          confirmLabel={busy ? '처리 중...' : confirm.kind === 'reset' ? '초기화' : '삭제'} onConfirm={() => { void runConfirm(); }} onCancel={() => setConfirm(null)}>
+        <ConfirmLayer tone={confirm.kind === 'reset' || confirm.kind === 'move' ? 'default' : 'danger'}
+          title={confirm.kind === 'reset' ? '비밀번호 초기화' : confirm.kind === 'move' ? '소속 옮기기' : confirm.kind === 'delete' ? '사용자 삭제' : '조직 삭제'}
+          confirmLabel={busy ? '처리 중...' : confirm.kind === 'reset' ? '초기화' : confirm.kind === 'move' ? '옮기기' : '삭제'}
+          onConfirm={() => { void runConfirm(); }} onCancel={() => setConfirm(null)}>
           {confirm.kind === 'reset' && <><b>{confirm.member.name}</b>({confirm.member.employeeNo}) 비밀번호를 새 초기 비밀번호로 바꾸고 슬랙 DM 으로 보낼까요? 지금 비밀번호는 더 이상 쓸 수 없어요.</>}
+          {confirm.kind === 'move' && <><b>{confirm.member.name}</b>을(를) {pathOf(confirm.member.teamId)}에서 <b>{pathOf(confirm.team.id)}</b>(으)로 옮길까요? 옮기면 새 조직의 데이터를 보고 쓰게 돼요.</>}
           {confirm.kind === 'delete' && <><b>{confirm.member.name}</b>({confirm.member.employeeNo}) 계정을 삭제할까요? 등록한 집행 기록은 조직에 남아요. 잠시 쉬는 경우라면 휴면을 쓰세요.</>}
           {confirm.kind === 'delete-org' && <><b>{pathOf(confirm.team.id)}</b> 조직을 삭제할까요? 소속 사용자 · 하위 조직 · 이력이 있으면 지울 수 없어요(비활성으로 바꾸세요).</>}
         </ConfirmLayer>
@@ -260,28 +367,13 @@ export default function Admin() {
           <span className="temp-pw__note">이 창을 닫으면 다시 볼 수 없어요. 본인에게 직접 전달하면 첫 로그인 때 새 비밀번호로 바꿉니다. 회사 이메일이 슬랙 로그인 이메일과 같은지도 확인하세요.</span>
         </ConfirmLayer>
       )}
+      {sheet && (
+        <MemberImportDialog file={sheet.file} rows={sheet.rows} problems={sheet.problems} existing={registeredNos} isAdmin={isAdmin} busy={busy}
+          onCancel={() => setSheet(null)} onSubmit={rows => { void runImport(rows); }} />
+      )}
 
-      {tab === 'members' && (
+      {tab === '사용자' && (
         <>
-          {/* 엑셀 미리보기 · 결과 */}
-          {sheet && (
-            <Card pad className="mb-16">
-              <h2 className="card-title">엑셀로 등록 — {sheet.file}</h2>
-              <div className="import-preview">
-                {sheet.rows.length}명{isAdmin && ` · 관리자 ${sheet.rows.filter(r => r.isAdmin).length}명`}
-                <ul>
-                  {sheet.rows.slice(0, 10).map(r => <li key={r.employeeNo}>{r.name} ({r.employeeNo}) · {unitPath(r)}{isAdmin && r.isAdmin ? ' · 관리자' : ''}</li>)}
-                  {sheet.rows.length > 10 && <li>… 외 {sheet.rows.length - 10}명</li>}
-                </ul>
-                {sheet.problems.length > 0 && <ul className="import-preview__problems">{sheet.problems.map(p => <li key={p}>{p}</li>)}</ul>}
-              </div>
-              <p className="form-note">이미 있는 사번은 건너뛰어요. 없는 조직은 새로 만들어요{isAdmin ? '' : ' (내 조직 아래 부서의 파트만)'}. 새 사용자에게는 슬랙 DM 으로 사번과 초기 비밀번호를 보내요.</p>
-              <div className="row row--end">
-                <Btn variant="secondary" onClick={() => setSheet(null)}>취소</Btn>
-                <Btn onClick={() => { void runImport(); }} disabled={busy || !sheet.rows.length || sheet.problems.length > 0}>{busy ? '등록 중...' : `${sheet.rows.length}명 등록`}</Btn>
-              </div>
-            </Card>
-          )}
           {imported && (
             <Card pad className="mb-16">
               <h2 className="card-title">등록 결과</h2>
@@ -331,10 +423,24 @@ export default function Admin() {
           )}
 
           <div className="member-toolbar">
-            <Select value={filter} onChange={e => setFilter(e.target.value)} aria-label="조직으로 거르기">
-              <option value="">전체 조직</option>
-              {teamOptions}
-            </Select>
+            {hqOpts.length > 0 && (
+              <Select className="member-toolbar__org" value={hq} aria-label="본부로 거르기" onChange={e => { setHq(e.target.value); setDept(''); setPart(''); }}>
+                <option value="">전체 본부</option>
+                {hqOpts.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </Select>
+            )}
+            {(deptOpts.length > 0 || dept) && (
+              <Select className="member-toolbar__org" value={dept} aria-label="부서로 거르기" onChange={e => { setDept(e.target.value); setPart(''); }}>
+                <option value="">전체 부서</option>
+                {deptOpts.map(t => <option key={t.id} value={t.id}>{hq ? t.name : pathOf(t.id)}</option>)}
+              </Select>
+            )}
+            {(partOpts.length > 0 || part) && (
+              <Select className="member-toolbar__org" value={part} aria-label="파트로 거르기" onChange={e => setPart(e.target.value)}>
+                <option value="">전체 파트</option>
+                {partOpts.map(t => <option key={t.id} value={t.id}>{dept ? t.name : pathOf(t.id)}</option>)}
+              </Select>
+            )}
             <Input value={query} onChange={e => setQuery(e.target.value)} onClear={() => setQuery('')} placeholder="성명 · 사번 · 이메일 검색" aria-label="사용자 검색" />
           </div>
 
@@ -342,7 +448,7 @@ export default function Admin() {
             {members === null ? (
               <EmptyState message={loadError ? '목록을 불러오지 못했어요' : '불러오는 중...'} />
             ) : !visible.length ? (
-              <EmptyState icon="👤" message="사용자가 없어요" sub="사용자 추가 또는 엑셀로 등록하세요" />
+              <EmptyState icon="👤" message="사용자가 없어요" sub={orgFilter || query ? '조직 · 검색 조건을 바꿔 보세요' : '사용자 추가 또는 엑셀로 등록하세요'} />
             ) : (
               <TableWrap>
                 <table className="table member-table">
@@ -408,7 +514,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'orgs' && (
+      {tab === '조직' && (
         <>
           {org && (
             <Card pad className="mb-16">
@@ -427,7 +533,7 @@ export default function Admin() {
                 {isAdmin && org.id && org.level !== '본부' && (
                   <Field label="상위 조직" htmlFor="of-parent">
                     <Select id="of-parent" value={org.parentId ?? ''} onChange={e => setOrg(o => o && { ...o, parentId: e.target.value || undefined })}>
-                      {teams.filter(t => t.id !== org.id && LEVELS.indexOf(t.level ?? '파트') < LEVELS.indexOf(org.level))
+                      {teams.filter(t => t.id !== org.id && LEVELS.indexOf(levelOf(t)) < LEVELS.indexOf(org.level))
                         .map(t => <option key={t.id} value={t.id}>{pathOf(t.id)}</option>)}
                     </Select>
                   </Field>
@@ -447,33 +553,17 @@ export default function Admin() {
           )}
 
           <Card className="card--clip">
-            {!tree.length ? (
+            {!roots.length ? (
               <EmptyState icon="🏢" message="관리할 수 있는 조직이 없어요" />
             ) : (
-              <ul className="org-tree">
-                {tree.map(({ team: t, depth }) => (
-                  <li key={t.id} className={cx('org-tree__row', !t.active && 'is-dormant')} style={{ paddingLeft: 16 + depth * 22 }}>
-                    <Badge variant={t.level === '본부' ? 'blue' : t.level === '부서' ? 'amber' : 'gray'} size="sm">{t.level ?? '조직'}</Badge>
-                    <span className="org-tree__name">{t.name}</span>
-                    <span className="t-muted org-tree__count">{memberCount(t.id)}명{!t.active && ' · 비활성'}</span>
-                    <span className="org-tree__acts">
-                      {canAddChild(t) && (
-                        <Btn size="sm" variant="secondary" disabled={!!org} onClick={() => setOrg({ name: '', level: CHILD_LEVEL[t.level ?? '파트']!, parentId: t.id, active: true })}>
-                          <IconPlus size={12} />{CHILD_LEVEL[t.level ?? '파트']}
-                        </Btn>
-                      )}
-                      {canEditOrg(t) && (
-                        <>
-                          <button type="button" className="icon-btn icon-btn--sm icon-btn--primary" aria-label={`${t.name} 수정`} title="수정" disabled={!!org}
-                            onClick={() => setOrg({ id: t.id, name: t.name, level: t.level ?? '파트', parentId: t.parentId, active: t.active })}><IconEdit size={14} /></button>
-                          <button type="button" className="icon-btn icon-btn--sm icon-btn--red" aria-label={`${t.name} 삭제`} title="삭제"
-                            onClick={() => setConfirm({ kind: 'delete-org', team: t })}><IconTrash size={14} /></button>
-                        </>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <div className="org-tree__tools">
+                  <span className="t-muted org-tree__hint">사용자를 끌어 다른 조직에 놓으면 소속을 옮겨요 (모바일은 사용자 탭 → 수정)</span>
+                  <Btn size="sm" variant="secondary" onClick={() => setExpanded(new Set(scopeTeams.map(t => t.id)))}>모두 펼치기</Btn>
+                  <Btn size="sm" variant="secondary" onClick={() => setExpanded(new Set())}>모두 접기</Btn>
+                </div>
+                <ul className="org-tree">{roots.map(n => renderOrg(n, 0))}</ul>
+              </>
             )}
           </Card>
         </>

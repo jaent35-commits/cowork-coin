@@ -46,7 +46,8 @@ const ALT = [
   '4/5 눈이 편한 큰 글씨. \'가\' 버튼 하나면 글씨가 1.4배 커져서 누구나 편하게 읽혀요.',
   '5/5 지금 코웍-코인을 시작해 보세요! 바탕화면·홈 화면에 설치하면 예산 알림도 바로 받을 수 있어요.',
 ];
-const LAST = ALT.length - 1;
+/** 마지막 카드(5/5 앱 다운로드) — 이미 설치된 앱으로 실행 중이면 빼고 4/5 까지만 보여 준다 */
+const DOWNLOAD = ALT.length - 1;
 const SWIPE_PX = 50;
 
 const pos = (l: Layout, [x, y, w, h]: Box): CSSProperties =>
@@ -76,26 +77,31 @@ export default function IntroPopup() {
   const { installed } = useInstall();
   const sheet = useSheet();
   const l = sheet ? SHEET : PC;
+  const slides = installed ? l.slides.slice(0, DOWNLOAD) : l.slides;
+  const last = slides.length - 1;
 
   useEffect(() => { setIntroState({ open }); return () => setIntroState({ open: false }); }, [open]);
-  useEffect(() => { if (idx === LAST) setIntroState({ sawInstall: true }); }, [idx]);
-  // 열릴 때 · 마지막 카드로 바뀔 때(다음 버튼이 사라짐) 주 버튼에 포커스
-  const onLast = idx === LAST;
-  useEffect(() => { if (open) firstBtn.current?.focus({ preventScroll: true }); }, [open, onLast]);
+  useEffect(() => { if (!installed && idx === DOWNLOAD) setIntroState({ sawInstall: true }); }, [idx, installed]);
+  // 보는 중에 설치가 끝나 다운로드 카드가 빠지면 마지막 카드로
+  useEffect(() => { if (idx > last) setIdx(last); }, [idx, last]);
+  // 열릴 때 · 다운로드 카드로 바뀔 때(다음 버튼이 사라짐) 주 버튼에 포커스
+  const onDownload = idx === DOWNLOAD;
+  useEffect(() => { if (open) firstBtn.current?.focus({ preventScroll: true }); }, [open, onDownload]);
 
   const close = () => { hideIntro(hideToday); setOpen(false); };
-  const go = (n: number) => { setGuide(false); setIdx(Math.max(0, Math.min(LAST, n))); };
+  const dismiss = () => { hideIntro(false); setOpen(false); };
+  const go = (n: number) => { setGuide(false); setIdx(Math.max(0, Math.min(last, n))); };
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { hideIntro(false); setOpen(false); }
+      if (e.key === 'Escape') dismiss();
       else if (e.key === 'ArrowRight') go(idx + 1);
       else if (e.key === 'ArrowLeft') go(idx - 1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, idx]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, idx, last]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
 
@@ -111,7 +117,7 @@ export default function IntroPopup() {
   const onMove = (e: RPointerEvent) => {
     if (!start.current || start.current.id !== e.pointerId) return;
     const dx = e.clientX - start.current.x;
-    if (Math.abs(dx) > 8) setDrag((idx === 0 && dx > 0) || (idx === LAST && dx < 0) ? dx / 3 : dx);
+    if (Math.abs(dx) > 8) setDrag((idx === 0 && dx > 0) || (idx === last && dx < 0) ? dx / 3 : dx);
   };
   const onUp = (e: RPointerEvent) => {
     if (!start.current || start.current.id !== e.pointerId) return;
@@ -127,29 +133,31 @@ export default function IntroPopup() {
 
   return createPortal(
     <div className={`intro${sheet ? ' intro--sheet' : ''}`} role="presentation">
-      <div className="install-sheet__dim" onClick={() => { hideIntro(false); setOpen(false); }} aria-hidden="true" />
+      <div className="install-sheet__dim" onClick={dismiss} aria-hidden="true" />
       <div className="intro__card" role="dialog" aria-modal="true" aria-roledescription="소개 슬라이드" aria-label="코웍-코인 소개"
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { start.current = null; setDrag(0); }}
         onClickCapture={onClickCapture}>
         {/* 버튼 위치(%)는 이미지와 비율이 같은 이 영역 기준 */}
         <div className="intro__stage" style={{ aspectRatio: `${l.w} / ${l.h}` }}>
           <div className="intro__track" style={{ transform: `translateX(calc(${-idx * 100}% + ${drag}px))`, transition: drag ? 'none' : undefined }}>
-            {l.slides.map((src, k) => (
+            {slides.map((src, k) => (
               <img key={src} src={src} className="intro__slide" draggable={false} decoding="async"
                 alt={k === idx ? ALT[k] : ''} aria-hidden={k !== idx} />
             ))}
           </div>
-          <p className="sr-only" aria-live="polite">{`${idx + 1} / ${ALT.length}`}</p>
+          <p className="sr-only" aria-live="polite">{`${idx + 1} / ${slides.length}`}</p>
 
-          <button type="button" className="intro__hit intro__hit--round" style={pos(l, l.close)} aria-label="소개 닫기" onClick={() => { hideIntro(false); setOpen(false); }} />
-          {idx < LAST && (
-            <button ref={firstBtn} type="button" className={`intro__hit${sheet ? '' : ' intro__hit--round'}`} style={pos(l, l.next)} onClick={() => go(idx + 1)}
-              aria-label={idx === 0 ? (sheet ? '시작하기' : '다음 카드') : sheet ? '다음' : '다음 카드'} />
+          <button type="button" className="intro__hit intro__hit--round" style={pos(l, l.close)} aria-label="소개 닫기" onClick={dismiss} />
+          {/* 다운로드 카드 앞의 카드에는 '다음' 이 그려져 있음 — 설치된 앱에서 4/5 가 마지막이면 눌러서 닫기 */}
+          {idx !== DOWNLOAD && (
+            <button ref={firstBtn} type="button" className={`intro__hit${sheet ? '' : ' intro__hit--round'}`} style={pos(l, l.next)}
+              onClick={() => (idx < last ? go(idx + 1) : dismiss())}
+              aria-label={idx === last ? '소개 닫기' : idx === 0 ? (sheet ? '시작하기' : '다음 카드') : sheet ? '다음' : '다음 카드'} />
           )}
           {l.prev && idx > 0 && (
             <button type="button" className="intro__hit intro__hit--round" style={pos(l, l.prev)} aria-label="이전 카드" onClick={() => go(idx - 1)} />
           )}
-          {idx === LAST && (
+          {idx === DOWNLOAD && (
             <>
               <button ref={firstBtn} type="button" className="intro__hit" style={pos(l, l.download)} onClick={() => { void install(); }}
                 aria-label={installed ? '앱이 이미 설치되어 있어요 — 닫기' : '앱 다운로드 받기'} />
