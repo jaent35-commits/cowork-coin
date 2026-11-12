@@ -7,7 +7,7 @@ import {
 } from '@/lib/authApi';
 import { readMemberSheet } from '@/lib/memberSheet';
 import { useToast } from '@/hooks/useToast';
-import { Alert, Badge, Btn, Card, ConfirmLayer, EmptyState, Field, Input, PageHead, Switch, TableWrap, Tabs, Toast, cx } from '@/components/ui';
+import { Alert, Avatar, Badge, Btn, Card, ConfirmLayer, EmptyState, Field, Input, PageHead, Switch, TableWrap, Tabs, Toast, cx } from '@/components/ui';
 import { Select } from '@/components/ui/SelectBox';
 import { IconEdit, IconPlus, IconTrash } from '@/components/icons';
 import ImportResults from '@/components/ImportResults';
@@ -15,6 +15,7 @@ import MemberImportDialog from '@/components/MemberImportDialog';
 import './Pages.css';
 
 const TABS = ['사용자', '조직'] as const;
+const ORG_PEOPLE_KEY = 'cowork-coin-org-people'; // localStorage: 조직 트리에 사용자 보기 (0 = 끔)
 type Tab = typeof TABS[number];
 /** 사용자 추가 · 수정 폼 (id 가 있으면 수정) */
 type MemberDraft = { id?: string; employeeNo: string; name: string; position: string; email: string; teamId: string; isAdmin: boolean };
@@ -245,6 +246,12 @@ export default function Admin() {
   const [expanded, setExpanded] = useState<Set<string> | null>(null);
   const openSet = expanded ?? new Set(roots.map(n => n.team.id));
   const toggleOrg = (id: string) => setExpanded(() => { const s = new Set(openSet); if (s.has(id)) s.delete(id); else s.add(id); return s; });
+  // 사용자 보기 끄면 조직만 펼치고 접는 트리 (이 기기에 기억)
+  const [showPeople, setShowPeopleState] = useState(() => { try { return localStorage.getItem(ORG_PEOPLE_KEY) !== '0'; } catch { return true; } });
+  const setShowPeople = (v: boolean) => {
+    setShowPeopleState(v);
+    try { localStorage.setItem(ORG_PEOPLE_KEY, v ? '1' : '0'); } catch { /* 저장 불가 시 이번 세션만 */ }
+  };
   const membersOf = useMemo(() => {
     const map = new Map<string, MemberAdminRow[]>();
     for (const m of [...shown].sort((a, b) => a.name.localeCompare(b.name, 'ko'))) map.set(m.teamId, [...(map.get(m.teamId) ?? []), m]);
@@ -266,59 +273,86 @@ export default function Admin() {
     },
   });
 
-  const renderOrg = (n: OrgNode, depth: number): ReactNode => {
+  /** 하위 조직까지 합친 사용자 수 */
+  const totalOf = (n: OrgNode): number => (membersOf.get(n.team.id)?.length ?? 0) + n.children.reduce((s, c) => s + totalOf(c), 0);
+
+  /**
+   * 조직 한 칸 — 들여쓰기 대신 왼쪽 연결선으로 단계를 보여 줌
+   *   본부 > 부서 > 파트 순으로 글자 굵기 · 크기를 한 단계씩 낮춤, 관리 버튼은 PC 에서 줄에 올렸을 때만 진하게
+   */
+  const renderOrg = (n: OrgNode): ReactNode => {
     const t = n.team;
+    const lv = levelOf(t);
     const people = membersOf.get(t.id) ?? [];
-    const hasBody = n.children.length > 0 || people.length > 0;
+    const hasBody = n.children.length > 0 || (showPeople && people.length > 0);
     const isOpen = hasBody && openSet.has(t.id);
-    const indent = 12 + depth * 22;
+    const total = totalOf(n);
+    const child = CHILD_LEVEL[lv];
     return (
-      <li key={t.id} className="org-tree__node">
-        <div className={cx('org-tree__row', !t.active && 'is-dormant', dropId === t.id && 'is-drop')} style={{ paddingLeft: indent }} {...dropProps(t)}>
+      <li key={t.id} className={cx('org-node', `org-node--${lv === '본부' ? 'hq' : lv === '부서' ? 'dept' : 'part'}`)}>
+        <div className={cx('org-node__row', !t.active && 'is-dormant', dropId === t.id && 'is-drop')} {...dropProps(t)}>
           {hasBody
-            ? <button type="button" className="org-tree__toggle" aria-expanded={isOpen} aria-label={`${t.name} ${isOpen ? '접기' : '펼치기'}`} onClick={() => toggleOrg(t.id)}>{isOpen ? '−' : '+'}</button>
-            : <span className="org-tree__toggle org-tree__toggle--empty" aria-hidden="true" />}
-          <Badge variant={t.level === '본부' ? 'blue' : t.level === '부서' ? 'amber' : 'gray'} size="sm">{t.level ?? '조직'}</Badge>
-          <span className="org-tree__name">{t.name}</span>
-          <span className="t-muted org-tree__count">{people.length}명{!t.active && ' · 비활성'}</span>
-          <span className="org-tree__acts">
-            {canAddChild(t) && (
-              <Btn size="sm" variant="secondary" disabled={!!org} onClick={() => setOrg({ name: '', level: CHILD_LEVEL[levelOf(t)]!, parentId: t.id, active: true })}>
-                <IconPlus size={12} />{CHILD_LEVEL[levelOf(t)]}
-              </Btn>
-            )}
-            {canEditOrg(t) && (
-              <>
-                <button type="button" className="icon-btn icon-btn--sm icon-btn--primary" aria-label={`${t.name} 수정`} title="수정" disabled={!!org}
-                  onClick={() => setOrg({ id: t.id, name: t.name, level: levelOf(t), parentId: t.parentId, active: t.active })}><IconEdit size={14} /></button>
-                <button type="button" className="icon-btn icon-btn--sm icon-btn--red" aria-label={`${t.name} 삭제`} title="삭제"
-                  onClick={() => setConfirm({ kind: 'delete-org', team: t })}><IconTrash size={14} /></button>
-              </>
-            )}
+            ? <button type="button" className="org-node__toggle" aria-expanded={isOpen} aria-label={`${t.name} ${isOpen ? '접기' : '펼치기'}`} onClick={() => toggleOrg(t.id)}>{isOpen ? '−' : '+'}</button>
+            : <span className="org-node__toggle is-empty" aria-hidden="true" />}
+          <button type="button" className="org-node__title" disabled={!hasBody} onClick={() => toggleOrg(t.id)} tabIndex={-1}>
+            <span className="org-node__level">{lv}</span>
+            <span className="org-node__name">{t.name}</span>
+          </button>
+          <span className="org-node__meta">
+            {!t.active && <Badge variant="gray" size="sm">비활성</Badge>}
+            <span className={cx('org-node__count', !total && 'is-zero')} title={total !== people.length ? `직속 ${people.length}명 · 하위 포함 ${total}명` : undefined}>
+              {total}명
+            </span>
           </span>
+          {(canAddChild(t) || canEditOrg(t)) && (
+            <span className="org-node__acts">
+              {canAddChild(t) && child && (
+                <Btn size="sm" variant="ghost" disabled={!!org} aria-label={`${t.name} 아래 ${child} 추가`}
+                  onClick={() => setOrg({ name: '', level: child, parentId: t.id, active: true })}>
+                  <IconPlus size={12} /><span className="org-node__add-label">{child}</span>
+                </Btn>
+              )}
+              {canEditOrg(t) && (
+                <>
+                  <button type="button" className="icon-btn icon-btn--sm" aria-label={`${t.name} 수정`} title="수정" disabled={!!org}
+                    onClick={() => setOrg({ id: t.id, name: t.name, level: lv, parentId: t.parentId, active: t.active })}><IconEdit size={14} /></button>
+                  <button type="button" className="icon-btn icon-btn--sm icon-btn--red" aria-label={`${t.name} 삭제`} title="삭제"
+                    onClick={() => setConfirm({ kind: 'delete-org', team: t })}><IconTrash size={14} /></button>
+                </>
+              )}
+            </span>
+          )}
         </div>
         {isOpen && (
-          <ul className="org-tree__body">
-            {people.map(m => {
-              const movable = canEditMember(m) && !busy;
-              return (
-                <li key={m.id} className={cx('org-tree__member', !m.active && 'is-dormant', dragging?.id === m.id && 'is-dragging')}
-                  style={{ paddingLeft: indent + 34 }} draggable={movable}
-                  title={movable ? '다른 조직으로 끌어 놓으면 소속을 옮겨요' : undefined}
-                  onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', m.id); setDragging(m); }}
-                  onDragEnd={endDrag}>
-                  {movable && <span className="org-tree__grip" aria-hidden="true">⠿</span>}
-                  <span className="t-strong">{m.name}</span>
-                  {m.position && <span className="t-muted">{m.position}</span>}
-                  <span className="t-muted org-tree__no">{m.employeeNo}</span>
-                  {m.id === myId && <Badge variant="amber" size="sm">나</Badge>}
-                  {m.isAdmin && <Badge variant="outline" size="sm">관리자</Badge>}
-                  {!m.active && <Badge variant="gray" size="sm">휴면</Badge>}
-                </li>
-              );
-            })}
-            {n.children.map(c => renderOrg(c, depth + 1))}
-          </ul>
+          <div className="org-node__body">
+            {showPeople && people.length > 0 && (
+              <ul className="org-people" aria-label={`${t.name} 소속 사용자`}>
+                {people.map(m => {
+                  const movable = canEditMember(m) && !busy;
+                  return (
+                    <li key={m.id} className={cx('org-person', !m.active && 'is-dormant', movable && 'is-movable', dragging?.id === m.id && 'is-dragging')}
+                      draggable={movable} title={movable ? '다른 조직으로 끌어 놓으면 소속을 옮겨요' : undefined}
+                      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', m.id); setDragging(m); }}
+                      onDragEnd={endDrag}>
+                      <span className="org-person__grip" aria-hidden="true">⠿</span>
+                      <Avatar name={m.name} size="sm" muted={!m.active} />
+                      <span className="org-person__who">
+                        <span className="org-person__name">{m.name}</span>
+                        {m.position && <span className="org-person__pos">{m.position}</span>}
+                      </span>
+                      <span className="org-person__no">{m.employeeNo}</span>
+                      <span className="org-person__tags">
+                        {m.id === myId && <Badge variant="amber" size="sm">나</Badge>}
+                        {m.isAdmin && <Badge variant="outline" size="sm">관리자</Badge>}
+                        {!m.active && <Badge variant="gray" size="sm">휴면</Badge>}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {n.children.length > 0 && <ul className="org-tree__children">{n.children.map(c => renderOrg(c))}</ul>}
+          </div>
         )}
       </li>
     );
@@ -558,11 +592,23 @@ export default function Admin() {
             ) : (
               <>
                 <div className="org-tree__tools">
-                  <span className="t-muted org-tree__hint">사용자를 끌어 다른 조직에 놓으면 소속을 옮겨요 (모바일은 사용자 탭 → 수정)</span>
-                  <Btn size="sm" variant="secondary" onClick={() => setExpanded(new Set(scopeTeams.map(t => t.id)))}>모두 펼치기</Btn>
-                  <Btn size="sm" variant="secondary" onClick={() => setExpanded(new Set())}>모두 접기</Btn>
+                  <p className="org-tree__hint">
+                    {showPeople ? (
+                      <>
+                        <span className="hide-touch">사용자를 끌어 다른 조직에 놓으면 소속이 바뀌어요.</span>
+                        <span className="show-touch">소속은 사용자 탭 → 수정에서 바꿀 수 있어요.</span>
+                      </>
+                    ) : '조직 구조만 보고 있어요. 인원 수는 하위 조직까지 합친 수예요.'}
+                  </p>
+                  <Switch checked={showPeople} onChange={setShowPeople} label="조직 트리에 소속 사용자 보기" text="사용자 보기" />
+                  <span className="org-tree__sep" aria-hidden="true" />
+                  <span className="org-tree__expand">
+                    <Btn size="sm" variant="ghost" onClick={() => setExpanded(new Set(scopeTeams.map(t => t.id)))}>모두 펼치기</Btn>
+                    <span className="org-tree__sep" aria-hidden="true" />
+                    <Btn size="sm" variant="ghost" onClick={() => setExpanded(new Set())}>모두 접기</Btn>
+                  </span>
                 </div>
-                <ul className="org-tree">{roots.map(n => renderOrg(n, 0))}</ul>
+                <ul className="org-tree">{roots.map(n => renderOrg(n))}</ul>
               </>
             )}
           </Card>

@@ -189,30 +189,72 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
 .member-table tr.is-dormant .member-table__name { color: var(--faint); }
 .member-table__org { color: var(--muted); }
 .member-toolbar > .member-toolbar__org { flex: 0 1 200px; }
-/* 조직 트리 — 아코디언(+ / −) · 사용자 끌어 옮기기 */
-.org-tree, .org-tree__body { margin: 0; padding: 0; list-style: none; }
-.org-tree__tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); }
-.org-tree__hint { margin-right: auto; font-size: calc(12.5px * var(--fs)); }
-.org-tree__row { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 16px; border-bottom: 1px solid var(--line-soft); transition: background-color 0.12s, box-shadow 0.12s; }
-.org-tree > .org-tree__node:last-child > .org-tree__row:last-child { border-bottom: 0; }
-.org-tree__row.is-dormant .org-tree__name { color: var(--faint); }
-.org-tree__row.is-drop { background: var(--primary-50); box-shadow: inset 0 0 0 2px var(--primary); }
-.org-tree__toggle {
-  display: inline-grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border: 1px solid var(--line); border-radius: var(--r-sm);
-  background: var(--surface); color: var(--muted); font-size: 16px; font-weight: 800; line-height: 1;
+/* ── 조직 트리 ──
+ * 단계는 들여쓰기 + 왼쪽 연결선, 본부 › 부서 › 파트 순으로 글자를 한 단계씩 낮춤
+ * 본부마다 한 묶음(위아래 구분선), 사용자는 조직 바로 아래 한 줄씩(아바타 · 성명 · 사번 · 표시)
+ */
+.org-tree, .org-tree__children, .org-people { margin: 0; padding: 0; list-style: none; }
+.org-tree__tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px 12px 20px; border-bottom: 1px solid var(--line); }
+.org-tree__hint { margin: 0 auto 0 0; font-size: calc(12.5px * var(--fs)); color: var(--faint); }
+.org-tree__hint .show-touch { display: none; }
+@media (hover: none) { .org-tree__hint .hide-touch { display: none; } .org-tree__hint .show-touch { display: inline; } }
+.org-tree__expand { display: inline-flex; align-items: center; gap: 2px; }
+.org-tree__sep { width: 1px; height: 14px; background: var(--line); }
+.org-tree { padding: 6px 0 10px; }
+.org-node--hq + .org-node--hq { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line-soft); }
+
+.org-node__row {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 8px; padding: 4px 8px 4px 10px;
+  border-radius: var(--r-md); transition: background-color 0.15s, box-shadow 0.15s;
 }
-.org-tree__toggle:hover { border-color: var(--primary-300); color: var(--text); }
-.org-tree__toggle--empty { visibility: hidden; }
-.org-tree__name { font-weight: 700; }
-.org-tree__count { font-size: calc(12.5px * var(--fs)); }
-.org-tree__acts { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-.org-tree__member { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 16px; border-bottom: 1px solid var(--line-soft); background: var(--surface-alt); font-size: calc(13.5px * var(--fs)); }
-.org-tree__member[draggable="true"] { cursor: grab; }
-.org-tree__member[draggable="true"]:hover { background: var(--primary-25); }
-.org-tree__member.is-dragging { opacity: 0.45; }
-.org-tree__member.is-dormant .t-strong { color: var(--faint); }
-.org-tree__grip { margin-left: -16px; width: 10px; color: var(--faint); font-size: 12px; }
-.org-tree__no { font-size: calc(12.5px * var(--fs)); }
+.org-node__row:hover { background: var(--surface-alt); }
+.org-node__row.is-drop { background: var(--primary-50); box-shadow: inset 0 0 0 2px var(--primary); }
+.org-node__toggle {
+  display: inline-grid; place-items: center; flex-shrink: 0; width: 22px; height: 22px; border-radius: var(--r-xs);
+  border: 1px solid var(--line-input); background: var(--surface); color: var(--muted);
+  font-size: calc(15px * var(--fs)); font-weight: 700; line-height: 1;
+}
+.org-node__toggle:hover { border-color: var(--primary-300); color: var(--primary-600); }
+.org-node__toggle.is-empty { visibility: hidden; }
+.org-node__title { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+.org-node__title:disabled { cursor: default; opacity: 1; }
+.org-node__level { flex-shrink: 0; font-size: calc(11px * var(--fs)); font-weight: 700; color: var(--faint); letter-spacing: 0.02em; }
+.org-node__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.org-node--hq > .org-node__row .org-node__name { font-size: calc(15.5px * var(--fs)); font-weight: 800; }
+.org-node--hq > .org-node__row .org-node__level { color: var(--primary-600); }
+.org-node--dept > .org-node__row .org-node__name { font-size: calc(14.5px * var(--fs)); font-weight: 700; }
+.org-node--part > .org-node__row .org-node__name { font-size: calc(14px * var(--fs)); font-weight: 600; }
+.org-node__row.is-dormant .org-node__name { color: var(--faint); }
+.org-node__meta { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.org-node__count {
+  min-width: 34px; padding: 1px 8px; border-radius: var(--r-pill); background: var(--surface-muted); text-align: center;
+  font-size: calc(12px * var(--fs)); font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.org-node__count.is-zero { color: var(--faint-2); font-weight: 600; }
+.org-node__acts { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; transition: opacity 0.15s; }
+@media (hover: hover) {
+  .org-node__acts { opacity: 0.35; }
+  .org-node__row:hover .org-node__acts, .org-node__row:focus-within .org-node__acts { opacity: 1; }
+}
+/* 아래 단계: 토글 가운데에서 내려오는 연결선 */
+.org-node__body { margin-left: 29px; padding: 2px 0 4px 12px; border-left: 1px solid var(--line); }
+
+.org-person {
+  display: grid; grid-template-columns: 12px 28px minmax(0, 160px) 72px minmax(0, 1fr); align-items: center; column-gap: 10px;
+  min-height: 42px; margin-right: 8px; padding: 4px 10px 4px 4px; border-radius: var(--r-md);
+}
+.org-person.is-movable { cursor: grab; }
+.org-person.is-movable:hover { background: var(--primary-25); }
+.org-person.is-movable:active { cursor: grabbing; }
+.org-person.is-dragging { opacity: 0.4; }
+.org-person__grip { color: var(--faint-3); font-size: 12px; line-height: 1; visibility: hidden; }
+.org-person.is-movable:hover .org-person__grip { visibility: visible; color: var(--faint); }
+.org-person__who { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.org-person__name { font-size: calc(13.5px * var(--fs)); font-weight: 700; color: var(--text); white-space: nowrap; }
+.org-person__pos { font-size: calc(12.5px * var(--fs)); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.org-person.is-dormant .org-person__name { color: var(--faint); }
+.org-person__no { font-size: calc(12px * var(--fs)); color: var(--faint); font-variant-numeric: tabular-nums; }
+.org-person__tags { display: inline-flex; gap: 4px; min-width: 0; }
 /* 가운데 팝업 (모바일은 바텀 시트) */
 .modal { position: fixed; inset: 0; z-index: var(--z-prompt); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .modal__dim { position: absolute; inset: 0; background: var(--dim); animation: fade-in 0.2s ease both; }
@@ -243,7 +285,14 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
   .member-form { grid-template-columns: 1fr; }
   .member-toolbar { flex-direction: column; }
   .member-toolbar > *, .member-toolbar > .member-toolbar__org { flex: none; max-width: none; }
-  .org-tree__row { flex-wrap: wrap; }
+  .org-tree__tools { padding: 10px 12px 10px 14px; }
+  .org-node__row { margin: 0 4px; padding: 4px 4px 4px 8px; gap: 8px; }
+  .org-node__add-label { display: none; }
+  .org-node__body { margin-left: 23px; padding-left: 8px; }
+  .org-person { grid-template-columns: 28px minmax(0, 1fr) auto; margin-right: 4px; }
+  .org-person__tags { justify-content: flex-end; }
+  .org-person__grip { display: none; }
+  .org-person__no { display: none; }
   .modal { align-items: flex-end; padding: 0; }
   .modal__panel { max-width: none; max-height: 88vh; padding-bottom: calc(20px + var(--safe-bottom)); border-radius: var(--r-3xl) var(--r-3xl) 0 0; box-shadow: var(--shadow-sheet); }
   .import-pick__row { flex-wrap: wrap; }
