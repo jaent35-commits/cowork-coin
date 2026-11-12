@@ -7,16 +7,14 @@ import {
 } from '@/lib/authApi';
 import { readMemberSheet } from '@/lib/memberSheet';
 import { useToast } from '@/hooks/useToast';
-import { Alert, Avatar, Badge, Btn, Card, ConfirmLayer, EmptyState, Field, Input, PageHead, Switch, TableWrap, Tabs, Toast, cx } from '@/components/ui';
+import { Alert, Avatar, Badge, Btn, Card, ConfirmLayer, EmptyState, Field, FilterChip, Input, PageHead, Segmented, Switch, TableWrap, Toast, cx } from '@/components/ui';
 import { Select } from '@/components/ui/SelectBox';
 import { IconEdit, IconPlus, IconTrash } from '@/components/icons';
 import ImportResults from '@/components/ImportResults';
 import MemberImportDialog from '@/components/MemberImportDialog';
 import './Pages.css';
 
-const TABS = ['사용자', '조직'] as const;
 const ORG_PEOPLE_KEY = 'cowork-coin-org-people'; // localStorage: 조직 트리에 사용자 보기 (0 = 끔)
-type Tab = typeof TABS[number];
 /** 사용자 추가 · 수정 폼 (id 가 있으면 수정) */
 type MemberDraft = { id?: string; employeeNo: string; name: string; position: string; email: string; teamId: string; isAdmin: boolean };
 type OrgDraft = { id?: string; name: string; level: UnitLevel; parentId?: string; active: boolean };
@@ -30,26 +28,27 @@ type Issued = { name: string; password: string } | null;
 /** 조직 트리 — 관리 범위의 조직만, 범위 밖 상위 조직은 건너뛰고 아래 조직을 끌어올림 */
 type OrgNode = { team: Team; children: OrgNode[] };
 
-const LEVELS: UnitLevel[] = ['본부', '부서', '파트'];
-const CHILD_LEVEL: Partial<Record<UnitLevel, UnitLevel>> = { 본부: '부서', 부서: '파트' };
+const LEVELS: UnitLevel[] = ['회사', '본부', '부서', '파트'];
+const CHILD_LEVEL: Partial<Record<UnitLevel, UnitLevel>> = { 회사: '본부', 본부: '부서', 부서: '파트' };
+const LEVEL_CLASS: Record<UnitLevel, string> = { 회사: 'co', 본부: 'hq', 부서: 'dept', 파트: 'part' };
 const levelOf = (t: Team): UnitLevel => t.level ?? '파트';
 const byName = (a: Team, b: Team) => a.name.localeCompare(b.name, 'ko');
 const errMsg = (e: unknown, fallback = '처리하지 못했습니다. 잠시 후 다시 시도하세요.') => (e instanceof AuthApiError ? e.message : fallback);
 
 /**
- * 사용자 관리 (Supabase 로그인) — 사용자(1인 1계정) · 조직(본부 › 부서 › 파트)
+ * 관리자 메뉴 (Supabase 로그인) — 사용자 관리(1인 1계정) · 조직 관리(회사 › 본부 › 부서 › 파트)
  *   관리자: 전체 · 관리자 지정
  *   부서장 이상(소속이 본부 · 부서): 내 조직 아래 사용자 등록 · 수정 · 초기화 · 삭제, 내 조직 아래 부서의 파트 추가 · 수정 · 삭제
  *   권한 확인은 서버(DB 함수 · Edge Function)가 다시 함 — 화면은 할 수 있는 것만 보여 줌
  */
-export default function Admin() {
+export default function Admin({ section }: { section: 'users' | 'org' }) {
   const { teams, session } = useAppState();
   const dispatch = useDispatch();
   const [toast, showToast] = useToast(3500);
   const isAdmin = !!session?.isAdmin;
   const myId = session?.member?.id;
 
-  const [tab, setTab] = useState<Tab>('사용자');
+  const tab = section === 'users' ? '사용자' : '조직';
   const [members, setMembers] = useState<MemberAdminRow[] | null>(null);
   const [scope, setScope] = useState<Set<string>>(new Set());
   const [loadError, setLoadError] = useState('');
@@ -88,9 +87,12 @@ export default function Admin() {
 
   // ── 조직 ──
   const byId = useMemo(() => new Map(teams.map(t => [t.id, t])), [teams]);
+  /** 조직 경로 (본부 › 부서 › 파트) — 모두 같은 회사라 회사 이름은 회사 소속일 때만 */
   const pathOf = useCallback((id?: string) => {
     const names: string[] = [];
-    for (let t = id ? byId.get(id) : undefined, n = 0; t && n < 5; t = t.parentId ? byId.get(t.parentId) : undefined, n++) names.unshift(t.name);
+    for (let t = id ? byId.get(id) : undefined, n = 0; t && n < 5; t = t.parentId ? byId.get(t.parentId) : undefined, n++) {
+      if (t.level !== '회사' || !names.length) names.unshift(t.name);
+    }
     return names.join(' › ');
   }, [byId]);
   /** teamId 가 ancestorId 이거나 그 아래 조직인지 */
@@ -110,6 +112,8 @@ export default function Admin() {
     walk(roots);
     return out;
   }, [roots]);
+  /** 최상위 회사 (대교CNS) — 새 본부는 이 아래에 */
+  const company = teams.find(t => t.level === '회사');
   /** 이 조직을 내가 바꿀 수 있는지 — 관리자: 전부, 부서장 이상: 관리 범위의 파트 */
   const canEditOrg = (t: Team) => isAdmin || (scope.has(t.id) && t.level === '파트');
   /** 이 조직 아래 하위 조직을 만들 수 있는지 — 관리자: 본부 · 부서 아래, 부서장 이상: 관리 범위의 부서 아래 파트 */
@@ -244,7 +248,7 @@ export default function Admin() {
 
   // ── 조직 트리: 펼치기 · 접기 (처음엔 맨 위 조직만 펼침) ──
   const [expanded, setExpanded] = useState<Set<string> | null>(null);
-  const openSet = expanded ?? new Set(roots.map(n => n.team.id));
+  const openSet = expanded ?? new Set(roots.flatMap(n => [n.team.id, ...(n.team.level === '회사' ? n.children.map(c => c.team.id) : [])]));
   const toggleOrg = (id: string) => setExpanded(() => { const s = new Set(openSet); if (s.has(id)) s.delete(id); else s.add(id); return s; });
   // 사용자 보기 끄면 조직만 펼치고 접는 트리 (이 기기에 기억)
   const [showPeople, setShowPeopleState] = useState(() => { try { return localStorage.getItem(ORG_PEOPLE_KEY) !== '0'; } catch { return true; } });
@@ -275,6 +279,15 @@ export default function Admin() {
 
   /** 하위 조직까지 합친 사용자 수 */
   const totalOf = (n: OrgNode): number => (membersOf.get(n.team.id)?.length ?? 0) + n.children.reduce((s, c) => s + totalOf(c), 0);
+  /** 펼칠 수 있는 조직 (하위 조직 또는 보이는 사용자가 있음) — 모두 펼치기 · 접기 상태 표시용 */
+  const openable: string[] = [];
+  const walk = (n: OrgNode) => {
+    if (n.children.length || (showPeople && membersOf.get(n.team.id)?.length)) openable.push(n.team.id);
+    n.children.forEach(walk);
+  };
+  roots.forEach(walk);
+  const allOpen = openable.length > 0 && openable.every(id => openSet.has(id));
+  const allClosed = openable.every(id => !openSet.has(id));
 
   /**
    * 조직 한 칸 — 들여쓰기 대신 왼쪽 연결선으로 단계를 보여 줌
@@ -289,7 +302,7 @@ export default function Admin() {
     const total = totalOf(n);
     const child = CHILD_LEVEL[lv];
     return (
-      <li key={t.id} className={cx('org-node', `org-node--${lv === '본부' ? 'hq' : lv === '부서' ? 'dept' : 'part'}`)}>
+      <li key={t.id} className={cx('org-node', `org-node--${LEVEL_CLASS[lv]}`)}>
         <div className={cx('org-node__row', !t.active && 'is-dormant', dropId === t.id && 'is-drop')} {...dropProps(t)}>
           {hasBody
             ? <button type="button" className="org-node__toggle" aria-expanded={isOpen} aria-label={`${t.name} ${isOpen ? '접기' : '펼치기'}`} onClick={() => toggleOrg(t.id)}>{isOpen ? '−' : '+'}</button>
@@ -363,7 +376,7 @@ export default function Admin() {
   return (
     <div className="view-enter">
       <Toast msg={toast} />
-      <PageHead title="사용자 관리"
+      <PageHead title={section === 'users' ? '사용자 관리' : '조직 관리'}
         actions={tab === '사용자'
           ? <>
               <label className={cx('btn btn--secondary', (busy || !scopeTeams.length) && 'is-disabled')}>
@@ -373,13 +386,11 @@ export default function Admin() {
               </label>
               <Btn onClick={openNew} disabled={!!draft || !scopeTeams.length}><IconPlus size={14} />사용자 추가</Btn>
             </>
-          : isAdmin && <Btn onClick={() => setOrg({ name: '', level: '본부', active: true })} disabled={!!org}><IconPlus size={14} />본부 추가</Btn>} />
-
-      <Tabs tabs={TABS} active={tab} onSelect={setTab} />
+          : isAdmin && <Btn onClick={() => setOrg({ name: '', level: '본부', parentId: company?.id, active: true })} disabled={!!org}><IconPlus size={14} />본부 추가</Btn>} />
 
       {loadError && <div className="mb-14"><Alert variant="danger">{loadError} <button type="button" className="text-link" onClick={() => { void reload(); }}>다시 시도</button></Alert></div>}
       {!isAdmin && (
-        <div className="mb-14"><Alert variant="info">내 조직({pathOf(session?.member ? teams.find(t => t.name === session.team)?.id : undefined) || session?.team}) 아래의 사용자와 파트를 관리할 수 있어요. 본부 · 부서 조직과 관리자 지정은 관리자만 바꿀 수 있어요.</Alert></div>
+        <div className="mb-14"><Alert variant="info">내 조직({pathOf(session?.member ? teams.find(t => t.name === session.team)?.id : undefined) || session?.team}) {tab === '사용자' ? '아래의 사용자를 관리할 수 있어요. 관리자 지정은 관리자만 할 수 있어요.' : '아래의 파트를 추가 · 수정할 수 있어요. 회사 · 본부 · 부서 조직은 관리자만 바꿀 수 있어요.'}</Alert></div>
       )}
 
       {/* 확인 창 */}
@@ -560,13 +571,14 @@ export default function Admin() {
                 {isAdmin && org.id && (
                   <Field label="구분" htmlFor="of-level">
                     <Select id="of-level" value={org.level} onChange={e => setOrg(o => o && { ...o, level: e.target.value as UnitLevel })}>
-                      {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                      {LEVELS.filter(l => l !== '회사' || org.level === '회사').map(l => <option key={l} value={l}>{l}</option>)}
                     </Select>
                   </Field>
                 )}
-                {isAdmin && org.id && org.level !== '본부' && (
+                {isAdmin && org.id && org.level !== '회사' && (
                   <Field label="상위 조직" htmlFor="of-parent">
                     <Select id="of-parent" value={org.parentId ?? ''} onChange={e => setOrg(o => o && { ...o, parentId: e.target.value || undefined })}>
+                      {org.level === '본부' && <option value="">상위 없음 (최상위)</option>}
                       {teams.filter(t => t.id !== org.id && LEVELS.indexOf(levelOf(t)) < LEVELS.indexOf(org.level))
                         .map(t => <option key={t.id} value={t.id}>{pathOf(t.id)}</option>)}
                     </Select>
@@ -596,16 +608,17 @@ export default function Admin() {
                     {showPeople ? (
                       <>
                         <span className="hide-touch">사용자를 끌어 다른 조직에 놓으면 소속이 바뀌어요.</span>
-                        <span className="show-touch">소속은 사용자 탭 → 수정에서 바꿀 수 있어요.</span>
+                        <span className="show-touch">소속은 사용자 관리 → 수정에서 바꿀 수 있어요.</span>
                       </>
                     ) : '조직 구조만 보고 있어요. 인원 수는 하위 조직까지 합친 수예요.'}
                   </p>
-                  <Switch checked={showPeople} onChange={setShowPeople} label="조직 트리에 소속 사용자 보기" text="사용자 보기" />
-                  <span className="org-tree__sep" aria-hidden="true" />
-                  <span className="org-tree__expand">
-                    <Btn size="sm" variant="ghost" onClick={() => setExpanded(new Set(scopeTeams.map(t => t.id)))}>모두 펼치기</Btn>
-                    <span className="org-tree__sep" aria-hidden="true" />
-                    <Btn size="sm" variant="ghost" onClick={() => setExpanded(new Set())}>모두 접기</Btn>
+                  <span className="org-tree__ctrls">
+                    <Segmented label="조직 트리 보기 형식" value={showPeople ? 'people' : 'org'} onChange={v => setShowPeople(v === 'people')}
+                      options={[{ value: 'people', label: '사용자 포함' }, { value: 'org', label: '조직만' }]} />
+                    <span className="chip-row">
+                      <FilterChip label="모두 펼치기" active={allOpen} onClick={() => setExpanded(new Set(scopeTeams.map(t => t.id)))} />
+                      <FilterChip label="모두 접기" active={allClosed} onClick={() => setExpanded(new Set())} />
+                    </span>
                   </span>
                 </div>
                 <ul className="org-tree">{roots.map(n => renderOrg(n))}</ul>

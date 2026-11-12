@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from 'react';
 import type { View } from '@/types';
-import { IconChecklist, IconFolder, IconHome, IconMeeting, IconReceipt, IconReport, IconShield } from '../icons';
+import { IconChecklist, IconFolder, IconHome, IconMeeting, IconOrg, IconReceipt, IconReport, IconUser } from '../icons';
 
 export interface NavItem {
   view: View;
@@ -34,12 +34,19 @@ export const BOTTOM_NAV: NavItem[] = BOTTOM_ORDER.map(v => {
   return v === 'exec' ? { ...item, match: [...(item.match ?? []), 'cowork'] } : item;
 });
 
-export const ADMIN_NAV: NavItem = { view: 'admin', label: '사용자 관리', short: '관리', icon: IconShield };
+/** 관리자 그룹 — 관리자 · 부서장 이상만. 조직 관리는 Supabase 로그인에서만 (브라우저 저장본은 팀 = 조직) */
+export const ADMIN_GROUP_TITLE = '관리자';
+export const ADMIN_NAV: NavItem[] = [
+  { view: 'admin', label: '사용자 관리', short: '사용자', icon: IconUser },
+  { view: 'admin-org', label: '조직 관리', short: '조직', icon: IconOrg },
+];
+export const adminNav = (remote: boolean) => (remote ? ADMIN_NAV : ADMIN_NAV.filter(i => i.view === 'admin'));
+export const isAdminView = (view: View) => ADMIN_NAV.some(i => i.view === view);
 
 /** 모바일(≤1024) 상단 헤더에 표시할 화면 제목 — 코웍 체크리스트는 모바일에서 집행 현황 안의 화면이므로 '집행 현황' */
 const MOBILE_TITLE: Record<View, string> = {
   home: '홈', meeting: '팀 운영', project: '프로젝트 운영', exec: '집행 현황', 'exec-new': '집행 등록', 'project-new': '프로젝트 등록', 'project-detail': '프로젝트 상세',
-  cowork: '집행 현황', report: '리포트', mypage: '비밀번호 변경', settings: '화면 설정', notification: '알림', admin: '관리자', search: '검색 결과',
+  cowork: '집행 현황', report: '리포트', mypage: '비밀번호 변경', settings: '화면 설정', notification: '알림', admin: '사용자 관리', 'admin-org': '조직 관리', search: '검색 결과',
 };
 export const mobileTitle = (view: View) => MOBILE_TITLE[view];
 

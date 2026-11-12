@@ -65,7 +65,7 @@ export type MemberRow = {
 };
 export const MEMBER_COLS = 'id, auth_user_id, login_email, employee_no, name, position, email, team_id, is_admin, is_active, must_change_password, slack_user_id';
 
-export type TeamRow = { id: number; name: string; unit_level: '본부' | '부서' | '파트'; parent_id: number | null; is_active: boolean };
+export type TeamRow = { id: number; name: string; unit_level: '회사' | '본부' | '부서' | '파트'; parent_id: number | null; is_active: boolean };
 export const TEAM_COLS = 'id, name, unit_level, parent_id, is_active';
 
 export const bearer = (req: Request) => (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');

@@ -6,6 +6,7 @@ import Login from './views/Login';
 import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
 import BottomNav from './components/layout/BottomNav';
+import { isAdminView } from './components/layout/nav';
 import PwaPrompt from './components/PwaPrompt';
 import { usePushDelivery } from './lib/push';
 import { IconPlus } from './components/icons';
@@ -59,7 +60,8 @@ export default function App() {
   // 관리 화면 보호 — 관리자 · 부서장 이상(관리 범위가 있는 사용자)만
   const canAdmin = !!session && (session.isAdmin || !!session.canManage);
   useEffect(() => {
-    if (session && view === 'admin' && !canAdmin) navigate('home');
+    if (session && isAdminView(view) && !canAdmin) navigate('home');
+    else if (!REMOTE_AUTH && view === 'admin-org') navigate('admin'); // 브라우저 저장본: 팀 = 조직
   }, [session, canAdmin, view, navigate]);
 
   // Supabase 로그인: 앱 세션과 Auth 세션을 맞춤 (시작할 때 한 번 + 다른 곳에서 로그아웃되면)
@@ -141,12 +143,13 @@ export default function App() {
           {view === 'settings' && <MyPage section="display" />}
           {view === 'notification' && <Notification />}
           {view === 'search' && <Search onNavigate={navigate} />}
-          {view === 'admin' && canAdmin && (REMOTE_AUTH ? <Admin /> : <AdminLocal />)}
+          {view === 'admin' && canAdmin && (REMOTE_AUTH ? <Admin section="users" /> : <AdminLocal />)}
+          {view === 'admin-org' && canAdmin && REMOTE_AUTH && <Admin section="org" />}
         </div>
       </main>
 
       {/* 모바일: 공통 집행 등록 플로팅 버튼 (등록·관리자 화면에서는 숨김) */}
-      {!backTo && view !== 'admin' && (
+      {!backTo && !isAdminView(view) && (
         <button type="button" className="fab" onClick={() => navigate('exec-new')} aria-label="집행 등록" title="집행 등록">
           <IconPlus size={24} />
         </button>

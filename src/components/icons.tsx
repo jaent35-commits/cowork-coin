@@ -53,6 +53,14 @@ export const IconBell = (p: P) => (
 export const IconUser = (p: P) => (
   <Svg strokeWidth={1.8} {...p}><circle cx="12" cy="8" r="3.5" /><path d="M4.5 20c.9-4.2 3.8-6.5 7.5-6.5s6.6 2.3 7.5 6.5" /></Svg>
 );
+/** 조직도 — 위 한 칸에서 아래 두 칸으로 */
+export const IconOrg = (p: P) => (
+  <Svg strokeWidth={1.8} {...p}>
+    <rect className="icon-fill" x="9" y="3" width="6" height="5" rx="1.2" />
+    <rect x="3" y="16" width="6" height="5" rx="1.2" /><rect x="15" y="16" width="6" height="5" rx="1.2" />
+    <path d="M12 8v4M6 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" />
+  </Svg>
+);
 export const IconLogout = (p: P) => (
   <Svg strokeWidth={1.8} {...p}><path d="M9 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h4M16 17l5-5-5-5M21 12H9" /></Svg>
 );

@@ -1,6 +1,7 @@
-// 사용자 일괄 등록 (엑셀 행) — 조직(본부 > 부서 > 파트)을 만들거나 찾고 사용자 계정을 만든 뒤 가입 안내 DM
+// 사용자 일괄 등록 (엑셀 행) — 조직(회사 > 본부 > 부서 > 파트)을 만들거나 찾고 사용자 계정을 만든 뒤 가입 안내 DM
 //   body: { rows: [{ employeeNo, name, position?, email?, hq, dept?, part?, isAdmin? }] }
 //     · 소속 = 본부 · 부서 · 파트 중 가장 아래 칸 (본부장은 본부만, 부서장은 본부 · 부서, 파트 소속은 셋 다)
+//     · 본부 칸에 회사 이름(대교CNS)만 적으면 회사 소속, 새 본부는 회사 아래에 만듦
 //   누가: ① 첫 설치(사용자 0명) — 로그인 없이, 관리자(isAdmin) 행이 1명 이상 있어야 함
 //         ② 관리자 — 모든 조직 · 관리자 지정 가능
 //         ③ 부서장 이상 — 내 관리 범위 안에서만, 본부 · 부서는 이미 있어야 함(파트만 새로 만듦), 관리자 지정 불가
@@ -61,13 +62,20 @@ serve(async (req, body) => {
   // ── 조직: 이름으로 찾고 없으면 만듦 (구분 · 상위 조직이 다르면 오류) ──
   const { data: teamData } = await admin.from('teams').select(TEAM_COLS);
   const byName = new Map(((teamData ?? []) as TeamRow[]).map(t => [t.name, t]));
+  // 최상위 회사(대교CNS) — 본부는 그 아래. 본부 칸에 회사 이름만 적으면 회사 소속 (예: 대표이사)
+  const company = ((teamData ?? []) as TeamRow[]).find(t => t.unit_level === '회사') ?? null;
   async function ensureTeam(path: string[]): Promise<number> {
-    let parent: TeamRow | null = null;
+    if (company && path.length === 1 && path[0] === company.name) {
+      if (scope && !scope.has(company.id)) throw new HttpError(403, 'forbidden', `'${company.name}' 은(는) 내 관리 범위가 아닙니다`);
+      return company.id;
+    }
+    let parent: TeamRow | null = company;
     for (let d = 0; d < path.length; d++) {
       const name = path[d], level = LEVELS[d];
       let t = byName.get(name) ?? null;
       if (t) {
-        if (t.unit_level !== level || (t.parent_id ?? null) !== (parent?.id ?? null)) {
+        const parentOk = (t.parent_id ?? null) === (parent?.id ?? null) || (d === 0 && t.parent_id === null);
+        if (t.unit_level !== level || !parentOk) {
           throw new HttpError(409, 'duplicate', `'${name}' 은(는) 이미 다른 위치(${t.unit_level})에 있는 조직입니다`);
         }
       } else {

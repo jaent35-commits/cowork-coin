@@ -2,7 +2,8 @@ import type { View } from '@/types';
 import { cx } from '../ui';
 import { IconPanelToggle } from '../icons';
 import { useTheme } from '@/lib/theme';
-import { ADMIN_NAV, GNB, GNB_GROUPS, isActive, type NavItem } from './nav';
+import { ADMIN_GROUP_TITLE, GNB, GNB_GROUPS, adminNav, isActive, type NavItem } from './nav';
+import { REMOTE_AUTH } from '@/lib/supabase';
 import kowokLogo from '@/assets/kowok-logo.webp';
 import kowokLogoDark from '@/assets/kowok-logo-dark.webp'; // 다크 모드: 글자만 밝게
 import kowokIcon from '@/assets/kowok-icon.png';
@@ -49,12 +50,14 @@ export default function Sidebar({ view, isAdmin, collapsed, onToggle, onNavigate
         ))}
       </nav>
       {isAdmin && (
-        <>
-          <div className="sidebar__sep" role="separator" />
-          <nav className="sidebar__nav" aria-label="관리 메뉴">
-            <Item item={ADMIN_NAV} collapsed={collapsed} active={view === 'admin'} onClick={() => onNavigate('admin')} />
-          </nav>
-        </>
+        <nav className="sidebar__nav sidebar__nav--admin" aria-label="관리 메뉴">
+          <div className="sidebar__group" role="group" aria-label={ADMIN_GROUP_TITLE}>
+            <div className="sidebar__group-title" aria-hidden="true">{ADMIN_GROUP_TITLE}</div>
+            {adminNav(REMOTE_AUTH).map(item => (
+              <Item key={item.view} item={item} collapsed={collapsed} active={isActive(item, view)} onClick={() => onNavigate(item.view)} />
+            ))}
+          </div>
+        </nav>
       )}
       {/* 하단 장식 — 펼친 상태에서만 */}
       <div className="sidebar__deco" aria-hidden="true">

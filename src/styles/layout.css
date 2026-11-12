@@ -149,7 +149,7 @@
 }
 /* 접힌 GNB: 그룹 제목 대신 구분선 */
 .sidebar.is-collapsed .sidebar__group-title { height: 1px; margin: 0 10px 8px; padding: 0; background: var(--line); font-size: 0; }
-.sidebar__sep { height: 1px; margin: 4px 20px 10px; background: var(--line); }
+/* 관리자 그룹은 따로 nav — 위 nav 아래 여백(10) + 2 = 그룹 간격 12 */
 .sidebar__item {
   position: relative;
   display: flex; align-items: center; gap: 10px; width: 100%; height: 40px;
@@ -162,6 +162,7 @@
 :root[data-font="lg"] .sidebar__nav, :root[data-font="lg"] .sidebar__group { gap: 4px; }
 :root[data-font="lg"] .sidebar__group + .sidebar__group { margin-top: 18px; }
 :root[data-font="lg"] .sidebar__group-title { padding-bottom: 8px; }
+:root[data-font="lg"] .sidebar__nav--admin { padding-top: 8px; }
 :root[data-font="lg"] .sidebar__item { height: 52px; }
 .sidebar__text { flex: 1; min-width: 0; overflow: hidden; transition: opacity 0.15s ease; }
 .sidebar__item:hover { background: var(--primary-50); color: var(--text); }

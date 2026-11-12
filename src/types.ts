@@ -12,6 +12,7 @@ export type View =
   | 'settings'
   | 'notification'
   | 'admin'
+  | 'admin-org'
   | 'search';
 
 /** 로그인한 사용자 (Supabase 로그인 — 1인 1계정, 사번 로그인 · db/migrations/20261111b_org_members.sql) */
@@ -36,7 +37,7 @@ export interface Session {
 }
 
 /** 조직 구분 — 상위 조직은 항상 더 높은 구분 */
-export type UnitLevel = '본부' | '부서' | '파트';
+export type UnitLevel = '회사' | '본부' | '부서' | '파트';
 
 export interface Team {
   id: string;

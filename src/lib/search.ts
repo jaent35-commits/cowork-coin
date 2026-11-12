@@ -63,7 +63,8 @@ const MENUS: { title: string; view: View; sub: string; kw: string; tab?: string;
   { title: '알림 설정', view: 'notification', tab: '알림 설정', sub: '알림 · 푸시 알림 켜기/끄기', kw: '푸시 알림 설정 끄기 켜기' },
   { title: '내 정보 · 비밀번호 변경', view: 'mypage', anchor: 'password', sub: '계정 메뉴', kw: '마이페이지 내정보 성명 직위 사번 소속 비밀번호 암호 계정' },
   { title: '화면 설정 (글씨 크기 · 화면 모드)', view: 'settings', anchor: 'display', sub: '계정 메뉴', kw: '마이페이지 글씨 크기 큰글씨 폰트 화면 다크 모드 라이트 테마 어둡게 밝게 야간' },
-  { title: '사용자 관리', view: 'admin', sub: '사용자 · 조직 추가·수정·비밀번호 초기화', kw: '관리자 메뉴 팀 조직 파트 사용자 회원 가입 등록 엑셀 추가 휴면 권한 초기화', admin: true },
+  { title: '사용자 관리', view: 'admin', sub: '사용자 추가·수정·비밀번호 초기화 · 엑셀 등록', kw: '관리자 메뉴 사용자 회원 가입 등록 엑셀 추가 휴면 권한 초기화 사번', admin: true },
+  { title: '조직 관리', view: 'admin-org', sub: '회사 › 본부 › 부서 › 파트 · 소속 옮기기', kw: '관리자 메뉴 조직 조직도 회사 본부 부서 파트 팀 소속 이동', admin: true },
 ];
 
 /** 검색 — limit: 묶음별 최대 건수 (count 는 자르기 전 전체 건수) */

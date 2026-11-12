@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { View } from '@/types';
-import { IconBack, IconBell, IconChevron, IconDisplay, IconLock, IconLogout, IconShield } from '../icons';
+import { IconBack, IconBell, IconChevron, IconDisplay, IconLock, IconLogout } from '../icons';
 import { IconBtn, cx } from '../ui';
 import { useFontMode } from '@/lib/fontScale';
 import { REMOTE_AUTH } from '@/lib/supabase';
 import kowokIcon from '@/assets/kowok-icon.png';
-import { mobileTitle } from './nav';
+import { adminNav, mobileTitle } from './nav';
 import HeaderSearch from './HeaderSearch';
 import { usePullEgg } from './usePullEgg';
 
@@ -22,7 +22,7 @@ function FontToggle() {
   );
 }
 
-/** 로그인한 사람(브라우저 저장본: 팀) 이름 → 계정 메뉴 (내 정보 · 비밀번호 · 화면 설정 · 사용자 관리 · 로그아웃) */
+/** 로그인한 사람(브라우저 저장본: 팀) 이름 → 계정 메뉴 (내 정보 · 비밀번호 · 화면 설정 · 사용자 · 조직 관리 · 로그아웃) */
 function TeamButton({ teamName, isAdmin, onNavigate, onLogout }: {
   teamName: string; isAdmin: boolean; onNavigate: (v: View) => void; onLogout: () => void;
 }) {
@@ -49,7 +49,9 @@ function TeamButton({ teamName, isAdmin, onNavigate, onLogout }: {
         <div className="team-menu__pop" role="menu">
           <button type="button" role="menuitem" onClick={() => go('mypage')}><IconLock size={15} />{REMOTE_AUTH ? '내 정보 · 비밀번호' : '비밀번호 변경'}</button>
           <button type="button" role="menuitem" onClick={() => go('settings')}><IconDisplay size={15} />화면 설정</button>
-          {isAdmin && <button type="button" role="menuitem" onClick={() => go('admin')}><IconShield size={15} />사용자 관리</button>}
+          {isAdmin && adminNav(REMOTE_AUTH).map(({ view, label, icon: Icon }) => (
+            <button key={view} type="button" role="menuitem" onClick={() => go(view)}><Icon size={15} />{label}</button>
+          ))}
           <button type="button" role="menuitem" className="team-menu__logout" onClick={() => { setOpen(false); onLogout(); }}>
             <IconLogout size={15} />로그아웃
           </button>
