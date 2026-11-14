@@ -37,6 +37,9 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
   });
 
   const team = state.session?.team ?? '';
+  // 인사말: 사람 계정이면 "부서명 이름", 팀 계정(브라우저 저장본)이면 팀명
+  const memberName = state.session?.member?.name;
+  const greetName = memberName ? `${team} ${memberName}` : team;
   const ov = budgetOverview(state);
   // 팀 업무비: 이번 달 월 예산 (이월 없음 → 남은 금액은 다음 달 소멸)
   const workBudget = workBudgetOf(state, CUR_YYYYMM).amount;
@@ -123,7 +126,7 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
       <div className="home-head">
         <div>
           <div className="page-head__eyebrow">{todayLabel()}</div>
-          <h1 className="page-head__title home-head__title">안녕하세요, {team}님 👋</h1>
+          <h1 className="page-head__title home-head__title">안녕하세요, {greetName}님 👋</h1>
         </div>
         <Btn className="exec-cta" onClick={() => onNavigate('exec-new')}><IconPlus size={14} />집행 등록</Btn>
       </div>
