@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type DragEvent, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ChangeEvent, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import type { Team, UnitLevel } from '@/types';
 import { useAppState, useDispatch } from '@/store/StoreContext';
 import {
@@ -15,6 +15,19 @@ import MemberImportDialog from '@/components/MemberImportDialog';
 import './Pages.css';
 
 const ORG_PEOPLE_KEY = 'cowork-coin-org-people'; // localStorage: 조직 트리에 사용자 보기 (0 = 끔)
+const MOBILE_MQ = '(max-width: 640px)'; // Pages.css 모바일 구간과 같게
+
+/** 모바일 폭인지 (화면 회전 · 창 크기 변경 따라감) */
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.matchMedia(MOBILE_MQ).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_MQ);
+    const on = () => setMobile(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return mobile;
+}
 /** 사용자 추가 · 수정 폼 (id 가 있으면 수정) */
 type MemberDraft = { id?: string; employeeNo: string; name: string; position: string; email: string; teamId: string; isAdmin: boolean };
 type OrgDraft = { id?: string; name: string; level: UnitLevel; parentId?: string; active: boolean };
@@ -250,6 +263,9 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
   const [expanded, setExpanded] = useState<Set<string> | null>(null);
   const openSet = expanded ?? new Set(roots.flatMap(n => [n.team.id, ...(n.team.level === '회사' ? n.children.map(c => c.team.id) : [])]));
   const toggleOrg = (id: string) => setExpanded(() => { const s = new Set(openSet); if (s.has(id)) s.delete(id); else s.add(id); return s; });
+  // 모바일: 조직 줄을 누르면 선택(색 표시) + 줄 아래로 추가 · 수정 · 삭제 버튼이 펼쳐짐 (다시 누르면 닫힘)
+  const isMobile = useIsMobile();
+  const [picked, setPicked] = useState<string | null>(null);
   // 사용자 보기 끄면 조직만 펼치고 접는 트리 (이 기기에 기억)
   const [showPeople, setShowPeopleState] = useState(() => { try { return localStorage.getItem(ORG_PEOPLE_KEY) !== '0'; } catch { return true; } });
   const setShowPeople = (v: boolean) => {
@@ -293,7 +309,7 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
    * 조직 한 칸 — 들여쓰기 대신 왼쪽 연결선으로 단계를 보여 줌
    *   본부 > 부서 > 파트 순으로 글자 굵기 · 크기를 한 단계씩 낮춤, 관리 버튼은 PC 에서 줄에 올렸을 때만 진하게
    */
-  const renderOrg = (n: OrgNode): ReactNode => {
+  const renderOrg = (n: OrgNode, depth = 0): ReactNode => {
     const t = n.team;
     const lv = levelOf(t);
     const people = membersOf.get(t.id) ?? [];
@@ -301,41 +317,67 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
     const isOpen = hasBody && openSet.has(t.id);
     const total = totalOf(n);
     const child = CHILD_LEVEL[lv];
+    const isPicked = isMobile && picked === t.id;
+    const addChild = () => { setPicked(null); setOrg({ name: '', level: child!, parentId: t.id, active: true }); };
+    const editOrg = () => { setPicked(null); setOrg({ id: t.id, name: t.name, level: lv, parentId: t.parentId, active: t.active }); };
+    const deleteOrg = () => { setPicked(null); setConfirm({ kind: 'delete-org', team: t }); };
+    const showAdd = canAddChild(t) && !!child;
+    const showEdit = canEditOrg(t);
     return (
-      <li key={t.id} className={cx('org-node', `org-node--${LEVEL_CLASS[lv]}`)}>
-        <div className={cx('org-node__row', !t.active && 'is-dormant', dropId === t.id && 'is-drop')} {...dropProps(t)}>
+      <li key={t.id} className={cx('org-node', `org-node--${LEVEL_CLASS[lv]}`)} style={{ '--depth': depth } as CSSProperties}>
+        <div className={cx('org-node__row', !t.active && 'is-dormant', dropId === t.id && 'is-drop', isPicked && 'is-picked')} {...dropProps(t)}>
           {hasBody
             ? <button type="button" className="org-node__toggle" aria-expanded={isOpen} aria-label={`${t.name} ${isOpen ? '접기' : '펼치기'}`} onClick={() => toggleOrg(t.id)}>{isOpen ? '−' : '+'}</button>
             : <span className="org-node__toggle is-empty" aria-hidden="true" />}
-          <button type="button" className="org-node__title" disabled={!hasBody} onClick={() => toggleOrg(t.id)} tabIndex={-1}>
-            <span className="org-node__level">{lv}</span>
-            <span className="org-node__name">{t.name}</span>
-          </button>
+          {isMobile ? (
+            <button type="button" className="org-node__title" aria-pressed={isPicked} aria-label={`${t.name} ${isPicked ? '선택 해제' : '선택 — 관리 버튼 보기'}`}
+              onClick={() => setPicked(p => (p === t.id ? null : t.id))}>
+              <span className="org-node__level">{lv}</span>
+              <span className="org-node__name">{t.name}</span>
+            </button>
+          ) : (
+            <button type="button" className="org-node__title" disabled={!hasBody} onClick={() => toggleOrg(t.id)} tabIndex={-1}>
+              <span className="org-node__level">{lv}</span>
+              <span className="org-node__name">{t.name}</span>
+            </button>
+          )}
           <span className="org-node__meta">
             {!t.active && <Badge variant="gray" size="sm">비활성</Badge>}
             <span className={cx('org-node__count', !total && 'is-zero')} title={total !== people.length ? `직속 ${people.length}명 · 하위 포함 ${total}명` : undefined}>
               {total}명
             </span>
           </span>
-          {(canAddChild(t) || canEditOrg(t)) && (
+          {!isMobile && (showAdd || showEdit) && (
             <span className="org-node__acts">
-              {canAddChild(t) && child && (
-                <Btn size="sm" variant="ghost" disabled={!!org} aria-label={`${t.name} 아래 ${child} 추가`}
-                  onClick={() => setOrg({ name: '', level: child, parentId: t.id, active: true })}>
+              {showAdd && (
+                <Btn size="sm" variant="ghost" disabled={!!org} aria-label={`${t.name} 아래 ${child} 추가`} onClick={addChild}>
                   <IconPlus size={12} /><span className="org-node__add-label">{child}</span>
                 </Btn>
               )}
-              {canEditOrg(t) && (
+              {showEdit && (
                 <>
                   <button type="button" className="icon-btn icon-btn--sm" aria-label={`${t.name} 수정`} title="수정" disabled={!!org}
-                    onClick={() => setOrg({ id: t.id, name: t.name, level: lv, parentId: t.parentId, active: t.active })}><IconEdit size={14} /></button>
+                    onClick={editOrg}><IconEdit size={14} /></button>
                   <button type="button" className="icon-btn icon-btn--sm icon-btn--red" aria-label={`${t.name} 삭제`} title="삭제"
-                    onClick={() => setConfirm({ kind: 'delete-org', team: t })}><IconTrash size={14} /></button>
+                    onClick={deleteOrg}><IconTrash size={14} /></button>
                 </>
               )}
             </span>
           )}
         </div>
+        {isPicked && (
+          <div className="org-node__drawer" role="group" aria-label={`${t.name} 관리`}>
+            {showAdd || showEdit ? (
+              <>
+                {showAdd && <Btn size="sm" variant="secondary" disabled={!!org} onClick={addChild}><IconPlus size={12} />{child} 추가</Btn>}
+                {showEdit && <Btn size="sm" variant="secondary" disabled={!!org} onClick={editOrg}><IconEdit size={13} />수정</Btn>}
+                {showEdit && <Btn size="sm" variant="secondary" className="org-node__drawer-del" onClick={deleteOrg}><IconTrash size={13} />삭제</Btn>}
+              </>
+            ) : (
+              <span className="org-node__drawer-note">이 조직은 관리 권한이 없어요.</span>
+            )}
+          </div>
+        )}
         {isOpen && (
           <div className="org-node__body">
             {showPeople && people.length > 0 && (
@@ -364,7 +406,7 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
                 })}
               </ul>
             )}
-            {n.children.length > 0 && <ul className="org-tree__children">{n.children.map(c => renderOrg(c))}</ul>}
+            {n.children.length > 0 && <ul className="org-tree__children">{n.children.map(c => renderOrg(c, depth + 1))}</ul>}
           </div>
         )}
       </li>
@@ -616,8 +658,8 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
                     <Segmented label="조직 트리 보기 형식" value={showPeople ? 'people' : 'org'} onChange={v => setShowPeople(v === 'people')}
                       options={[{ value: 'people', label: '사용자 포함' }, { value: 'org', label: '조직만' }]} />
                     <span className="chip-row">
-                      <FilterChip label="모두 펼치기" active={allOpen} onClick={() => setExpanded(new Set(scopeTeams.map(t => t.id)))} />
-                      <FilterChip label="모두 접기" active={allClosed} onClick={() => setExpanded(new Set())} />
+                      <FilterChip label={isMobile ? '펼치기' : '모두 펼치기'} active={allOpen} onClick={() => setExpanded(new Set(scopeTeams.map(t => t.id)))} />
+                      <FilterChip label={isMobile ? '접기' : '모두 접기'} active={allClosed} onClick={() => setExpanded(new Set())} />
                     </span>
                   </span>
                 </div>

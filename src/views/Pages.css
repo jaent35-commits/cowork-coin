@@ -239,6 +239,18 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
 }
 /* 아래 단계: 토글 가운데에서 내려오는 연결선 */
 .org-node__body { margin-left: 29px; padding: 2px 0 4px 12px; border-left: 1px solid var(--line); }
+/* 모바일: 누른 조직 줄 색 표시 + 줄 아래로 펼쳐지는 관리 버튼 */
+.org-node__row.is-picked, .org-node__row.is-picked:hover { background: var(--primary-50); box-shadow: inset 3px 0 0 var(--primary); }
+.org-node__row.is-picked .org-node__name { color: var(--primary-700); }
+.org-node__drawer {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 4px 6px; padding: 8px 10px;
+  border-radius: var(--r-md); background: var(--primary-25); animation: org-drawer-in 0.18s ease both;
+}
+.org-node__drawer .btn { gap: 4px; }
+.org-node__drawer-del { color: var(--danger-600); }
+.org-node__drawer-note { font-size: calc(12.5px * var(--fs)); color: var(--muted); }
+@keyframes org-drawer-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .org-node__drawer { animation: none; } }
 
 .org-person {
   display: grid; grid-template-columns: 12px 28px minmax(0, 160px) 72px minmax(0, 1fr); align-items: center; column-gap: 10px;
@@ -286,11 +298,22 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
   .member-form { grid-template-columns: 1fr; }
   .member-toolbar { flex-direction: column; }
   .member-toolbar > *, .member-toolbar > .member-toolbar__org { flex: none; max-width: none; }
-  .org-tree__tools { padding: 10px 12px 10px 14px; }
-  .org-node__row { margin: 0 4px; padding: 4px 4px 4px 8px; gap: 8px; }
-  .org-node__add-label { display: none; }
-  .org-node__body { margin-left: 23px; padding-left: 8px; }
-  .org-person { grid-template-columns: 28px minmax(0, 1fr) auto; margin-right: 4px; }
+  /* 안내 문구는 윗줄, 보기 형식 · 펼치기 · 접기는 한 줄에 */
+  .org-tree__tools { gap: 8px; padding: 10px 12px; }
+  .org-tree__hint { flex: 1 0 100%; }
+  .org-tree__ctrls { flex: 1 0 100%; flex-wrap: nowrap; justify-content: space-between; gap: 8px; }
+  .org-tree__ctrls .chip-row { flex-wrap: nowrap; }
+  .org-tree__ctrls .chip { padding: 5px 11px; white-space: nowrap; }
+  .org-tree__ctrls .segmented__btn { padding: 5px 10px; white-space: nowrap; }
+  :root[data-font="lg"] .org-tree__ctrls { flex-wrap: wrap; } /* 큰 글씨: 넘치면 두 줄 */
+  .org-tree { padding: 8px 0 12px; }
+  .org-node--hq + .org-node--hq { margin-top: 4px; padding-top: 4px; }
+  /* +/− 는 단계와 상관없이 맨 왼쪽 한 줄로, 단계는 이름 들여쓰기로 */
+  .org-node__row { min-height: 46px; margin: 0 4px; padding: 6px 8px; gap: 8px; }
+  .org-node__title { flex: 1; align-self: stretch; align-items: center; padding-left: calc(var(--depth, 0) * 14px); }
+  .org-node__body { margin-left: 0; padding: 0; border-left: 0; }
+  .org-node__drawer { padding-left: calc(42px + var(--depth, 0) * 14px - 4px); }
+  .org-person { grid-template-columns: 28px minmax(0, 1fr) auto; min-height: 40px; margin-right: 4px; padding-left: calc(42px + (var(--depth, 0) + 1) * 14px); }
   .org-person__tags { justify-content: flex-end; }
   .org-person__grip { display: none; }
   .org-person__no { display: none; }
