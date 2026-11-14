@@ -248,7 +248,7 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
   border-radius: var(--r-md); background: var(--primary-25); animation: org-drawer-in 0.18s ease both;
 }
 .org-node__drawer .btn { gap: 4px; }
-.member-table--m th, .member-table--m td { white-space: nowrap; text-align: left; }
+.member-table--m th, .member-table--m td { white-space: nowrap; text-align: center; }
 .org-node__drawer-del { color: var(--danger-600); }
 .org-node__drawer-note { font-size: calc(12.5px * var(--fs)); color: var(--muted); }
 @keyframes org-drawer-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
@@ -320,14 +320,13 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
   .org-person { grid-template-columns: 28px minmax(0, 1fr) auto; min-height: 40px; margin-right: 4px; padding-left: 42px; }
   /* 사용자 목록: 사번 · 성명 · 직위, 누른 줄 색 표시 + 아래로 상세 */
   .member-table--m { width: 100%; table-layout: fixed; }
-  .member-table--m th:first-child, .member-table--m td:first-child { width: 30%; }
-  .member-table--m th:last-child, .member-table--m td:last-child { width: 26%; }
-  .member-table--m td { overflow: hidden; text-overflow: ellipsis; }
+  .member-table--m th { width: 33.33%; padding: 8px 6px; }
+  .member-table--m td { padding: 10px 6px; overflow: hidden; text-overflow: ellipsis; }
   .member-table__row { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   .member-table__row.is-picked > td { background: var(--primary-50); }
   .member-table__row.is-picked > td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
   .member-table__row.is-picked .member-table__name .t-strong { color: var(--primary-700); }
-  .member-table__panel > td { padding: 4px 12px 14px; background: var(--primary-25); white-space: normal; }
+  .member-table__panel > td { padding: 4px 12px 14px; background: var(--primary-25); white-space: normal; text-align: left; }
   .member-detail { display: grid; gap: 8px; margin: 6px 0 12px; }
   .member-detail > div { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 8px; }
   .member-detail dt { font-size: calc(12px * var(--fs)); font-weight: 700; color: var(--faint); }
