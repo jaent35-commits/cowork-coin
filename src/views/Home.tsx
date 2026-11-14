@@ -37,9 +37,15 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
   });
 
   const team = state.session?.team ?? '';
-  // 인사말: 사람 계정이면 "부서명 이름", 팀 계정(브라우저 저장본)이면 팀명
+  // 인사말: 사람 계정이면 "부서명 이름" (파트 소속이면 위의 부서, 본부 · 회사 직속이면 그 조직), 팀 계정(브라우저 저장본)이면 팀명
   const memberName = state.session?.member?.name;
-  const greetName = memberName ? `${team} ${memberName}` : team;
+  let unit = state.teams.find(t => t.name === team);
+  for (let guard = 0; unit?.level === '파트' && unit.parentId && guard < 5; guard++) {
+    const parent = state.teams.find(t => t.id === unit!.parentId);
+    if (!parent) break;
+    unit = parent;
+  }
+  const greetName = memberName ? `${unit?.name ?? team} ${memberName}` : team;
   const ov = budgetOverview(state);
   // 팀 업무비: 이번 달 월 예산 (이월 없음 → 남은 금액은 다음 달 소멸)
   const workBudget = workBudgetOf(state, CUR_YYYYMM).amount;
