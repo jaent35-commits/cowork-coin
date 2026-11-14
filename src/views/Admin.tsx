@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ChangeEvent, type DragEvent, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState, type ChangeEvent, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import type { Team, UnitLevel } from '@/types';
 import { useAppState, useDispatch } from '@/store/StoreContext';
 import {
@@ -14,7 +14,7 @@ import ImportResults from '@/components/ImportResults';
 import MemberImportDialog from '@/components/MemberImportDialog';
 import './Pages.css';
 
-const ORG_PEOPLE_KEY = 'cowork-coin-org-people'; // localStorage: 조직 트리에 사용자 보기 (0 = 끔)
+const ORG_PEOPLE_KEY = 'cowork-coin-org-people'; // localStorage: 조직 트리에 사용자 보기 (1 = 켬, 기본 끔)
 const MOBILE_MQ = '(max-width: 640px)'; // Pages.css 모바일 구간과 같게
 
 /** 모바일 폭인지 (화면 회전 · 창 크기 변경 따라감) */
@@ -266,8 +266,36 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
   // 모바일: 조직 줄을 누르면 선택(색 표시) + 줄 아래로 추가 · 수정 · 삭제 버튼이 펼쳐짐 (다시 누르면 닫힘)
   const isMobile = useIsMobile();
   const [picked, setPicked] = useState<string | null>(null);
+  // 모바일 사용자 목록: 누른 사용자 (아래로 상세 · 관리 버튼)
+  const [pickedMember, setPickedMember] = useState<string | null>(null);
+
+  // 사용자 표 칸 — PC 표와 모바일 펼침 영역이 함께 씀
+  const slackStatus = (m: MemberAdminRow) => (
+    !m.email ? <span className="t-muted">이메일 없음</span>
+      : m.slackLinked === true ? <Badge variant="green" size="sm">연결됨</Badge>
+      : m.slackLinked === false ? <Badge variant="red" size="sm">실패</Badge>
+      : <span className="t-muted">보낸 적 없음</span>
+  );
+  const activeBadge = (m: MemberAdminRow) => {
+    const self = m.id === myId;
+    return (
+      <Badge variant={m.active ? 'green' : 'gray'} size="lg" pressed={m.active} disabled={!canEditMember(m) || self || busy}
+        title={self ? '내 계정은 휴면으로 바꿀 수 없어요' : `${m.active ? '휴면' : '활성'}으로 변경`}
+        onClick={() => { void setActive(m, !m.active); }}>
+        ● {m.active ? '활성' : '휴면'}
+      </Badge>
+    );
+  };
+  const adminSwitch = (m: MemberAdminRow) => {
+    const self = m.id === myId;
+    return (
+      <Switch checked={m.isAdmin} disabled={self || busy} label={`${m.name} 관리자 권한`} text={m.isAdmin ? '관리자' : '일반'}
+        title={self ? '내 권한은 바꿀 수 없어요' : undefined} onChange={v => { void setAdmin(m, v); }} />
+    );
+  };
   // 사용자 보기 끄면 조직만 펼치고 접는 트리 (이 기기에 기억)
-  const [showPeople, setShowPeopleState] = useState(() => { try { return localStorage.getItem(ORG_PEOPLE_KEY) !== '0'; } catch { return true; } });
+  // 기본은 '조직만' — 사용자 포함을 고른 적이 있으면 그 선택을 따름
+  const [showPeople, setShowPeopleState] = useState(() => { try { return localStorage.getItem(ORG_PEOPLE_KEY) === '1'; } catch { return false; } });
   const setShowPeople = (v: boolean) => {
     setShowPeopleState(v);
     try { localStorage.setItem(ORG_PEOPLE_KEY, v ? '1' : '0'); } catch { /* 저장 불가 시 이번 세션만 */ }
@@ -309,7 +337,7 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
    * 조직 한 칸 — 들여쓰기 대신 왼쪽 연결선으로 단계를 보여 줌
    *   본부 > 부서 > 파트 순으로 글자 굵기 · 크기를 한 단계씩 낮춤, 관리 버튼은 PC 에서 줄에 올렸을 때만 진하게
    */
-  const renderOrg = (n: OrgNode, depth = 0): ReactNode => {
+  const renderOrg = (n: OrgNode): ReactNode => {
     const t = n.team;
     const lv = levelOf(t);
     const people = membersOf.get(t.id) ?? [];
@@ -323,8 +351,12 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
     const deleteOrg = () => { setPicked(null); setConfirm({ kind: 'delete-org', team: t }); };
     const showAdd = canAddChild(t) && !!child;
     const showEdit = canEditOrg(t);
+    // 바로 아래 조직 수 — 예: 경영지원본부 (2)
+    const subCount = n.children.length > 0 && (
+      <span className="org-node__sub" title={`하위 ${child ?? '조직'} ${n.children.length}개`} aria-label={`하위 조직 ${n.children.length}개`}>({n.children.length})</span>
+    );
     return (
-      <li key={t.id} className={cx('org-node', `org-node--${LEVEL_CLASS[lv]}`)} style={{ '--depth': depth } as CSSProperties}>
+      <li key={t.id} className={cx('org-node', `org-node--${LEVEL_CLASS[lv]}`)}>
         <div className={cx('org-node__row', !t.active && 'is-dormant', dropId === t.id && 'is-drop', isPicked && 'is-picked')} {...dropProps(t)}>
           {hasBody
             ? <button type="button" className="org-node__toggle" aria-expanded={isOpen} aria-label={`${t.name} ${isOpen ? '접기' : '펼치기'}`} onClick={() => toggleOrg(t.id)}>{isOpen ? '−' : '+'}</button>
@@ -334,11 +366,13 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
               onClick={() => setPicked(p => (p === t.id ? null : t.id))}>
               <span className="org-node__level">{lv}</span>
               <span className="org-node__name">{t.name}</span>
+              {subCount}
             </button>
           ) : (
             <button type="button" className="org-node__title" disabled={!hasBody} onClick={() => toggleOrg(t.id)} tabIndex={-1}>
               <span className="org-node__level">{lv}</span>
               <span className="org-node__name">{t.name}</span>
+              {subCount}
             </button>
           )}
           <span className="org-node__meta">
@@ -406,7 +440,7 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
                 })}
               </ul>
             )}
-            {n.children.length > 0 && <ul className="org-tree__children">{n.children.map(c => renderOrg(c, depth + 1))}</ul>}
+            {n.children.length > 0 && <ul className="org-tree__children">{n.children.map(c => renderOrg(c))}</ul>}
           </div>
         )}
       </li>
@@ -536,6 +570,53 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
               <EmptyState message={loadError ? '목록을 불러오지 못했어요' : '불러오는 중...'} />
             ) : !visible.length ? (
               <EmptyState icon="👤" message="사용자가 없어요" sub={orgFilter || query ? '조직 · 검색 조건을 바꿔 보세요' : '사용자 추가 또는 엑셀로 등록하세요'} />
+            ) : isMobile ? (
+              /* 모바일: 사번 · 성명 · 직위만, 줄을 누르면 색 표시 + 아래로 상세 · 관리 버튼 */
+              <table className="table member-table member-table--m">
+                <thead><tr><th>사번</th><th>성명</th><th>직위</th></tr></thead>
+                <tbody>
+                  {visible.map(m => {
+                    const self = m.id === myId;
+                    const editable = canEditMember(m);
+                    const open = pickedMember === m.id;
+                    const toggle = () => setPickedMember(p => (p === m.id ? null : m.id));
+                    return (
+                      <Fragment key={m.id}>
+                        <tr className={cx('member-table__row', !m.active && 'is-dormant', open && 'is-picked')} tabIndex={0} aria-expanded={open}
+                          onClick={toggle} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}>
+                          <td className="t-muted">{m.employeeNo}</td>
+                          <td className="member-table__name">
+                            <span className="t-strong">{m.name}</span>
+                            {self && <Badge variant="amber" size="sm" className="team-table__me">나</Badge>}
+                          </td>
+                          <td className="t-muted">{m.position || '—'}</td>
+                        </tr>
+                        {open && (
+                          <tr className="member-table__panel">
+                            <td colSpan={3}>
+                              <dl className="member-detail">
+                                <div><dt>소속</dt><dd>{pathOf(m.teamId) || '—'}</dd></div>
+                                <div><dt>슬랙 DM</dt><dd title={m.slackError ?? undefined}>{slackStatus(m)}</dd></div>
+                                <div><dt>상태</dt><dd>{activeBadge(m)}</dd></div>
+                                {isAdmin && <div><dt>관리자</dt><dd>{adminSwitch(m)}</dd></div>}
+                                {m.mustChangePassword && <div><dt>비밀번호</dt><dd><Badge variant="gray" size="sm">초기 비밀번호 사용 중</Badge></dd></div>}
+                              </dl>
+                              <div className="member-detail__btns">
+                                <Btn size="sm" variant="secondary" disabled={!editable || self} title={self ? '내 비밀번호는 내 정보에서 바꾸세요' : undefined}
+                                  onClick={() => setConfirm({ kind: 'reset', member: m })}>비밀번호 초기화</Btn>
+                                <Btn size="sm" variant="secondary" disabled={!editable}
+                                  onClick={() => { openEdit(m); window.scrollTo({ top: 0, behavior: 'smooth' }); }}><IconEdit size={13} />수정</Btn>
+                                <Btn size="sm" variant="secondary" className="member-detail__del" disabled={!editable || self}
+                                  onClick={() => setConfirm({ kind: 'delete', member: m })}><IconTrash size={13} />삭제</Btn>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
             ) : (
               <TableWrap>
                 <table className="table member-table">
@@ -558,25 +639,9 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
                           </td>
                           <td className="t-muted">{m.employeeNo}</td>
                           <td className="member-table__org">{pathOf(m.teamId)}</td>
-                          <td title={m.slackError ?? m.email ?? '회사 이메일 없음'}>
-                            {!m.email ? <span className="t-muted">이메일 없음</span>
-                              : m.slackLinked === true ? <Badge variant="green" size="sm">연결됨</Badge>
-                              : m.slackLinked === false ? <Badge variant="red" size="sm">실패</Badge>
-                              : <span className="t-muted">보낸 적 없음</span>}
-                          </td>
-                          <td>
-                            <Badge variant={m.active ? 'green' : 'gray'} size="lg" pressed={m.active} disabled={!editable || self || busy}
-                              title={self ? '내 계정은 휴면으로 바꿀 수 없어요' : `${m.active ? '휴면' : '활성'}으로 변경`}
-                              onClick={() => { void setActive(m, !m.active); }}>
-                              ● {m.active ? '활성' : '휴면'}
-                            </Badge>
-                          </td>
-                          {isAdmin && (
-                            <td>
-                              <Switch checked={m.isAdmin} disabled={self || busy} label={`${m.name} 관리자 권한`} text={m.isAdmin ? '관리자' : '일반'}
-                                title={self ? '내 권한은 바꿀 수 없어요' : undefined} onChange={v => { void setAdmin(m, v); }} />
-                            </td>
-                          )}
+                          <td title={m.slackError ?? m.email ?? '회사 이메일 없음'}>{slackStatus(m)}</td>
+                          <td>{activeBadge(m)}</td>
+                          {isAdmin && <td>{adminSwitch(m)}</td>}
                           <td className="t-center">
                             <Btn size="sm" variant="secondary" disabled={!editable || self} title={self ? '내 비밀번호는 내 정보에서 바꾸세요' : undefined}
                               onClick={() => setConfirm({ kind: 'reset', member: m })}>초기화</Btn>

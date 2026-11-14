@@ -226,6 +226,7 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
 .org-node--dept > .org-node__row .org-node__name { font-size: calc(14.5px * var(--fs)); font-weight: 700; }
 .org-node--part > .org-node__row .org-node__name { font-size: calc(14px * var(--fs)); font-weight: 600; }
 .org-node__row.is-dormant .org-node__name { color: var(--faint); }
+.org-node__sub { flex-shrink: 0; margin-left: -4px; font-size: calc(12.5px * var(--fs)); font-weight: 600; color: var(--faint); font-variant-numeric: tabular-nums; }
 .org-node__meta { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .org-node__count {
   min-width: 34px; padding: 1px 8px; border-radius: var(--r-pill); background: var(--surface-muted); text-align: center;
@@ -247,6 +248,7 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
   border-radius: var(--r-md); background: var(--primary-25); animation: org-drawer-in 0.18s ease both;
 }
 .org-node__drawer .btn { gap: 4px; }
+.member-table--m th, .member-table--m td { white-space: nowrap; text-align: left; }
 .org-node__drawer-del { color: var(--danger-600); }
 .org-node__drawer-note { font-size: calc(12.5px * var(--fs)); color: var(--muted); }
 @keyframes org-drawer-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
@@ -308,12 +310,31 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
   :root[data-font="lg"] .org-tree__ctrls { flex-wrap: wrap; } /* 큰 글씨: 넘치면 두 줄 */
   .org-tree { padding: 8px 0 12px; }
   .org-node--hq + .org-node--hq { margin-top: 4px; padding-top: 4px; }
-  /* +/− 는 단계와 상관없이 맨 왼쪽 한 줄로, 단계는 이름 들여쓰기로 */
+  /* 회사 · 본부 · 부서 · 파트 모두 같은 왼쪽 선 · 같은 글씨 크기 — 단계는 앞의 단계 글자로 구분 */
   .org-node__row { min-height: 46px; margin: 0 4px; padding: 6px 8px; gap: 8px; }
-  .org-node__title { flex: 1; align-self: stretch; align-items: center; padding-left: calc(var(--depth, 0) * 14px); }
+  .org-node__title { flex: 1; align-self: stretch; align-items: center; }
+  .org-node__level { min-width: 2.2em; }
+  .org-node > .org-node__row .org-node__name { font-size: calc(14.5px * var(--fs)); font-weight: 700; letter-spacing: 0; }
   .org-node__body { margin-left: 0; padding: 0; border-left: 0; }
-  .org-node__drawer { padding-left: calc(42px + var(--depth, 0) * 14px - 4px); }
-  .org-person { grid-template-columns: 28px minmax(0, 1fr) auto; min-height: 40px; margin-right: 4px; padding-left: calc(42px + (var(--depth, 0) + 1) * 14px); }
+  .org-node__drawer { padding-left: 38px; }
+  .org-person { grid-template-columns: 28px minmax(0, 1fr) auto; min-height: 40px; margin-right: 4px; padding-left: 42px; }
+  /* 사용자 목록: 사번 · 성명 · 직위, 누른 줄 색 표시 + 아래로 상세 */
+  .member-table--m { width: 100%; table-layout: fixed; }
+  .member-table--m th:first-child, .member-table--m td:first-child { width: 30%; }
+  .member-table--m th:last-child, .member-table--m td:last-child { width: 26%; }
+  .member-table--m td { overflow: hidden; text-overflow: ellipsis; }
+  .member-table__row { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .member-table__row.is-picked > td { background: var(--primary-50); }
+  .member-table__row.is-picked > td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+  .member-table__row.is-picked .member-table__name .t-strong { color: var(--primary-700); }
+  .member-table__panel > td { padding: 4px 12px 14px; background: var(--primary-25); white-space: normal; }
+  .member-detail { display: grid; gap: 8px; margin: 6px 0 12px; }
+  .member-detail > div { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 8px; }
+  .member-detail dt { font-size: calc(12px * var(--fs)); font-weight: 700; color: var(--faint); }
+  .member-detail dd { margin: 0; min-width: 0; font-size: calc(13.5px * var(--fs)); color: var(--text-2); word-break: keep-all; }
+  .member-detail__btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  .member-detail__btns .btn { gap: 4px; }
+  .member-detail__del { color: var(--danger-600); }
   .org-person__tags { justify-content: flex-end; }
   .org-person__grip { display: none; }
   .org-person__no { display: none; }
