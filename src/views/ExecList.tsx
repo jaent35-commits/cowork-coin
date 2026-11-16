@@ -7,7 +7,7 @@ import {
   PROJECT_GROUP, TEAM_GROUP, bucketOf, budgetName, groupOf, parseTypeKey, recordTypeKey, typeIcon, workBudgetOf, workUsedOf,
 } from '@/lib/budget';
 import { budgetTypeOptions } from '@/components/budgetTypeOptions';
-import { workEnabled } from '@/lib/access';
+import { meetingEditable, workEnabled } from '@/lib/access';
 import { execProjects } from '@/store/selectors';
 import { useToast } from '@/hooks/useToast';
 import { onFocusRequest, takeFocus } from '@/lib/search';
@@ -180,6 +180,9 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
   const state = useAppState();
   const { records, projects } = state;
   const showWork = workEnabled(state);
+  // 팀 회의비 편집 권한이 없으면 회의비 집행은 보기만 (수정 · 삭제 선택 불가)
+  const showMeeting = meetingEditable(state);
+  const locked = (r: ExecRecord) => r.type === 'meeting' && !showMeeting;
   const dispatch = useDispatch();
   const [toast, showToast] = useToast();
   const [arrivalMsg] = useState(() => pendingToast);
@@ -367,6 +370,7 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
     if (edit?.id === r.id && edit.field === field) return; // 수정 중인 칸(팝업 포함) 안의 클릭
     if (selectedId !== r.id) { setSelectedId(r.id); setEdit(null); return; }
     if (!field) return;
+    if (locked(r)) { showToast('팀 회의비 편집 권한이 없어 볼 수만 있어요.', 'warn'); return; }
     const value = field === 'useDate' ? spentDateOf(r) : field === 'type' ? recordTypeKey(r) : field === 'name' ? r.items[0]?.name ?? '' : r.total;
     setEdit({ id: r.id, field, value });
   };
@@ -377,13 +381,14 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
 
   // ── 체크 삭제 ──
   const visibleChecked = filtered.filter(r => checked.has(r.id));
-  const allChecked = filtered.length > 0 && visibleChecked.length === filtered.length;
+  const checkable = filtered.filter(r => !locked(r));
+  const allChecked = checkable.length > 0 && visibleChecked.length === checkable.length;
   const toggleCheck = (id: string) => setChecked(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   // 모바일(체크박스 숨김): 행을 꾹 누르면(0.5초) 삭제 선택 토글 — 손을 떼며 생기는 클릭은 무시
   const press = useRef<{ id: string; x: number; y: number; timer: number; fired: boolean } | null>(null);
   const isMobile = () => window.matchMedia('(max-width: 1024px)').matches;
   const pressStart = (id: string) => (e: ReactPointerEvent) => {
-    if (!isMobile() || edit?.id === id) return;
+    if (!isMobile() || edit?.id === id || !checkable.some(r => r.id === id)) return;
     const timer = window.setTimeout(() => {
       if (!press.current) return;
       press.current.fired = true;
@@ -410,10 +415,10 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
   const selectMode = mobile && visibleChecked.length > 0;
   const pressClick = (id: string) => (e: ReactMouseEvent) => {
     if (press.current?.fired) { e.stopPropagation(); e.preventDefault(); press.current = null; return; }
-    if (selectMode) { e.stopPropagation(); e.preventDefault(); toggleCheck(id); setConfirmDelete(false); }
+    if (selectMode) { e.stopPropagation(); e.preventDefault(); if (checkable.some(r => r.id === id)) toggleCheck(id); setConfirmDelete(false); }
   };
   const exitSelect = () => { setChecked(new Set()); setConfirmDelete(false); };
-  const toggleAll = () => setChecked(allChecked ? new Set() : new Set(filtered.map(r => r.id)));
+  const toggleAll = () => setChecked(allChecked ? new Set() : new Set(checkable.map(r => r.id)));
   const deleteChecked = () => {
     const ids = visibleChecked.map(r => r.id);
     if (!ids.length) return;
@@ -527,7 +532,7 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
             <thead>
               <tr>
                 <th className="exec-table__check">
-                  <Checkbox checked={allChecked} disabled={!filtered.length}
+                  <Checkbox checked={allChecked} disabled={!checkable.length}
                     ref={el => { if (el) el.indeterminate = visibleChecked.length > 0 && !allChecked; }}
                     onChange={toggleAll} aria-label="전체 선택" />
                 </th>
@@ -560,7 +565,7 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
                     onPointerDown={pressStart(r.id)} onPointerMove={pressMove} onPointerUp={pressEnd} onPointerCancel={pressEnd} onPointerLeave={pressEnd}
                     onClickCapture={pressClick(r.id)} onContextMenu={e => { if (isMobile()) e.preventDefault(); }}>
                     <td className="exec-table__check" onClick={e => e.stopPropagation()}>
-                      <Checkbox checked={checked.has(r.id)} onChange={() => toggleCheck(r.id)}
+                      <Checkbox checked={checked.has(r.id)} onChange={() => toggleCheck(r.id)} disabled={locked(r)}
                         aria-label={`${spentDateOf(r)} ${r.items[0]?.name ?? ''} 선택`} />
                     </td>
                     <td className="exec-table__use t-nowrap" onClick={e => { e.stopPropagation(); onCell(r, 'useDate'); }}>
@@ -583,6 +588,7 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
                             value={recordTypeKey(r)} onChange={e => commit(r, 'type', e.target.value)} onClose={() => setEdit(null)}>
                             {budgetTypeOptions(typeProjectsOf(r), {
                               work: showWork || r.type === 'work',
+                              meeting: showMeeting || r.type === 'meeting',
                               extra: r.type === 'project' && !typeProjectsOf(r).some(p => p.id === r.projectId) && (
                                 <option value={recordTypeKey(r)} disabled>{projName(r.projectId)} (종료)</option>
                               ),

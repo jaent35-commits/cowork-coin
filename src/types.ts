@@ -24,8 +24,10 @@ export interface MemberInfo {
   email: string | null;
   /** 초기 비밀번호 상태 — 첫 로그인 때 변경 필수 */
   mustChangePassword: boolean;
-  /** 업무비 사용 여부 — 관리자가 사용자별로 켜고 끔 (없으면 켬) */
+  /** 업무비 권한 (조회 + 편집) — 관리자가 사용자별로 켜고 끔 (없으면 켬) */
   workEnabled?: boolean;
+  /** 팀 회의비 편집 권한 — 끄면 보기만 (없으면 켬, 관리자 계정은 늘 편집) */
+  meetingEdit?: boolean;
 }
 
 export interface Session {

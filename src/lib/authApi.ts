@@ -55,12 +55,12 @@ export const toTeam = (r: TeamRow): Team => ({
 
 type MemberRow = {
   id: number; employee_no: string; name: string; position: string | null; email: string | null; team_id: number;
-  is_admin: boolean; is_active: boolean; must_change_password: boolean; work_enabled: boolean; slack_user_id?: string | null; slack_error?: string | null;
+  is_admin: boolean; is_active: boolean; must_change_password: boolean; work_enabled: boolean; meeting_edit: boolean; slack_user_id?: string | null; slack_error?: string | null;
 };
-const MEMBER_COLS = 'id, employee_no, name, position, email, team_id, is_admin, is_active, must_change_password, work_enabled';
+const MEMBER_COLS = 'id, employee_no, name, position, email, team_id, is_admin, is_active, must_change_password, work_enabled, meeting_edit';
 const toMemberInfo = (r: MemberRow): MemberInfo => ({
   id: String(r.id), employeeNo: r.employee_no, name: r.name, position: r.position, email: r.email, mustChangePassword: r.must_change_password,
-  workEnabled: r.work_enabled !== false,
+  workEnabled: r.work_enabled !== false, meetingEdit: r.meeting_edit !== false,
 });
 
 // ── 로그인 전 ──
@@ -157,12 +157,12 @@ export const createMember = (m: NewMember) =>
 export const resetMemberPassword = (memberId: string) => invoke<{ dm: boolean; tempPassword?: string }>('reset-member-password', { memberId: Number(memberId) });
 export const deleteMember = (memberId: string) => invoke<{ ok: true }>('delete-member', { memberId: Number(memberId) });
 
-/** 성명 · 직위 · 이메일 · 소속 · 활성 · 관리자 · 업무비 사용(관리자만) (바꾸지 않을 값은 생략 · 빈 문자열은 지움) */
-export async function updateMember(memberId: string, patch: { name?: string; position?: string; email?: string; teamId?: string; active?: boolean; isAdmin?: boolean; workEnabled?: boolean }) {
+/** 성명 · 직위 · 이메일 · 소속 · 활성 · 관리자 · 업무비 권한 · 회의비 편집 권한(관리자만) (바꾸지 않을 값은 생략 · 빈 문자열은 지움) */
+export async function updateMember(memberId: string, patch: { name?: string; position?: string; email?: string; teamId?: string; active?: boolean; isAdmin?: boolean; workEnabled?: boolean; meetingEdit?: boolean }) {
   const { error } = await client().rpc('update_member', {
     p_id: Number(memberId), p_name: patch.name ?? null, p_position: patch.position ?? null, p_email: patch.email ?? null,
     p_team_id: patch.teamId ? Number(patch.teamId) : null, p_is_active: patch.active ?? null, p_is_admin: patch.isAdmin ?? null,
-    p_work_enabled: patch.workEnabled ?? null,
+    p_work_enabled: patch.workEnabled ?? null, p_meeting_edit: patch.meetingEdit ?? null,
   });
   if (error) rpcFail(error, '사용자 정보를 바꾸지 못했습니다');
 }

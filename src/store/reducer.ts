@@ -419,7 +419,9 @@ export function reducer(state: AppState, action: Action): AppState {
     }
     case 'SET_PUSH_KIND': {
       const cur = state.notifPrefs[action.team] ?? DEFAULT_PREFS;
-      return { ...state, notifPrefs: { ...state.notifPrefs, [action.team]: { ...cur, kinds: { ...cur.kinds, [action.kind]: action.on } } } };
+      // '설정 변경' 은 늘 켜짐 (끌 수 없음)
+      const on = action.kind === 'setting' ? true : action.on;
+      return { ...state, notifPrefs: { ...state.notifPrefs, [action.team]: { ...cur, kinds: { ...cur.kinds, [action.kind]: on } } } };
     }
 
   }

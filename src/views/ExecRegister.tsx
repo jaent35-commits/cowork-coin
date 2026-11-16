@@ -10,7 +10,7 @@ import { AmountInput, Btn, Card, DateField, IconBtn, Input, PageHead, SectionHea
 import { IconClose } from '@/components/icons';
 import ReceiptScan from '@/components/ReceiptScan';
 import { budgetTypeOptions } from '@/components/budgetTypeOptions';
-import { workEnabled } from '@/lib/access';
+import { meetingEditable, workEnabled } from '@/lib/access';
 import type { ReceiptResult } from '@/lib/receiptOcr';
 import { releaseReceiptScan } from '@/lib/receiptPipeline';
 import { toastOnExecList } from './ExecList';
@@ -18,7 +18,7 @@ import './Exec.css';
 
 /** 1줄 = 1건 (집행 현황 표와 같은 기조: 사용일자 · 예산 유형 · 항목명 · 금액) */
 interface Row { id: string; useDate: string; typeKey: string; name: string; amount: number }
-const newRow = (from?: Row): Row => ({ id: uid('r'), useDate: from?.useDate || TODAY_ISO, typeKey: from?.typeKey ?? 'meeting', name: '', amount: 0 });
+const newRow = (from?: Row, typeKey = 'meeting'): Row => ({ id: uid('r'), useDate: from?.useDate || TODAY_ISO, typeKey: from?.typeKey ?? typeKey, name: '', amount: 0 });
 
 interface Impact extends Bucket { input: number; after: number | null; over: boolean }
 
@@ -26,18 +26,23 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
   const state = useAppState();
   const dispatch = useDispatch();
   const [toast, showToast] = useToast();
-  const [rows, setRows] = useState<Row[]>([newRow()]);
   /** 이 줄의 사용일자에 쓸 수 있는 프로젝트 (사용 종료일 지난 프로젝트는 숨김) */
   const projectsFor = (r: Row) => execProjects(state, r.useDate || TODAY_ISO);
-  // 업무비를 쓰지 않는 사용자는 업무비 선택지 없음
+  // 업무비 권한 · 팀 회의비 편집 권한이 없는 사용자는 그 선택지 없음
   const showWork = workEnabled(state);
-  const allowed = (r: Row) => (r.typeKey === 'work' ? showWork : !r.typeKey.startsWith('p:') || projectsFor(r).some(p => `p:${p.id}` === r.typeKey));
+  const showMeeting = meetingEditable(state);
+  /** 기본 예산 유형 — 팀 회의비 → 업무비 → 오늘 쓸 수 있는 첫 프로젝트 */
+  const firstProject = execProjects(state, TODAY_ISO)[0];
+  const defaultKey = showMeeting ? 'meeting' : showWork ? 'work' : firstProject ? `p:${firstProject.id}` : '';
+  const [rows, setRows] = useState<Row[]>(() => [newRow(undefined, defaultKey)]);
+  const allowed = (r: Row) => (r.typeKey === 'work' ? showWork : r.typeKey === 'meeting' ? showMeeting
+    : r.typeKey.startsWith('p:') && projectsFor(r).some(p => `p:${p.id}` === r.typeKey));
 
   // 사용일자를 바꿔 고른 프로젝트를 더 쓸 수 없으면 예산 유형을 팀 회의비로 되돌림
   const update = (id: string, patch: Partial<Row>) => setRows(rs => rs.map(r => {
     if (r.id !== id) return r;
     const next = { ...r, ...patch };
-    return allowed(next) ? next : { ...next, typeKey: 'meeting' };
+    return allowed(next) ? next : { ...next, typeKey: defaultKey };
   }));
   const monthOf = (r: Row) => (r.useDate || TODAY_ISO).slice(0, 7);
 
@@ -64,7 +69,7 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
   const canSave = sum > 0 && !noProject && !tooOld;
 
   // 입력 전 요약(PC): 첫 줄 예산의 현재 잔액
-  const firstBucket = bucketOf(state, rows[0]?.typeKey ?? 'meeting', monthOf(rows[0] ?? newRow()));
+  const firstBucket = bucketOf(state, rows[0]?.typeKey ?? defaultKey, monthOf(rows[0] ?? newRow(undefined, defaultKey)));
 
   // 영수증 인식 worker 는 이 화면 안에서만 재사용 — 화면을 벗어나면 서버 요청 취소 + 즉시 해제
   useEffect(() => releaseReceiptScan, []);
@@ -165,7 +170,7 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
                   <div className="reg-field reg-row__type">
                     <span className="reg-field__label" aria-hidden="true">예산 유형</span>
                     <Select value={row.typeKey} aria-label={`${idx + 1}번 예산 유형`} onChange={e => update(row.id, { typeKey: e.target.value })}>
-                      {budgetTypeOptions(projectsFor(row), { icons: true, work: showWork })}
+                      {budgetTypeOptions(projectsFor(row), { icons: true, work: showWork, meeting: showMeeting })}
                     </Select>
                   </div>
                   <div className="reg-field reg-row__name">
@@ -187,7 +192,8 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
               );
             })}
           </div>
-          {noProject && <p className="reg-note">사용일자가 사용 종료일 이내인 프로젝트만 선택할 수 있습니다.</p>}
+          {!defaultKey && <p className="reg-note">등록할 수 있는 예산이 없어요. 팀 회의비 · 업무비 권한은 관리자에게 문의하세요.</p>}
+          {noProject && defaultKey && <p className="reg-note">사용일자가 사용 종료일 이내인 프로젝트만 선택할 수 있습니다.</p>}
           {tooOld && <p className="reg-note">사용일자는 {minDate.slice(0, 4)}년 {Number(minDate.slice(5, 7))}월 1일부터 등록할 수 있습니다 (지난달 사용 건은 매월 {PREV_MONTH_DEADLINE}일까지).</p>}
         </Card>
 

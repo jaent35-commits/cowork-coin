@@ -198,7 +198,9 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
   const setAdmin = (m: MemberAdminRow, on: boolean) =>
     run(() => updateMember(m.id, { isAdmin: on }), `${m.name} 관리자 권한을 ${on ? '부여' : '해제'}했어요.`);
   const setWork = (m: MemberAdminRow, on: boolean) =>
-    run(() => updateMember(m.id, { workEnabled: on }), `${m.name}의 업무비를 ${on ? '켰어요' : '껐어요. 업무비 메뉴가 숨겨져요'}.`);
+    run(() => updateMember(m.id, { workEnabled: on }), `${m.name}의 업무비 권한을 ${on ? '켰어요' : '껐어요. 업무비 메뉴가 숨겨져요'}.`);
+  const setMeetingEdit = (m: MemberAdminRow, on: boolean) =>
+    run(() => updateMember(m.id, { meetingEdit: on }), `${m.name}의 팀 회의비 편집 권한을 ${on ? '켰어요' : '껐어요. 팀 회의비는 보기만 해요'}.`);
 
   const runConfirm = async () => {
     if (!confirm || busy) return;
@@ -295,10 +297,17 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
         title={self ? '내 권한은 바꿀 수 없어요' : undefined} onChange={v => { void setAdmin(m, v); }} />
     );
   };
-  // 업무비 사용 여부 (관리자만) — 끄면 그 사람의 업무비 메뉴 · 집행 선택지가 숨겨짐
+  // 메뉴 권한 (관리자만)
+  //   업무비 = 조회 + 편집 Y/N — 끄면 그 사람의 업무비 메뉴 · 집행 선택지가 숨겨지고 업무비 기록도 안 보임
   const workSwitch = (m: MemberAdminRow) => (
-    <Switch checked={m.workEnabled !== false} disabled={busy} label={`${m.name} 업무비 사용`} text={m.workEnabled !== false ? '사용' : '안 씀'}
+    <Switch checked={m.workEnabled !== false} disabled={busy} label={`${m.name} 업무비 조회 · 편집 권한`} text={m.workEnabled !== false ? 'Y' : 'N'}
       onChange={v => { void setWork(m, v); }} />
+  );
+  //   팀 회의비 편집 Y/N — 끄면 회의비는 보기만 (관리자 계정은 늘 편집)
+  const meetingSwitch = (m: MemberAdminRow) => (
+    <Switch checked={m.isAdmin || m.meetingEdit !== false} disabled={busy || m.isAdmin} label={`${m.name} 팀 회의비 편집 권한`}
+      text={m.isAdmin || m.meetingEdit !== false ? 'Y' : 'N'} title={m.isAdmin ? '관리자는 늘 편집할 수 있어요' : undefined}
+      onChange={v => { void setMeetingEdit(m, v); }} />
   );
   // 사용자 보기 끄면 조직만 펼치고 접는 트리 (이 기기에 기억)
   // 기본은 '조직만' — 사용자 포함을 고른 적이 있으면 그 선택을 따름
@@ -338,7 +347,27 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
   };
   roots.forEach(walk);
   const allOpen = openable.length > 0 && openable.every(id => openSet.has(id));
-  const allClosed = openable.every(id => !openSet.has(id));
+  // 접기 = 맨 위 조직(대교CNS)만 펼쳐 본부까지 보이게
+  const rootIds = new Set(roots.map(n => n.team.id));
+  const collapseAll = () => setExpanded(new Set(rootIds));
+  const allClosed = openable.every(id => openSet.has(id) === rootIds.has(id));
+
+  // 조직 활성 · 비활성 — 목록에서 바로 바꿈 (회사 · 내 조직은 못 끔)
+  const myTeamId = members?.find(m => m.id === myId)?.teamId;
+  const setOrgActive = (t: Team, active: boolean) =>
+    run(() => saveTeam({ id: t.id, name: t.name, level: levelOf(t), parentId: t.parentId, active }),
+      `${t.name} 조직을 ${active ? '활성' : '비활성'}으로 바꿨어요.`);
+  const orgActiveBadge = (t: Team) => {
+    const locked = levelOf(t) === '회사' || (t.active && t.id === myTeamId);
+    const editable = canEditOrg(t) && !locked;
+    if (!editable) return !t.active ? <Badge variant="gray" size="sm">비활성</Badge> : null;
+    return (
+      <Badge variant={t.active ? 'green' : 'gray'} size="sm" pressed={t.active} disabled={busy || !!org}
+        title={`${t.active ? '비활성' : '활성'}으로 변경`} onClick={() => { void setOrgActive(t, !t.active); }}>
+        ● {t.active ? '활성' : '비활성'}
+      </Badge>
+    );
+  };
 
   /**
    * 조직 한 칸 — 들여쓰기 대신 왼쪽 연결선으로 단계를 보여 줌
@@ -358,9 +387,9 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
     const deleteOrg = () => { setPicked(null); setConfirm({ kind: 'delete-org', team: t }); };
     const showAdd = canAddChild(t) && !!child;
     const showEdit = canEditOrg(t);
-    // 바로 아래 조직 수 — 예: 경영지원본부 (2)
-    const subCount = n.children.length > 0 && (
-      <span className="org-node__sub" title={`하위 ${child ?? '조직'} ${n.children.length}개`} aria-label={`하위 조직 ${n.children.length}개`}>({n.children.length})</span>
+    // 이 조직 소속(직속) 사용자 수 — 모든 단계에 항상 표시, 예: 경영지원본부 (1) · 디자인파트 (0)
+    const subCount = (
+      <span className="org-node__sub" title={`직속 사용자 ${people.length}명`} aria-label={`직속 사용자 ${people.length}명`}>({people.length})</span>
     );
     return (
       <li key={t.id} className={cx('org-node', `org-node--${LEVEL_CLASS[lv]}`)}>
@@ -383,8 +412,8 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
             </button>
           )}
           <span className="org-node__meta">
-            {!t.active && <Badge variant="gray" size="sm">비활성</Badge>}
-            <span className={cx('org-node__count', !total && 'is-zero')} title={total !== people.length ? `직속 ${people.length}명 · 하위 포함 ${total}명` : undefined}>
+            {orgActiveBadge(t)}
+            <span className={cx('org-node__count', !total && 'is-zero')} title={`하위 조직 포함 ${total}명`}>
               {total}명
             </span>
           </span>
@@ -606,7 +635,8 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
                                 <div><dt>슬랙 DM</dt><dd title={m.slackError ?? undefined}>{slackStatus(m)}</dd></div>
                                 <div><dt>상태</dt><dd>{activeBadge(m)}</dd></div>
                                 {isAdmin && <div><dt>관리자</dt><dd>{adminSwitch(m)}</dd></div>}
-                                {isAdmin && <div><dt>업무비</dt><dd>{workSwitch(m)}</dd></div>}
+                                {isAdmin && <div><dt>업무비 조회·편집</dt><dd>{workSwitch(m)}</dd></div>}
+                                {isAdmin && <div><dt>회의비 편집</dt><dd>{meetingSwitch(m)}</dd></div>}
                                 {m.mustChangePassword && <div><dt>비밀번호</dt><dd><Badge variant="gray" size="sm">초기 비밀번호 사용 중</Badge></dd></div>}
                               </dl>
                               <div className="member-detail__btns">
@@ -630,7 +660,7 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
                 <table className="table member-table">
                   <thead>
                     <tr>
-                      <th>성명</th><th>사번</th><th>소속</th><th>슬랙 DM</th><th>상태</th>{isAdmin && <><th>관리자</th><th>업무비</th></>}
+                      <th>성명</th><th>사번</th><th>소속</th><th>슬랙 DM</th><th>상태</th>{isAdmin && <><th>관리자</th><th title="팀 운영 › 업무비 메뉴 조회 · 편집">업무비 조회·편집</th><th title="팀 운영 › 팀 회의비 편집">회의비 편집</th></>}
                       <th className="t-center">비밀번호</th><th className="t-center">수정</th><th className="t-center">삭제</th>
                     </tr>
                   </thead>
@@ -649,7 +679,7 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
                           <td className="member-table__org">{pathOf(m.teamId)}</td>
                           <td title={m.slackError ?? m.email ?? '회사 이메일 없음'}>{slackStatus(m)}</td>
                           <td>{activeBadge(m)}</td>
-                          {isAdmin && <><td>{adminSwitch(m)}</td><td>{workSwitch(m)}</td></>}
+                          {isAdmin && <><td>{adminSwitch(m)}</td><td>{workSwitch(m)}</td><td>{meetingSwitch(m)}</td></>}
                           <td className="t-center">
                             <Btn size="sm" variant="secondary" disabled={!editable || self} title={self ? '내 비밀번호는 내 정보에서 바꾸세요' : undefined}
                               onClick={() => setConfirm({ kind: 'reset', member: m })}>초기화</Btn>
@@ -729,10 +759,10 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
                   </p>
                   <span className="org-tree__ctrls">
                     <Segmented label="조직 트리 보기 형식" value={showPeople ? 'people' : 'org'} onChange={v => setShowPeople(v === 'people')}
-                      options={[{ value: 'people', label: '사용자 포함' }, { value: 'org', label: '조직만' }]} />
+                      options={[{ value: 'org', label: '조직만' }, { value: 'people', label: '사용자 포함' }]} />
                     <span className="chip-row">
                       <FilterChip label={isMobile ? '펼치기' : '모두 펼치기'} active={allOpen} onClick={() => setExpanded(new Set(scopeTeams.map(t => t.id)))} />
-                      <FilterChip label={isMobile ? '접기' : '모두 접기'} active={allClosed} onClick={() => setExpanded(new Set())} />
+                      <FilterChip label={isMobile ? '접기' : '모두 접기'} active={allClosed} onClick={collapseAll} />
                     </span>
                   </span>
                 </div>

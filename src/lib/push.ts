@@ -52,6 +52,6 @@ export function usePushDelivery(state: AppState) {
     fresh.forEach(n => { seen.current.add(n.id); seen.current.add(sameKey(n)); });
     const prefs = state.notifPrefs[team] ?? DEFAULT_PREFS;
     if (!prefs.push) return;
-    fresh.filter(n => !isPushKind(n.type) || prefs.kinds[n.type]).forEach(n => { void showPush(n); });
+    fresh.filter(n => !isPushKind(n.type) || n.type === 'setting' || prefs.kinds[n.type]).forEach(n => { void showPush(n); });
   }, [team, mine, state.notifPrefs]);
 }

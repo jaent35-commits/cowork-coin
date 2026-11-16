@@ -11,7 +11,7 @@ import Donut from '@/components/Donut';
 import YearPicker, { YearBar } from '@/components/layout/YearPicker';
 import { useViewYear } from '@/lib/viewYear';
 import { SEED_QUARTERS } from '@/data/seed';
-import { deptOf, isMeetingLeader, workEnabled } from '@/lib/access';
+import { deptOf, isMeetingLeader, meetingEditable, workEnabled } from '@/lib/access';
 import WorkBudget from './WorkBudget';
 import './Meeting.css';
 
@@ -47,6 +47,7 @@ export default function Meeting({ onNavigate }: { onNavigate: (v: View) => void 
   const [viewYear] = useViewYear();
   // 회의비는 부서가 함께 봄 — 인원(예산) 설정은 팀장(부서 직속) · 관리자만, 업무비 탭은 사용하는 사람만
   const leader = isMeetingLeader(state);
+  const canEditMeeting = meetingEditable(state);
   const dept = deptOf(state.teams, state.session?.team);
   const showWork = workEnabled(state);
   const tabs = showWork ? TEAM_TABS : TEAM_TABS.filter(t => t !== '업무비');
@@ -224,7 +225,9 @@ export default function Meeting({ onNavigate }: { onNavigate: (v: View) => void 
                 </div>
               ))}
             </div>
-            <Alert variant="info">팀 회의비 인원은 팀장(부서에 바로 속한 사람)이 정해요. 정해진 회의비는 부서 모두가 함께 봅니다.</Alert>
+            <Alert variant="info">{canEditMeeting
+              ? '팀 회의비 인원은 팀장(부서에 바로 속한 사람)이 정해요. 정해진 회의비는 부서 모두가 함께 봅니다.'
+              : '팀 회의비는 볼 수만 있어요. 편집 권한은 관리자에게 문의하세요.'}</Alert>
           </>)}
         </Card>
 

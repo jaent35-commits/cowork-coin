@@ -99,6 +99,9 @@
 .font-toggle__glyph small { position: absolute; top: -5px; right: -8px; font-size: 11px; font-weight: 900; color: var(--primary-600); }
 .font-toggle.is-on { background: var(--primary-50); border-color: var(--primary-200); color: var(--text); }
 .team-menu__pop .team-menu__logout { color: var(--danger-600); }
+/* 관리자 메뉴는 PC 에서 왼쪽 메뉴에 있으므로 계정 메뉴에는 모바일에서만 */
+.team-menu__pop .team-menu__admin { display: none; }
+@media (max-width: 1024px) { .team-menu__pop .team-menu__admin { display: flex; } }
 .team-menu__pop .team-menu__logout svg { color: var(--danger-600); }
 .team-menu__pop .team-menu__logout:hover { background: var(--danger-50); }
 

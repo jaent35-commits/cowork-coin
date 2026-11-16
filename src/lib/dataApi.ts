@@ -171,7 +171,7 @@ export async function loadRemote(me: Team): Promise<RemoteData & { teams: Team[]
   }));
   const pref = must(prefRes as Res<PrefRow>, '알림 설정 조회');
   const notifPrefs: Record<string, NotifPrefs> = pref
-    ? { [me.name]: { push: pref.push_enabled, slack: pref.slack_enabled, kinds: { exec: pref.push_exec, setting: pref.push_setting, alloc: pref.push_alloc, deadline: pref.push_deadline } } }
+    ? { [me.name]: { push: pref.push_enabled, slack: pref.slack_enabled, kinds: { exec: pref.push_exec, setting: true, alloc: pref.push_alloc, deadline: pref.push_deadline } } }
     : {};
 
   return {
@@ -344,7 +344,7 @@ export async function pushAction(action: Action, before: AppState, after: AppSta
       if (!pr) break;
       must(await c.from('notification_prefs').upsert({
         member_id: memberId, push_enabled: pr.push, slack_enabled: pr.slack ?? true,
-        push_exec: pr.kinds.exec, push_setting: pr.kinds.setting, push_alloc: pr.kinds.alloc, push_deadline: pr.kinds.deadline,
+        push_exec: pr.kinds.exec, push_setting: true, push_alloc: pr.kinds.alloc, push_deadline: pr.kinds.deadline,
       }, { onConflict: 'member_id' }) as Res<null>, '알림 설정 저장');
       pushed = true;
       break;

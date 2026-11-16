@@ -7,8 +7,9 @@ import { REMOTE_AUTH } from '@/lib/supabase';
 import { AuthApiError, sendSlackTest } from '@/lib/authApi';
 import { Alert, Btn, Switch, cx } from './ui';
 
-export const PUSH_KIND_META: { kind: PushKind; icon: string; label: string; desc: string }[] = [
-  { kind: 'setting', icon: '🔐', label: '설정 변경', desc: '비밀번호를 변경하거나 관리자가 초기화했을 때' },
+/** locked = 늘 켜짐 (사용자가 끌 수 없음 — 계정 보안 알림) */
+export const PUSH_KIND_META: { kind: PushKind; icon: string; label: string; desc: string; locked?: boolean }[] = [
+  { kind: 'setting', icon: '🔐', label: '설정 변경', desc: '비밀번호를 변경하거나 관리자가 초기화했을 때 · 늘 켜짐', locked: true },
   { kind: 'alloc', icon: '📁', label: '새 프로젝트 배분', desc: '우리 조직에 프로젝트 예산이 배분·변경되었을 때' },
   { kind: 'deadline', icon: '⏰', label: '기한 임박', desc: '다음 달 종료되는 프로젝트가 있을 때 (1개월 전, 잔여 금액 포함)' },
 ];
@@ -98,8 +99,10 @@ export default function NotifSettings() {
               <div className="notif-set__label">{m.label}</div>
               <div className="notif-set__desc">{m.desc}</div>
             </div>
-            <Switch checked={prefs.kinds[m.kind]} disabled={!kindsOn} label={`${m.label} 알림`} text={prefs.kinds[m.kind] ? 'ON' : 'OFF'}
-              onChange={on => dispatch({ type: 'SET_PUSH_KIND', team, kind: m.kind, on })} />
+            {m.locked
+              ? <Switch checked disabled label={`${m.label} 알림 (끌 수 없음)`} text="ON" title="계정 보안 알림이라 끌 수 없어요" onChange={() => {}} />
+              : <Switch checked={prefs.kinds[m.kind]} disabled={!kindsOn} label={`${m.label} 알림`} text={prefs.kinds[m.kind] ? 'ON' : 'OFF'}
+                  onChange={on => dispatch({ type: 'SET_PUSH_KIND', team, kind: m.kind, on })} />}
           </li>
         ))}
       </ul>
