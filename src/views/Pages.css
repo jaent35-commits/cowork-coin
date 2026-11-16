@@ -189,87 +189,63 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
 .member-table tr.is-dormant .member-table__name { color: var(--faint); }
 .member-table__org { color: var(--muted); }
 .member-toolbar > .member-toolbar__org { flex: 0 1 200px; }
-/* ── 조직 트리 ──
- * 단계는 들여쓰기 + 왼쪽 연결선, 본부 › 부서 › 파트 순으로 글자를 한 단계씩 낮춤
- * 본부마다 한 묶음(위아래 구분선), 사용자는 조직 바로 아래 한 줄씩(아바타 · 성명 · 사번 · 표시)
- */
-.org-tree, .org-tree__children, .org-people { margin: 0; padding: 0; list-style: none; }
-.org-tree__tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px 12px 20px; border-bottom: 1px solid var(--line); }
-.org-tree__hint { margin: 0 auto 0 0; font-size: calc(12.5px * var(--fs)); color: var(--faint); }
-.org-tree__hint .show-touch { display: none; }
-@media (hover: none) { .org-tree__hint .hide-touch { display: none; } .org-tree__hint .show-touch { display: inline; } }
-.org-tree__ctrls { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.org-tree { padding: 6px 0 10px; }
-.org-node--hq + .org-node--hq { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line-soft); }
+/* ── 사용자 관리 — 집행 현황 표와 같은 형식 (체크 열 · 머리글 정렬 · 행 선택 색 · 합계 줄) ── */
+.member-table td { vertical-align: middle; }
+.member-table .member-table__check { width: 44px; padding-left: 16px; padding-right: 4px; text-align: center; }
+.member-table tbody tr.is-clickable { cursor: pointer; }
+.member-table tbody tr.is-clickable:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.member-table tbody tr.is-checked td { background: var(--primary-25); }
+.member-table tbody tr.is-selected td { background: var(--primary-50); }
+.member-table tbody tr.is-selected td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+.member-table tbody tr.is-selected .member-table__name .t-strong { color: var(--primary-700); }
+.member-table__total td { padding-top: 13px; padding-bottom: 13px; border-top: 1.5px solid var(--line); border-bottom: 0; background: var(--surface-alt); font-weight: 800; color: var(--text); }
+.member-table__total small { margin-left: 4px; font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--faint); }
+.member-table--m th, .member-table--m td { white-space: nowrap; text-align: center; }
+.member-table--m .exec-sort { justify-content: center; }
 
-.org-node__row {
-  display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 8px; padding: 4px 8px 4px 10px;
-  border-radius: var(--r-md); transition: background-color 0.15s, box-shadow 0.15s;
-}
-.org-node__row:hover { background: var(--surface-alt); }
-.org-node__row.is-drop { background: var(--primary-50); box-shadow: inset 0 0 0 2px var(--primary); }
-.org-node__toggle {
-  display: inline-grid; place-items: center; flex-shrink: 0; width: 22px; height: 22px; border-radius: var(--r-xs);
+/* ── 조직 관리 — 코웍 체크리스트와 같은 줄 목록 (단계는 들여쓰기, 체크박스 자리에 펼치기 버튼) ── */
+.org-list__note { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin: 10px 0 4px; }
+.org-list__note .proj-check__budget { flex: 1 1 240px; margin: 0; }
+.org-list__note .show-touch { display: none; }
+@media (hover: none) { .org-list__note .hide-touch { display: none; } .org-list__note .show-touch { display: inline; } }
+.check-list.is-selectable.org-list .check-row { --indent: 24px; padding-left: calc(12px + var(--depth, 0) * var(--indent)); }
+.org-row__toggle {
+  display: inline-grid; place-items: center; flex-shrink: 0; width: 22px; height: 22px; margin-top: 1px; padding: 0; border-radius: var(--r-xs);
   border: 1px solid var(--line-input); background: var(--surface); color: var(--muted);
   font-size: calc(15px * var(--fs)); font-weight: 700; line-height: 1;
 }
-.org-node__toggle:hover { border-color: var(--primary-300); color: var(--primary-600); }
-.org-node__toggle.is-empty { visibility: hidden; }
-.org-node__title { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
-.org-node__title:disabled { cursor: default; opacity: 1; }
-.org-node__level { flex-shrink: 0; font-size: calc(11px * var(--fs)); font-weight: 700; color: var(--faint); letter-spacing: 0.02em; }
-.org-node__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-.org-node--co > .org-node__row .org-node__name { font-size: calc(17px * var(--fs)); font-weight: 800; letter-spacing: -0.01em; }
-.org-node--co > .org-node__row .org-node__level { color: var(--primary-600); }
-.org-node--hq > .org-node__row .org-node__name { font-size: calc(15.5px * var(--fs)); font-weight: 800; }
-.org-node--hq > .org-node__row .org-node__level { color: var(--primary-600); }
-.org-node--dept > .org-node__row .org-node__name { font-size: calc(14.5px * var(--fs)); font-weight: 700; }
-.org-node--part > .org-node__row .org-node__name { font-size: calc(14px * var(--fs)); font-weight: 600; }
-.org-node__row.is-dormant .org-node__name { color: var(--faint); }
-.org-node__sub { flex-shrink: 0; margin-left: -4px; font-size: calc(12.5px * var(--fs)); font-weight: 600; color: var(--faint); font-variant-numeric: tabular-nums; }
-.org-node__meta { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.org-node__count {
-  min-width: 34px; padding: 1px 8px; border-radius: var(--r-pill); background: var(--surface-muted); text-align: center;
-  font-size: calc(12px * var(--fs)); font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums;
-}
-.org-node__count.is-zero { color: var(--faint-2); font-weight: 600; }
-.org-node__acts { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; transition: opacity 0.15s; }
+.org-row__toggle:hover { border-color: var(--primary-300); color: var(--primary-600); }
+.org-row__toggle.is-empty { visibility: hidden; }
+.org-row__sub { margin-left: 6px; font-size: calc(12.5px * var(--fs)); font-weight: 600; color: var(--faint); font-variant-numeric: tabular-nums; }
+.org-row--co .check-row__title { font-size: calc(16px * var(--fs)); font-weight: 800; }
+.org-row--hq .check-row__title { font-size: calc(15px * var(--fs)); font-weight: 800; }
+.org-row--dept .check-row__title { font-size: calc(14.5px * var(--fs)); }
+.org-row--part .check-row__title { font-weight: 600; }
+.org-row.is-dormant .check-row__title { color: var(--faint); }
+.org-list .check-row.is-selected .check-row__title { color: var(--primary-700); }
+.org-row__count { font-variant-numeric: tabular-nums; }
+.org-row__count.is-zero { color: var(--faint-2); font-weight: 600; }
+.org-row__add-label { margin-left: 2px; }
+.org-row__del { color: var(--danger-600); }
+.org-list .check-row.is-drop { background: var(--primary-50); box-shadow: inset 0 0 0 2px var(--primary); }
 @media (hover: hover) {
-  .org-node__acts { opacity: 0.35; }
-  .org-node__row:hover .org-node__acts, .org-node__row:focus-within .org-node__acts { opacity: 1; }
+  .org-list .check-row__actions { opacity: 0.4; transition: opacity 0.15s; }
+  .org-list .check-row:hover .check-row__actions, .org-list .check-row:focus-within .check-row__actions, .org-list .check-row.is-selected .check-row__actions { opacity: 1; }
 }
-/* 아래 단계: 토글 가운데에서 내려오는 연결선 */
-.org-node__body { margin-left: 29px; padding: 2px 0 4px 12px; border-left: 1px solid var(--line); }
-/* 모바일: 누른 조직 줄 색 표시 + 줄 아래로 펼쳐지는 관리 버튼 */
-.org-node__row.is-picked, .org-node__row.is-picked:hover { background: var(--primary-50); box-shadow: inset 3px 0 0 var(--primary); }
-.org-node__row.is-picked .org-node__name { color: var(--primary-700); }
-.org-node__drawer {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 4px 6px; padding: 8px 10px;
-  border-radius: var(--r-md); background: var(--primary-25); animation: org-drawer-in 0.18s ease both;
-}
-.org-node__drawer .btn { gap: 4px; }
-.member-table--m th, .member-table--m td { white-space: nowrap; text-align: center; }
-.org-node__drawer-del { color: var(--danger-600); }
-.org-node__drawer-note { font-size: calc(12.5px * var(--fs)); color: var(--muted); }
-@keyframes org-drawer-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .org-node__drawer { animation: none; } }
-
-.org-person {
-  display: grid; grid-template-columns: 12px 28px minmax(0, 160px) 72px minmax(0, 1fr); align-items: center; column-gap: 10px;
-  min-height: 42px; margin-right: 8px; padding: 4px 10px 4px 4px; border-radius: var(--r-md);
-}
-.org-person.is-movable { cursor: grab; }
-.org-person.is-movable:hover { background: var(--primary-25); }
-.org-person.is-movable:active { cursor: grabbing; }
-.org-person.is-dragging { opacity: 0.4; }
-.org-person__grip { color: var(--faint-3); font-size: 12px; line-height: 1; visibility: hidden; }
-.org-person.is-movable:hover .org-person__grip { visibility: visible; color: var(--faint); }
-.org-person__who { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-.org-person__name { font-size: calc(13.5px * var(--fs)); font-weight: 700; color: var(--text); white-space: nowrap; }
-.org-person__pos { font-size: calc(12.5px * var(--fs)); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.org-person.is-dormant .org-person__name { color: var(--faint); }
-.org-person__no { font-size: calc(12px * var(--fs)); color: var(--faint); font-variant-numeric: tabular-nums; }
-.org-person__tags { display: inline-flex; gap: 4px; min-width: 0; }
+/* 사용자 줄 (사용자 포함) — 조직 아래 한 단계 들여서, 조금 작게 */
+.check-list.is-selectable .org-row--person { padding-top: 9px; padding-bottom: 9px; cursor: default; }
+.check-list.is-selectable .org-row--person:hover { background: transparent; }
+.check-list.is-selectable .org-row--person.is-movable { cursor: grab; }
+.check-list.is-selectable .org-row--person.is-movable:hover { background: var(--primary-25); }
+.org-row--person.is-movable:active { cursor: grabbing; }
+.org-row--person.is-dragging { opacity: 0.4; }
+.org-row--person > .avatar { margin-top: -2px; }
+.org-row--person .check-row__head { align-items: center; }
+.org-row--person .check-row__title { font-size: calc(13.5px * var(--fs)); }
+.org-row--person.is-dormant .check-row__title { color: var(--faint); }
+.org-row__pos { margin-left: 6px; font-size: calc(12.5px * var(--fs)); font-weight: 500; color: var(--muted); }
+.org-row__no { flex-shrink: 0; font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--faint); }
+.org-row--person .check-row__meta { margin-top: 2px; }
 /* 가운데 팝업 (모바일은 바텀 시트) */
 .modal { position: fixed; inset: 0; z-index: var(--z-prompt); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .modal__dim { position: absolute; inset: 0; background: var(--dim); animation: fade-in 0.2s ease both; }
@@ -300,24 +276,13 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
   .member-form { grid-template-columns: 1fr; }
   .member-toolbar { flex-direction: column; }
   .member-toolbar > *, .member-toolbar > .member-toolbar__org { flex: none; max-width: none; }
-  /* 안내 문구는 윗줄, 보기 형식 · 펼치기 · 접기는 한 줄에 */
-  .org-tree__tools { gap: 8px; padding: 10px 12px; }
-  .org-tree__hint { flex: 1 0 100%; }
-  .org-tree__ctrls { flex: 1 0 100%; flex-wrap: nowrap; justify-content: space-between; gap: 8px; }
-  .org-tree__ctrls .chip-row { flex-wrap: nowrap; }
-  .org-tree__ctrls .chip { padding: 5px 11px; white-space: nowrap; }
-  .org-tree__ctrls .segmented__btn { padding: 5px 10px; white-space: nowrap; }
-  :root[data-font="lg"] .org-tree__ctrls { flex-wrap: wrap; } /* 큰 글씨: 넘치면 두 줄 */
-  .org-tree { padding: 8px 0 12px; }
-  .org-node--hq + .org-node--hq { margin-top: 4px; padding-top: 4px; }
-  /* 회사 · 본부 · 부서 · 파트 모두 같은 왼쪽 선 · 같은 글씨 크기 — 단계는 앞의 단계 글자로 구분 */
-  .org-node__row { min-height: 46px; margin: 0 4px; padding: 6px 8px; gap: 8px; }
-  .org-node__title { flex: 1; align-self: stretch; align-items: center; }
-  .org-node__level { min-width: 2.2em; }
-  .org-node > .org-node__row .org-node__name { font-size: calc(14.5px * var(--fs)); font-weight: 700; letter-spacing: 0; }
-  .org-node__body { margin-left: 0; padding: 0; border-left: 0; }
-  .org-node__drawer { padding-left: 38px; }
-  .org-person { grid-template-columns: 28px minmax(0, 1fr) auto; min-height: 40px; margin-right: 4px; padding-left: 42px; }
+  /* 조직 목록: 단계 들여쓰기를 좁게, 보기 형식은 한 줄 전체 */
+  .check-list.is-selectable.org-list .check-row { --indent: 14px; }
+  /* 관리 버튼이 둘째 줄로 내려갈 때 펼치기 버튼(22px + 간격)과 조직명은 한 줄에 */
+  .org-list .check-row.has-actions .check-row__body { flex-basis: calc(100% - 36px); }
+  .proj-check__filters:has(.proj-check__proj) { flex-wrap: wrap; }
+  .proj-check__filters .proj-check__sort { margin-left: auto; }
+  .org-list__note .chip { padding: 5px 11px; white-space: nowrap; }
   /* 사용자 목록: 사번 · 성명 · 직위, 누른 줄 색 표시 + 아래로 상세 */
   .member-table--m { width: 100%; table-layout: fixed; }
   .member-table--m th { width: 33.33%; padding: 8px 6px; }
@@ -334,9 +299,6 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
   .member-detail__btns { display: flex; flex-wrap: wrap; gap: 6px; }
   .member-detail__btns .btn { gap: 4px; }
   .member-detail__del { color: var(--danger-600); }
-  .org-person__tags { justify-content: flex-end; }
-  .org-person__grip { display: none; }
-  .org-person__no { display: none; }
   .modal { align-items: flex-end; padding: 0; }
   .modal__panel { max-width: none; max-height: 88vh; padding-bottom: calc(20px + var(--safe-bottom)); border-radius: var(--r-3xl) var(--r-3xl) 0 0; box-shadow: var(--shadow-sheet); }
   .import-pick__row { flex-wrap: wrap; }
