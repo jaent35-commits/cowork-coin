@@ -209,8 +209,24 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
 .org-list__note .show-touch { display: none; }
 @media (hover: none) { .org-list__note .hide-touch { display: none; } .org-list__note .show-touch { display: inline; } }
 .check-list.is-selectable.org-list .check-row { --indent: 24px; padding-left: calc(12px + var(--depth, 0) * var(--indent)); }
+/* 조직 줄은 한 줄: [+/−] 조직명 (n) [단계] [● 활성] ··· N명 [관리] */
+.check-list.is-selectable.org-list .org-row:not(.org-row--person) { align-items: center; padding-top: 10px; padding-bottom: 10px; }
+.org-row:not(.org-row--person) .check-row__head { align-items: center; }
+.org-row__line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.org-row__tags { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.org-row__path { font-size: calc(12px * var(--fs)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 상위 조직은 표 머리글 색으로 띠를 깔아 단계가 한눈에 — 회사 · 본부: 머리글보다 한 단계 진하게 + 아래 선, 부서: 머리글 색, 파트: 바탕 */
+.check-list.is-selectable.org-list .org-row--co:not(.is-selected):not(.is-drop),
+.check-list.is-selectable.org-list .org-row--hq:not(.is-selected):not(.is-drop) {
+  background: color-mix(in srgb, var(--line) 60%, var(--surface-muted)); box-shadow: inset 0 -1px 0 var(--line);
+}
+.check-list.is-selectable.org-list .org-row--dept:not(.is-selected):not(.is-drop) { background: var(--surface-muted); }
+.check-list.is-selectable.org-list .org-row--co:not(.is-selected):not(.is-drop):hover,
+.check-list.is-selectable.org-list .org-row--hq:not(.is-selected):not(.is-drop):hover,
+.check-list.is-selectable.org-list .org-row--dept:not(.is-selected):not(.is-drop):hover { background: var(--primary-25); }
+.org-row--co .check-row__amt, .org-row--hq .check-row__amt { color: var(--primary-600); }
 .org-row__toggle {
-  display: inline-grid; place-items: center; flex-shrink: 0; width: 22px; height: 22px; margin-top: 1px; padding: 0; border-radius: var(--r-xs);
+  display: inline-grid; place-items: center; flex-shrink: 0; width: 22px; height: 22px; padding: 0; border-radius: var(--r-xs);
   border: 1px solid var(--line-input); background: var(--surface); color: var(--muted);
   font-size: calc(15px * var(--fs)); font-weight: 700; line-height: 1;
 }
@@ -280,8 +296,6 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
   .check-list.is-selectable.org-list .check-row { --indent: 14px; }
   /* 관리 버튼이 둘째 줄로 내려갈 때 펼치기 버튼(22px + 간격)과 조직명은 한 줄에 */
   .org-list .check-row.has-actions .check-row__body { flex-basis: calc(100% - 36px); }
-  .proj-check__filters:has(.proj-check__proj) { flex-wrap: wrap; }
-  .proj-check__filters .proj-check__sort { margin-left: auto; }
   .org-list__note .chip { padding: 5px 11px; white-space: nowrap; }
   /* 사용자 목록: 사번 · 성명 · 직위, 누른 줄 색 표시 + 아래로 상세 */
   .member-table--m { width: 100%; table-layout: fixed; }

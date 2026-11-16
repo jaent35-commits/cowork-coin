@@ -519,16 +519,18 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
           : <span className="org-row__toggle is-empty" aria-hidden="true" />}
         <div className="check-row__body">
           <div className="check-row__head">
-            {/* 조직명 (직속 사용자 수) — 모든 단계에 항상 표시 */}
-            <span className="check-row__title">
-              {t.name}<span className="org-row__sub" title={`직속 사용자 ${direct}명`} aria-label={`직속 사용자 ${direct}명`}>({direct})</span>
+            {/* 한 줄: 조직명 (직속 사용자 수) · 단계 · 활성 ··· 하위 포함 인원 */}
+            <span className="org-row__line">
+              <span className="check-row__title">
+                {t.name}<span className="org-row__sub" title={`직속 사용자 ${direct}명`} aria-label={`직속 사용자 ${direct}명`}>({direct})</span>
+              </span>
+              <span className="org-row__tags">
+                <Badge variant="tint" size="sm" color={LEVEL_COLOR[lv]}>{lv}</Badge>
+                {orgActiveBadge(t)}
+                {o.flat && t.parentId && <span className="check-row__proj org-row__path">{pathOf(t.parentId)}</span>}
+              </span>
             </span>
             <span className={cx('check-row__amt num org-row__count', !o.total && 'is-zero')} title={`하위 조직 포함 ${o.total}명`}>{o.total}명</span>
-          </div>
-          <div className="check-row__meta">
-            <Badge variant="tint" size="sm" color={LEVEL_COLOR[lv]}>{lv}</Badge>
-            {o.flat && t.parentId && <span className="check-row__proj">{pathOf(t.parentId)}</span>}
-            {orgActiveBadge(t)}
           </div>
         </div>
         {showActs && (
@@ -889,18 +891,21 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
             </Card>
           )}
 
-          {/* 코웍 체크리스트와 같은 형식: [본부 선택] ··· [보기 형식] / 카드 머리 [상태 (건수)] ··· 사용자 수 / 안내 / 줄 목록 */}
-          <div className="proj-check__filters">
-            {hqOpts.length > 1 && (
+          {/* [본부 선택] / 상태 칩 [전체 (n)] [활성 (n)] [비활성 (n)] — 사용자 관리와 같은 버튼 / 카드 머리 [조직만 | 사용자 포함] ··· 사용자 수 */}
+          {hqOpts.length > 1 && (
+            <div className="proj-check__filters">
               <Select className="proj-check__proj" value={orgHq} onChange={e => { setOrgHq(e.target.value); setSelOrg(null); }} aria-label="본부 선택">
                 <option value="">전체 본부</option>
                 {hqOpts.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </Select>
-            )}
-            <span className="proj-check__sort">
-              <Segmented label="조직 목록 보기 형식" value={showPeople ? 'people' : 'org'} onChange={v => setShowPeople(v === 'people')}
-                options={[{ value: 'org', label: '조직만' }, { value: 'people', label: '사용자 포함' }]} />
-            </span>
+            </div>
+          )}
+          <div className="exec-filter">
+            <div className="chip-row">
+              {([['all', '전체'], ['active', '활성'], ['dormant', '비활성']] as [OrgState, string][]).map(([v, label]) => (
+                <FilterChip key={v} label={label} count={orgCounts[v]} active={orgState === v} onClick={() => { setOrgState(v); setSelOrg(null); }} />
+              ))}
+            </div>
           </div>
           <Card pad>
             {!roots.length ? (
@@ -908,8 +913,8 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
             ) : (
               <>
                 <div className="proj-check__head">
-                  <Segmented<OrgState> label="조직 상태" value={orgState} onChange={v => { setOrgState(v); setSelOrg(null); }}
-                    options={[{ value: 'all', label: `전체 ${orgCounts.all}` }, { value: 'active', label: `활성 ${orgCounts.active}` }, { value: 'dormant', label: `비활성 ${orgCounts.dormant}` }]} />
+                  <Segmented label="조직 목록 보기 형식" value={showPeople ? 'people' : 'org'} onChange={v => setShowPeople(v === 'people')}
+                    options={[{ value: 'org', label: '조직만' }, { value: 'people', label: '사용자 포함' }]} />
                   <p className="proj-check__todo">사용자 <b className="num">{orgPeople}명</b></p>
                 </div>
                 <div className="org-list__note">
