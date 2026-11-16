@@ -39,6 +39,14 @@ npx supabase functions deploy ocr-receipt --project-ref yqaioqxkqcwejwqqwatl
 ```
 (PowerShell 에서 `npx` 가 막히면 `npx.cmd` 로 실행)
 
+- 확인 질문이 나오면 방향키로 **Yes** 를 고르거나 끝에 `--yes` 를 붙입니다
+- `TransportError` 로 끝나면 (Supabase CLI 3.1.0 · 터미널 진행 표시 문제로 보임) 출력을 넘겨서 다시 실행합니다
+  ```
+  npx.cmd supabase functions deploy ocr-receipt --project-ref yqaioqxkqcwejwqqwatl --yes 2>&1 | Out-String
+  npx.cmd supabase functions list --project-ref yqaioqxkqcwejwqqwatl 2>&1 | Out-String
+  ```
+  목록에서 `ocr-receipt` 의 version 이 올라갔으면 배포된 것입니다
+
 ### 4. 앱 배포 (main 푸시)
 
 순서가 바뀌어도 앱은 멈추지 않습니다 — 함수나 키가 아직 없으면 지금처럼 휴대폰에서 읽습니다.
@@ -47,5 +55,12 @@ npx supabase functions deploy ocr-receipt --project-ref yqaioqxkqcwejwqqwatl
 ## 확인
 - 관리자 > 영수증 인식: 이번 달 사용량 `0 / 1,000건`
 - 모바일 집행 등록 → 영수증 찍기: 안내 문구가 “서버에서 읽는 중” 으로 나오고, 날짜 · 금액이 채워지면 사용량이 1 늘어남
-- 사용량이 늘지 않고 “휴대폰에서 읽는 중” 으로 넘어가면: Edge Functions → `ocr-receipt` → Logs 에서 `vision error` 상태 코드 확인
-  (`PERMISSION_DENIED` = API 사용 안 함 · 키 제한 확인, `RESOURCE_EXHAUSTED` = Google 쪽 한도)
+- 사용량이 늘지 않고 “휴대폰에서 읽는 중” 으로 넘어가면: Edge Functions → `ocr-receipt` → Logs 에서 `vision error` 줄 확인
+  | 로그 | 원인 · 조치 |
+  |---|---|
+  | `403 PERMISSION_DENIED BILLING_DISABLED` | 결제 계정 미연결 · 확인 대기 중 — 결제 화면에서 활성 · 프로젝트 연결 확인 (새 결제 계정은 Google 이 카드 · 신분증 확인을 요청하기도 함, 며칠 걸림) |
+  | `403 PERMISSION_DENIED SERVICE_DISABLED` | Cloud Vision API 사용 안 함 — 키를 만든 프로젝트에서 사용 설정 |
+  | `403 PERMISSION_DENIED API_KEY_SERVICE_BLOCKED` · `…_BLOCKED` | 키 제한 — API 제한사항에 Cloud Vision API, 애플리케이션 제한사항은 없음 |
+  | `400 INVALID_ARGUMENT` (키 관련) | 비밀값 `GOOGLE_VISION_API_KEY` 값 확인 |
+  | `429 RESOURCE_EXHAUSTED` | Google 쪽 할당량 |
+  | 로그 없음 · 함수 404 | 함수 미배포 — 3단계 |

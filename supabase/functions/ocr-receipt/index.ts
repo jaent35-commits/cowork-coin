@@ -14,7 +14,7 @@ const VISION_TIMEOUT = 25_000;
 
 type VisionResponse = {
   responses?: { fullTextAnnotation?: { text?: string }; error?: { code?: number; message?: string } }[];
-  error?: { code?: number; message?: string; status?: string };
+  error?: { code?: number; message?: string; status?: string; details?: { reason?: string }[] };
 };
 
 serve(async (req, body) => {
@@ -51,8 +51,9 @@ serve(async (req, body) => {
     const data = (await res.json().catch(() => ({}))) as VisionResponse;
     const r = data.responses?.[0];
     if (!res.ok || data.error || r?.error) {
-      // 원인 코드만 기록 (사진 · 글자 · 키는 남기지 않음)
-      console.error('vision error', res.status, data.error?.status ?? r?.error?.code ?? '');
+      // 원인 코드만 기록 (사진 · 글자 · 키는 남기지 않음) — reason 예: SERVICE_DISABLED · BILLING_DISABLED · API_KEY_SERVICE_BLOCKED
+      const reason = data.error?.details?.find(d => d.reason)?.reason ?? '';
+      console.error('vision error', res.status, data.error?.status ?? r?.error?.code ?? '', reason);
       await release();
       throw new HttpError(502, 'unavailable', '영수증 서버 인식에 실패했습니다');
     }
