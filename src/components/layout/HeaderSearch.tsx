@@ -17,13 +17,13 @@ export function Mark({ text, q }: { text: string; q: string }) {
 /** 결과 종류 아이콘 (헤더 목록 · 검색 결과 페이지 공용) */
 const ICON: Record<SearchHit['kind'], string> = { menu: '🧭', project: '📁', joined: '🤝', check: '📋', quarter: '👥', work: '💼', exec: '🧾' };
 export const hitIcon = (h: SearchHit) =>
-  h.kind === 'exec' ? (h.title.includes('팀 회의비') ? '👥' : h.title.includes('팀 업무비') ? '💼' : '🧾') : ICON[h.kind];
+  h.kind === 'exec' ? (h.title.includes('팀 회의비') ? '👥' : h.title.includes('업무비') ? '💼' : '🧾') : ICON[h.kind];
 
 /** 검색 결과로 이동 — 대상 화면이 해당 항목을 선택·강조 (헤더 목록 · 검색 결과 페이지 공용) */
 export function goToHit(hit: SearchHit, onNavigate: (v: View) => void) {
   // 탭 먼저 → 항목 (이미 열린 화면은 탭 전환 뒤 새로 그려진 목록이 항목을 가져감)
   if (hit.tab) requestFocus('tab', hit.tab);
-  // 팀 회의비 분기·팀 업무비 월은 올해 기준
+  // 팀 회의비 분기·업무비 월은 올해 기준
   if (hit.kind === 'quarter') setViewYear(CUR_YEAR);
   if (hit.kind === 'work') setViewYear(Number(hit.id.slice(0, 4)));
   // 메뉴는 화면만, 종료된 참여 프로젝트(리포트로 이동)는 강조할 목록이 없음

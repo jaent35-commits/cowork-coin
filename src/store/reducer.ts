@@ -25,7 +25,7 @@ export interface AppState {
   /** 팀명 → 알림 설정 */
   notifPrefs: Record<string, NotifPrefs>;
   meetingRate: number;
-  /** 팀 업무비 월 예산 'YYYY-MM' → 금액 (입력한 달만. 사용액은 집행 이력에서 계산) */
+  /** 업무비 월 예산 'YYYY-MM' → 금액 (입력한 달만. 사용액은 집행 이력에서 계산) */
   workBudgets: Record<string, number>;
   /** 팀명 → 팀이 직접 만든 My 경비 구분 (그 팀만 보고 씀) */
   categories: Record<string, string[]>;

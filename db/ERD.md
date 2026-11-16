@@ -224,7 +224,7 @@ v2에서 비밀번호 관련 키(`admin_password_hash`, `reset_password_hash`)�
 | month | date | ● | PK | 매월 1일 |
 | headcount | smallint | ● | | ≥ 0. **분기 회의비 예산 = Σ(월 인원 × 그 달 단가)** |
 
-### work_budgets — 팀 업무비 월 예산
+### work_budgets — 업무비 월 예산
 | 컬럼 | 타입 | 필수 | 키 | 설명 |
 |---|---|:-:|:-:|---|
 | team_id | bigint | ● | PK, FK→teams | |
@@ -291,7 +291,7 @@ v2에서 비밀번호 관련 키(`admin_password_hash`, `reset_password_hash`)�
 |---|---|:-:|:-:|---|
 | id | bigint (identity) | ● | PK | |
 | team_id | bigint | ● | FK→teams | 집행한 팀 |
-| budget_type | enum `budget_type` | ● | | `meeting` 팀 회의비 · `work` 팀 업무비 · `project` 프로젝트 경비 |
+| budget_type | enum `budget_type` | ● | | `meeting` 팀 회의비 · `work` 업무비 · `project` 프로젝트 경비 |
 | project_id | bigint | | FK→project_allocations(project_id, team_id) | `project`일 때만 필수 — 배분받은 팀만 집행 |
 | use_date | date | ● | | 사용일자 |
 | use_month | date | ● | | **생성 컬럼** = 사용일자의 월 1일 (예산 집계 기준) |
@@ -419,7 +419,7 @@ v2에서 비밀번호 관련 키(`admin_password_hash`, `reset_password_hash`)�
 | `v_team_projects` | My 프로젝트 | 팀이 주관(`owner`)하거나 배분받은(`participant`) 프로젝트 |
 | `v_team_checklist` | 프로젝트 운영 › My 체크리스트 (`role='owner'`) · 코웍 체크리스트 메뉴 (`role='participant'`) · 홈 (My/코웍 태그) | 팀별로 보이는 체크리스트 — 주관 프로젝트는 전부, 참여 프로젝트는 공개 항목만 (`role` 표시) |
 | `v_team_meeting_quarters` | 팀 회의비 분기표 · 홈 | 팀 · 연도 · 분기별 인원 합, 예산, 사용액, 잔액 |
-| `v_team_work_months` | 팀 업무비 표 · 홈 | 팀 · 월별 업무비 예산(이전 입력값 이어 받음), 사용액 |
+| `v_team_work_months` | 업무비 표 · 홈 | 팀 · 월별 업무비 예산(이전 입력값 이어 받음), 사용액 |
 | `v_team_notifications` | 알림 | 팀별 받은 알림 + 읽음 여부 |
 | `meeting_rate_of(월)` | | 그 달에 적용되는 회의비 단가 |
 | `work_budget_of(팀, 월)` | 집행 등록 잔액 표시 | 그 달의 업무비 예산 |

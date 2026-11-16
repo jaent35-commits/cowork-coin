@@ -12,7 +12,7 @@ BEGIN;
 -- ---------------------------------------------------------------------
 -- 열거형
 -- ---------------------------------------------------------------------
--- 예산 유형: meeting = 팀 회의비, work = 팀 업무비, project = 프로젝트 경비
+-- 예산 유형: meeting = 팀 회의비, work = 업무비, project = 프로젝트 경비
 CREATE TYPE budget_type AS ENUM ('meeting', 'work', 'project');
 
 -- 알림 종류 (exec·setting·alloc·deadline 은 종류별 푸시 on/off 대상)
@@ -71,7 +71,7 @@ CREATE TABLE app_settings (
 CREATE TRIGGER app_settings_touch BEFORE UPDATE ON app_settings FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
 
 -- =====================================================================
--- 2. 팀 운영 예산 (팀 회의비 · 팀 업무비)
+-- 2. 팀 운영 예산 (팀 회의비 · 업무비)
 -- =====================================================================
 -- 팀 회의비 1인당 월 단가 — 적용 시작일부터 다음 변경 전까지 (전사 공통)
 CREATE TABLE meeting_rates (
@@ -87,7 +87,7 @@ CREATE TABLE team_headcounts (
   PRIMARY KEY (team_id, month)
 );
 
--- 팀 업무비 월 예산 — 입력한 달부터 다음 입력 전까지 같은 금액 (이월 없음, 남으면 소멸)
+-- 업무비 월 예산 — 입력한 달부터 다음 입력 전까지 같은 금액 (이월 없음, 남으면 소멸)
 CREATE TABLE work_budgets (
   team_id         bigint NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   effective_month date   NOT NULL CHECK (effective_month = date_trunc('month', effective_month::timestamp)::date),
@@ -221,7 +221,7 @@ CREATE TRIGGER checklist_items_teams BEFORE INSERT OR UPDATE ON checklist_items
   FOR EACH ROW EXECUTE FUNCTION check_checklist_teams();
 
 -- =====================================================================
--- 4. 집행 (팀 회의비 · 팀 업무비 · 프로젝트 경비 공통)
+-- 4. 집행 (팀 회의비 · 업무비 · 프로젝트 경비 공통)
 -- =====================================================================
 CREATE TABLE exec_records (
   id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -302,7 +302,7 @@ CREATE FUNCTION meeting_rate_of(p_month date) RETURNS integer LANGUAGE sql STABL
   SELECT rate FROM meeting_rates WHERE effective_from <= p_month ORDER BY effective_from DESC LIMIT 1
 $$;
 
--- 그 달의 팀 업무비 예산 (입력한 달이 없으면 가장 가까운 이전 입력값, 없으면 0)
+-- 그 달의 업무비 예산 (입력한 달이 없으면 가장 가까운 이전 입력값, 없으면 0)
 CREATE FUNCTION work_budget_of(p_team bigint, p_month date) RETURNS bigint LANGUAGE sql STABLE SET search_path = public AS $$
   SELECT COALESCE((SELECT amount FROM work_budgets
                    WHERE team_id = p_team AND effective_month <= p_month
@@ -369,7 +369,7 @@ SELECT COALESCE(b.team_id, u.team_id) AS team_id, COALESCE(b.year, u.year) AS ye
        (COALESCE(b.budget, 0) - COALESCE(u.used, 0))::bigint AS remain
 FROM b FULL JOIN u USING (team_id, year, quarter);
 
--- 팀 업무비 월 예산 · 사용액 (예산을 입력했거나 집행이 있는 달)
+-- 업무비 월 예산 · 사용액 (예산을 입력했거나 집행이 있는 달)
 CREATE VIEW v_team_work_months AS
 WITH m AS (
   SELECT team_id, effective_month AS month FROM work_budgets
@@ -407,7 +407,7 @@ COMMENT ON COLUMN teams.must_change_password IS '초기 비밀번호 상태 — 
 COMMENT ON TABLE app_settings         IS '시스템 설정 (키-값)';
 COMMENT ON TABLE meeting_rates        IS '팀 회의비 1인당 월 단가 이력';
 COMMENT ON TABLE team_headcounts      IS '팀 월별 인원 (회의비 예산 산정)';
-COMMENT ON TABLE work_budgets         IS '팀 업무비 월 예산 (입력 월부터 적용)';
+COMMENT ON TABLE work_budgets         IS '업무비 월 예산 (입력 월부터 적용)';
 COMMENT ON TABLE projects             IS '프로젝트';
 COMMENT ON TABLE project_allocations  IS '프로젝트 팀 배분 (참여 팀)';
 COMMENT ON TABLE expense_categories   IS '경비 분류';

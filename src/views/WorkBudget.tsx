@@ -10,7 +10,7 @@ import { Alert, AmountInput, Btn, Card, ConfirmLayer, ProgressBar, TableWrap, cx
 interface Pending { month: string; from: number; to: number }
 
 /**
- * 팀 운영 › 팀 업무비 — 월별 예산 (이월 없음)
+ * 팀 운영 › 업무비 — 월별 예산 (이월 없음)
  * - 입력하지 않은 달은 이전 달 금액을 그대로 씀
  * - 수정: 행 선택 → 선택된 행의 예산을 한 번 더 누르면 바로 수정 (집행 현황과 같은 방식)
  * - 저장 전에 "이후 달 예산에도 반영할까요?" → 예: 이후 달도 / 아니오: 이 달만
@@ -157,7 +157,8 @@ export default function WorkBudget({ onToast }: { onToast: (msg: string) => void
       </Card>
 
       <Alert variant="info">
-        <strong>팀 업무비 기준</strong>
+        <strong>업무비 기준</strong>
+        업무비는 사람마다 따로 관리하며, 예산과 집행 내역은 본인만 볼 수 있습니다.
         달마다 예산을 정하고(입력하지 않은 달은 이전 달 금액), 사용일자가 속한 달의 예산에서 차감됩니다. 남은 금액은 다음 달로 이월되지 않습니다.
         <span className="show-mobile-inline"> 월을 누른 뒤 예산을 한 번 더 누르면 바로 수정됩니다.</span>
       </Alert>

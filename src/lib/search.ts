@@ -11,7 +11,7 @@ import { workBudgetOf, workUsedOf } from './budget';
  * - menu    메뉴 바로가기 (화면·기능 이름)
  * - project 우리 팀 주관 프로젝트 · joined 다른 팀 주관 참여 프로젝트
  * - check   진행 중 프로젝트의 체크리스트 항목 (My · 코웍)
- * - quarter 팀 회의비 분기 · work 팀 업무비 월 (올해)
+ * - quarter 팀 회의비 분기 · work 업무비 월 (올해)
  * - exec    집행 내역
  */
 export type HitKind = 'menu' | 'project' | 'joined' | 'check' | 'quarter' | 'work' | 'exec';
@@ -51,7 +51,7 @@ const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '');
 const MENUS: { title: string; view: View; sub: string; kw: string; tab?: string; anchor?: string; admin?: boolean }[] = [
   { title: '홈', view: 'home', sub: '예산 현황 · 내 체크리스트', kw: '대시보드 메인 잔여 금액' },
   { title: '팀 회의비', view: 'meeting', tab: '팀 회의비', sub: '팀 운영 · 분기별 인원·예산', kw: '팀운영 회의비 분기 인원 기준 수량' },
-  { title: '팀 업무비', view: 'meeting', tab: '팀 업무비', sub: '팀 운영 · 월별 예산', kw: '팀운영 업무비 월 예산 변경' },
+  { title: '업무비', view: 'meeting', tab: '업무비', sub: '팀 운영 · 월별 예산', kw: '팀운영 업무비 월 예산 변경' },
   { title: 'My 프로젝트', view: 'project', tab: 'My 프로젝트', sub: '프로젝트 운영 · 주관 프로젝트 목록·팀 배분', kw: '프로젝트운영 사업 배분 지분' },
   { title: 'My 체크리스트', view: 'project', tab: 'My 체크리스트', sub: '프로젝트 운영 · 경비 집행 체크리스트', kw: '프로젝트운영 체크리스트 예정' },
   { title: '프로젝트 등록', view: 'project-new', sub: '프로젝트 운영 · 새 사업 등록', kw: '신규 사업 추가 생성 만들기' },
@@ -112,7 +112,7 @@ export function searchAll(q: string, state: AppState, limit = 8): SearchResult {
     });
   }
 
-  // 팀 운영 — 팀 회의비 분기 · 팀 업무비 월 (올해)
+  // 팀 운영 — 팀 회의비 분기 · 업무비 월 (올해)
   state.quarters.forEach((qd, i) => {
     const title = `${qd.label} 팀 회의비`;
     if (!has(title) && !qd.months.some(has) && !has('팀운영')) return;
@@ -124,18 +124,18 @@ export function searchAll(q: string, state: AppState, limit = 8): SearchResult {
   });
   for (let m = 0; m < 12; m++) {
     const key = ym(CUR_YEAR, m);
-    const title = `${m + 1}월 팀 업무비`;
+    const title = `${m + 1}월 업무비`;
     if (!has(title) && !has('팀운영')) continue;
     const budget = workBudgetOf(state, key).amount, used = workUsedOf(state, key);
     out.team.push({
-      key: `w-${key}`, kind: 'work', group: 'team', view: 'meeting', id: key, tab: '팀 업무비',
+      key: `w-${key}`, kind: 'work', group: 'team', view: 'meeting', id: key, tab: '업무비',
       title, sub: `${CUR_YEAR}년 ${m + 1}월 · 예산 ${fmt(budget)} · 집행 ${fmt(used)}`, meta: `잔액 ${fmt(budget - used)}`,
     });
   }
 
   // 집행 내역 (최근 등록 순)
   for (const r of [...state.records].sort((a, b) => b.date.localeCompare(a.date))) {
-    const label = r.type === 'meeting' ? '팀 회의비' : r.type === 'work' ? '팀 업무비' : projName(r.projectId);
+    const label = r.type === 'meeting' ? '팀 회의비' : r.type === 'work' ? '업무비' : projName(r.projectId);
     const items = r.items.filter(i => has(i.name)).map(i => i.name);
     if (!items.length && !has(label) && !has(r.month) && !has(r.team)) continue;
     out.exec.push({

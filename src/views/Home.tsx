@@ -5,7 +5,8 @@ import { budgetOverview, currentQuarter, expiring, teamAllocOf, visibleChecklist
 import { CUR_MONTH, CUR_QUARTER, CUR_YEAR, CUR_YYYYMM, todayLabel } from '@/lib/date';
 import { workBudgetOf, workUsedOf } from '@/lib/budget';
 import { fmt, fmtMan, pct } from '@/lib/format';
-import { Alert, Badge, Btn, Card, FilterChip, ProgressBar, MonthGrid, SectionHead, StepNav, progVariant } from '@/components/ui';
+import { Alert, Badge, Btn, Card, FilterChip, ProgressBar, MonthGrid, SectionHead, StepNav, cx, progVariant } from '@/components/ui';
+import { deptOf, isMeetingLeader, workEnabled } from '@/lib/access';
 import { IconPlus } from '@/components/icons';
 import InstallCard from '@/components/InstallCard';
 import IntroPopup from '@/components/IntroPopup';
@@ -39,17 +40,15 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
   const team = state.session?.team ?? '';
   // 인사말: 사람 계정이면 "부서명 이름" (파트 소속이면 위의 부서, 본부 · 회사 직속이면 그 조직), 팀 계정(브라우저 저장본)이면 팀명
   const memberName = state.session?.member?.name;
-  let unit = state.teams.find(t => t.name === team);
-  for (let guard = 0; unit?.level === '파트' && unit.parentId && guard < 5; guard++) {
-    const parent = state.teams.find(t => t.id === unit!.parentId);
-    if (!parent) break;
-    unit = parent;
-  }
-  const greetName = memberName ? `${unit?.name ?? team} ${memberName}` : team;
+  const dept = deptOf(state.teams, team);
+  const greetName = memberName ? `${dept?.name ?? team} ${memberName}` : team;
+  // 회의비 인원은 팀장 · 관리자만 입력 / 업무비는 쓰는 사람만
+  const leader = isMeetingLeader(state);
+  const showWork = workEnabled(state);
   const ov = budgetOverview(state);
-  // 팀 업무비: 이번 달 월 예산 (이월 없음 → 남은 금액은 다음 달 소멸)
-  const workBudget = workBudgetOf(state, CUR_YYYYMM).amount;
-  const workUsed = workUsedOf(state, CUR_YYYYMM);
+  // 업무비: 이번 달 월 예산 (이월 없음 → 남은 금액은 다음 달 소멸)
+  const workBudget = showWork ? workBudgetOf(state, CUR_YYYYMM).amount : 0;
+  const workUsed = showWork ? workUsedOf(state, CUR_YYYYMM) : 0;
   const workRemain = workBudget - workUsed;
   const exp0 = expiring(state);
   const exp = { ...exp0, work: Math.max(0, workRemain), total: exp0.total + Math.max(0, workRemain) };
@@ -62,20 +61,21 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
   /**
    * 잔여 금액 카드 — 고른 달 말 기준 (지난달·다음 달·다른 해 어디로든 이동)
    * · 팀 회의비: 그 달이 속한 분기 예산 − 그 분기에서 그 달까지 집행 (올해·미리 입력한 다음 해만 예산 있음)
-   * · 팀 업무비: 그 달 예산 − 그 달 집행
+   * · 업무비: 그 달 예산 − 그 달 집행
    * · 프로젝트: 그 달에 쓸 수 있는 우리 팀 배분 경비(주관 My 경비 + 참여 배분) − 그 달까지 우리 팀 집행
    */
   const heroOf = (m: string) => {
     const y = Number(m.slice(0, 4)), mi = Number(m.slice(5, 7)) - 1, qi = Math.floor(mi / 3);
     const qStart = ymOf(y, qi * 3);
     const qd = y === CUR_YEAR ? state.quarters[qi] : state.plannedQuarters[String(y)]?.[qi];
-    // 우리 팀 집행만 (팀 정보가 없는 예전 기록은 포함)
-    const sumRec = (pred: (r: (typeof state.records)[number]) => boolean) => state.records.filter(r => (!r.team || r.team === team) && pred(r)).reduce((s, r) => s + r.total, 0);
+    // 우리 팀 집행만 (팀 정보가 없는 예전 기록은 포함) — 회의비는 부서 앞으로 등록된 것도 우리 것
+    const sumRec = (pred: (r: (typeof state.records)[number]) => boolean) => state.records
+      .filter(r => (!r.team || r.team === team || (r.type === 'meeting' && r.team === dept?.name)) && pred(r)).reduce((s, r) => s + r.total, 0);
     const meeting = {
       budget: qd?.budget ?? 0, used: sumRec(r => r.type === 'meeting' && r.month >= qStart && r.month <= m),
       label: qd?.label ?? `${qi + 1}분기`, headcount: qd?.headcounts[mi % 3] ?? 0,
     };
-    const work = { budget: workBudgetOf(state, m).amount, used: workUsedOf(state, m) };
+    const work = showWork ? { budget: workBudgetOf(state, m).amount, used: workUsedOf(state, m) } : { budget: 0, used: 0 };
     // 그 달이 착수월 ~ 우리 팀 사용 종료월 안에 드는 배분 프로젝트
     const live = state.projects.filter(p => { const a = teamAllocOf(state, p); return !!a && p.startDate.slice(0, 7) <= m && a.endDate.slice(0, 7) >= m; });
     const project = {
@@ -139,7 +139,7 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
 
       <InstallCard />
       <IntroPopup />
-      {curQMissing && (
+      {curQMissing && leader && (
         <Alert variant="warn" className="home-notice">
           <strong>이번 분기({q.label}) 팀 인원이 입력되지 않았습니다</strong>
           팀 회의비 예산은 분기별 인원수를 기준으로 산정됩니다.{' '}
@@ -174,7 +174,7 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
       </section>
 
       {/* Stat cards */}
-      <div className="grid-3 mb-20">
+      <div className={cx(showWork ? 'grid-3' : 'grid-2', 'mb-20')}>
         <StatCard
           accent="var(--coral)" label="팀 회의비" value={fmt(cards.meeting.budget - cards.meeting.used)}
           sub={`${isCurMonth ? '' : `${monthLabel} · `}${cards.meeting.label} 잔액 · ${cards.meeting.headcount}명 × ${fmtMan(state.meetingRate)}원`}
@@ -187,12 +187,14 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
           budget={cards.project.budget} used={cards.project.used} expiring={isCurMonth ? exp.project : 0}
           action={{ label: '목록 보기 →', onClick: () => onNavigate('project') }}
         />
-        <StatCard
-          accent="var(--violet)" label="팀 업무비" value={fmt(cards.work.budget - cards.work.used)}
-          sub={`${monthLabel} 잔액 · 월 예산 ${fmtMan(cards.work.budget)}원`}
-          budget={cards.work.budget} used={cards.work.used} expiring={0} available={isCurMonth ? exp.work : undefined}
-          action={{ label: '업무비 관리 →', onClick: () => { openTeamTab('팀 업무비'); onNavigate('meeting'); } }}
-        />
+        {showWork && (
+          <StatCard
+            accent="var(--violet)" label="업무비" value={fmt(cards.work.budget - cards.work.used)}
+            sub={`${monthLabel} 잔액 · 월 예산 ${fmtMan(cards.work.budget)}원`}
+            budget={cards.work.budget} used={cards.work.used} expiring={0} available={isCurMonth ? exp.work : undefined}
+            action={{ label: '업무비 관리 →', onClick: () => { openTeamTab('업무비'); onNavigate('meeting'); } }}
+          />
+        )}
       </div>
 
       {/* Full checklist */}
@@ -219,7 +221,7 @@ export default function Home({ onNavigate }: { onNavigate: (v: View) => void }) 
 
 function StatCard({ accent, label, value, sub, budget, used, expiring, available, action }: {
   accent: string; label: string; value: string; sub: string; budget: number; used: number; expiring: number;
-  /** 팀 업무비: 이번 달 쓸 수 있는 금액 — 경고 대신 녹색 안내 */
+  /** 업무비: 이번 달 쓸 수 있는 금액 — 경고 대신 녹색 안내 */
   available?: number;
   action?: { label: string; onClick: () => void };
 }) {

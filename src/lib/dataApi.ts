@@ -5,6 +5,7 @@ import { CUR_QUARTER, CUR_YEAR, CUR_YYYYMM, ym } from './date';
 import { splitRecords } from './records';
 import { supabase } from './supabase';
 import { listTeams } from './authApi';
+import { deptOf } from './access';
 
 /**
  * 앱 데이터 ↔ Supabase (db/migrations/20261004_app_data_v2_5.sql)
@@ -95,6 +96,9 @@ export async function loadRemote(me: Team): Promise<RemoteData & { teams: Team[]
     c.from('notification_prefs').select('push_enabled, slack_enabled, push_exec, push_setting, push_alloc, push_deadline').maybeSingle(),
   ]);
   const myId = Number(me.id);
+  // 회의비는 부서 단위 (파트 소속이면 위 부서) — 부서 앞으로 등록된 회의비 집행도 우리 집행으로 봄
+  const deptId = Number(deptOf(teams, me.name)?.id ?? me.id);
+  const isMine = (r: Pick<RecRow, 'team_id' | 'budget_type'>) => r.team_id === myId || (r.budget_type === 'meeting' && r.team_id === deptId);
   const nameOf = (id: number | null) => teams.find(t => t.id === String(id))?.name ?? `팀 ${id}`;
   const usage = must(uRes as Res<UsageRow[]>, '프로젝트 사용액 조회') ?? [];
   const usedOf = (pid: number, tid?: number) => usage.filter(u => u.project_id === pid && (tid == null || u.team_id === tid)).reduce((s, u) => s + Number(u.used), 0);
@@ -126,7 +130,8 @@ export async function loadRemote(me: Team): Promise<RemoteData & { teams: Team[]
     };
   };
   // 집행 현황·예산은 우리 팀 집행만 (주관 프로젝트에 다른 팀이 집행한 건은 프로젝트 월별 집계에만)
-  const records = splitRecords(allRecs.filter(r => r.team_id === myId).map(toRecord));
+  //   업무비는 서버가 본인 등록분만 줌 · 회의비는 부서 것
+  const records = splitRecords(allRecs.filter(isMine).map(toRecord));
   const projectMonthly: Record<string, number[]> = Object.fromEntries(projects.map(p => [p.id, Array(12).fill(0)]));
   const monthly: MonthlyExec[] = Array.from({ length: 12 }, (_, month) => ({ month, meeting: 0, project: 0 }));
   for (const r of allRecs) {
@@ -134,7 +139,7 @@ export async function loadRemote(me: Team): Promise<RemoteData & { teams: Team[]
     const mi = Number(r.use_date.slice(5, 7)) - 1;
     const total = r.exec_items.reduce((s, i) => s + Number(i.amount), 0);
     if (r.project_id != null) (projectMonthly[String(r.project_id)] ??= Array(12).fill(0))[mi] += total;
-    if (r.team_id !== myId) continue;
+    if (!isMine(r)) continue;
     if (r.budget_type === 'meeting') monthly[mi].meeting += total;
     else if (r.budget_type === 'project') monthly[mi].project += total;
   }
@@ -300,18 +305,22 @@ export async function pushAction(action: Action, before: AppState, after: AppSta
       pushed = true;
       break;
     case 'SAVE_HEADCOUNTS': {
+      // 회의비 인원은 부서 단위 (팀장 · 관리자만 — 서버 권한 정책이 다시 확인)
       const year = action.year ?? CUR_YEAR;
-      const rows = action.headcounts.map((headcount, k) => ({ team_id: myId, month: `${ym(year, action.quarterIdx * 3 + k)}-01`, headcount }));
+      const deptId = Number(deptOf(after.teams, me.name)?.id ?? me.id);
+      const rows = action.headcounts.map((headcount, k) => ({ team_id: deptId, month: `${ym(year, action.quarterIdx * 3 + k)}-01`, headcount }));
       must(await c.from('team_headcounts').upsert(rows, { onConflict: 'team_id,month' }) as Res<null>, '팀 인원 저장');
       pushed = true;
       break;
     }
     case 'SAVE_WORK_BUDGET': {
+      // 업무비 예산은 사람별
       const prev = before.workBudgets, next = after.workBudgets;
-      const upserts = Object.entries(next).filter(([m, v]) => prev[m] !== v).map(([m, amount]) => ({ team_id: myId, effective_month: `${m}-01`, amount }));
+      const upserts = Object.entries(next).filter(([m, v]) => prev[m] !== v)
+        .map(([m, amount]) => ({ member_id: memberId, team_id: myId, effective_month: `${m}-01`, amount }));
       const removed = Object.keys(prev).filter(m => !(m in next)).map(m => `${m}-01`);
-      if (upserts.length) must(await c.from('work_budgets').upsert(upserts, { onConflict: 'team_id,effective_month' }) as Res<null>, '업무비 예산 저장');
-      if (removed.length) must(await c.from('work_budgets').delete().eq('team_id', myId).in('effective_month', removed) as Res<null>, '업무비 예산 저장');
+      if (upserts.length) must(await c.from('work_budgets').upsert(upserts, { onConflict: 'member_id,effective_month' }) as Res<null>, '업무비 예산 저장');
+      if (removed.length) must(await c.from('work_budgets').delete().eq('member_id', memberId).in('effective_month', removed) as Res<null>, '업무비 예산 저장');
       pushed = true;
       break;
     }

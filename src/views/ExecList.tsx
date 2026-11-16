@@ -7,6 +7,7 @@ import {
   PROJECT_GROUP, TEAM_GROUP, bucketOf, budgetName, groupOf, parseTypeKey, recordTypeKey, typeIcon, workBudgetOf, workUsedOf,
 } from '@/lib/budget';
 import { budgetTypeOptions } from '@/components/budgetTypeOptions';
+import { workEnabled } from '@/lib/access';
 import { execProjects } from '@/store/selectors';
 import { useToast } from '@/hooks/useToast';
 import { onFocusRequest, takeFocus } from '@/lib/search';
@@ -60,7 +61,7 @@ function ExecSummary({ period, total, count, lines }: { period: string; total: n
     };
   };
   const byGroup = SUM_GROUPS.map(g => toGroup(g, lines.filter(l => l.group === g.key))).filter(g => g.lines.length > 0);
-  // 주관·참여 프로젝트가 없으면(모두 종료되고 조회 기간 집행도 없음) 팀 운영 소계 대신 [팀 회의비] [팀 업무비] 로 나눠 표시
+  // 주관·참여 프로젝트가 없으면(모두 종료되고 조회 기간 집행도 없음) 팀 운영 소계 대신 [팀 회의비] [업무비] 로 나눠 표시
   const split = !byGroup.some(g => g.key === 'project');
   const groups = !split
     ? byGroup
@@ -178,6 +179,7 @@ export const toastOnExecList = (msg: string) => { pendingToast = msg; };
 export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void }) {
   const state = useAppState();
   const { records, projects } = state;
+  const showWork = workEnabled(state);
   const dispatch = useDispatch();
   const [toast, showToast] = useToast();
   const [arrivalMsg] = useState(() => pendingToast);
@@ -276,12 +278,12 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
       remain: qList.length ? budget - used : null, budget, used,
     });
   }
-  // 팀 업무비는 조회 기간의 달마다 월 예산·사용액 합 (이월 없음)
-  {
+  // 업무비는 조회 기간의 달마다 월 예산·사용액 합 (이월 없음) — 업무비를 쓰지 않는 사용자는 생략
+  if (showWork) {
     let budget = 0, used = 0;
     for (let m = start; m <= end; m = shiftYm(m, 1)) { budget += workBudgetOf(state, m).amount; used += workUsedOf(state, m); }
     sumLines.push({
-      key: 'work', group: 'team', icon: '💼', name: '팀 업무비', sub: `${periodText(start, end)} 월 예산 ${fmt(budget)}`,
+      key: 'work', group: 'team', icon: '💼', name: '업무비', sub: `${periodText(start, end)} 월 예산 ${fmt(budget)}`,
       spent: spentOf(r => r.type === 'work'), remain: budget - used, budget, used,
     });
   }
@@ -352,10 +354,12 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
       if (!(v > 0)) { showToast('금액은 0원보다 커야 합니다.', 'warn'); return; }
       next = { ...r, items: [{ name: r.items[0]?.name ?? '기타 경비', amount: v }] };
     }
+    // 잔액을 넘어도 수정 가능 — 초과는 안내만
     const msg = shortage(r, recordTypeKey(next), next.month, next.items[0].amount);
-    if (msg) { showToast(`${msg} 수정할 수 없습니다.`, 'warn'); return; }
     dispatch({ type: 'UPDATE_RECORD', record: next });
-    showToast(field === 'type' ? `예산 유형을 '${typeName(next)}'(으)로 변경했습니다.` : '집행 이력이 수정되었습니다.');
+    const done = field === 'type' ? `예산 유형을 '${typeName(next)}'(으)로 변경했습니다.` : '집행 이력이 수정되었습니다.';
+    if (msg) showToast(`${done} ${msg.replace('부족합니다.', '부족해 초과 집행됩니다.')}`, 'warn');
+    else showToast(done);
   };
 
   // 행 클릭: 처음 = 선택, 선택된 행에서 한 번 더 = 그 칸 수정
@@ -470,7 +474,7 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
           <Select size="sm" value={projectFilter} onChange={e => { setProjectFilter(e.target.value); resetMarks(); }} aria-label="팀 운영 항목 필터">
             <option value="all">전체 항목</option>
             <option value="meeting">팀 회의비</option>
-            <option value="work">팀 업무비</option>
+            {showWork && <option value="work">업무비</option>}
           </Select>
         )}
         {filter === 'project' && (
@@ -578,6 +582,7 @@ export default function ExecList({ onNavigate }: { onNavigate: (v: View) => void
                           <Select bare defaultOpen className="exec-type-pick" popClassName="exec-type-pop" aria-label="예산 유형 변경"
                             value={recordTypeKey(r)} onChange={e => commit(r, 'type', e.target.value)} onClose={() => setEdit(null)}>
                             {budgetTypeOptions(typeProjectsOf(r), {
+                              work: showWork || r.type === 'work',
                               extra: r.type === 'project' && !typeProjectsOf(r).some(p => p.id === r.projectId) && (
                                 <option value={recordTypeKey(r)} disabled>{projName(r.projectId)} (종료)</option>
                               ),

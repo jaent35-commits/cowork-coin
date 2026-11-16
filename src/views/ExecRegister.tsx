@@ -10,6 +10,7 @@ import { AmountInput, Btn, Card, DateField, IconBtn, Input, PageHead, SectionHea
 import { IconClose } from '@/components/icons';
 import ReceiptScan from '@/components/ReceiptScan';
 import { budgetTypeOptions } from '@/components/budgetTypeOptions';
+import { workEnabled } from '@/lib/access';
 import type { ReceiptResult } from '@/lib/receiptOcr';
 import { releaseReceiptScan } from '@/lib/receiptPipeline';
 import { toastOnExecList } from './ExecList';
@@ -28,7 +29,9 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
   const [rows, setRows] = useState<Row[]>([newRow()]);
   /** 이 줄의 사용일자에 쓸 수 있는 프로젝트 (사용 종료일 지난 프로젝트는 숨김) */
   const projectsFor = (r: Row) => execProjects(state, r.useDate || TODAY_ISO);
-  const allowed = (r: Row) => !r.typeKey.startsWith('p:') || projectsFor(r).some(p => `p:${p.id}` === r.typeKey);
+  // 업무비를 쓰지 않는 사용자는 업무비 선택지 없음
+  const showWork = workEnabled(state);
+  const allowed = (r: Row) => (r.typeKey === 'work' ? showWork : !r.typeKey.startsWith('p:') || projectsFor(r).some(p => `p:${p.id}` === r.typeKey));
 
   // 사용일자를 바꿔 고른 프로젝트를 더 쓸 수 없으면 예산 유형을 팀 회의비로 되돌림
   const update = (id: string, patch: Partial<Row>) => setRows(rs => rs.map(r => {
@@ -53,12 +56,12 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
     i.over = i.after != null && i.after < 0;
   }
   const sum = rows.reduce((s, r) => s + r.amount, 0);
-  const anyOver = impacts.some(i => i.over);
   const noProject = rows.some(r => r.amount > 0 && !allowed(r));
   // 사용일자: 1~15일은 지난달부터, 16일부터는 이번 달부터 (영수증 인식으로 들어온 이전 날짜도 막음)
   const minDate = execMinDate();
   const tooOld = rows.some(r => r.amount > 0 && (r.useDate || TODAY_ISO) < minDate);
-  const canSave = sum > 0 && !anyOver && !noProject && !tooOld;
+  // 잔액을 넘어도 등록 가능 (초과 금액은 안내만 — 저장 버튼 위 경고)
+  const canSave = sum > 0 && !noProject && !tooOld;
 
   // 입력 전 요약(PC): 첫 줄 예산의 현재 잔액
   const firstBucket = bucketOf(state, rows[0]?.typeKey ?? 'meeting', monthOf(rows[0] ?? newRow()));
@@ -162,7 +165,7 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
                   <div className="reg-field reg-row__type">
                     <span className="reg-field__label" aria-hidden="true">예산 유형</span>
                     <Select value={row.typeKey} aria-label={`${idx + 1}번 예산 유형`} onChange={e => update(row.id, { typeKey: e.target.value })}>
-                      {budgetTypeOptions(projectsFor(row), { icons: true })}
+                      {budgetTypeOptions(projectsFor(row), { icons: true, work: showWork })}
                     </Select>
                   </div>
                   <div className="reg-field reg-row__name">
@@ -211,7 +214,7 @@ export default function ExecRegister({ onBack }: { onBack: () => void }) {
                       <dd className={cx(i.over && 'text-danger')}>{i.after == null ? '—' : i.over ? `−${fmt(-i.after)}` : fmt(i.after)}</dd>
                     </div>
                   </dl>
-                  {i.over && <p className="reg-sum__warn">🔴 잔액을 넘었습니다. 금액을 줄여주세요.</p>}
+                  {i.over && <p className="reg-sum__warn">🔴 잔액을 넘었습니다. 초과한 금액도 그대로 등록됩니다.</p>}
                 </div>
               ))}
             </div>

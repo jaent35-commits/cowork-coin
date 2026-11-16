@@ -197,6 +197,8 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
     run(() => updateMember(m.id, { active }), `${m.name}을(를) ${active ? '활성' : '휴면'}으로 바꿨어요.`);
   const setAdmin = (m: MemberAdminRow, on: boolean) =>
     run(() => updateMember(m.id, { isAdmin: on }), `${m.name} 관리자 권한을 ${on ? '부여' : '해제'}했어요.`);
+  const setWork = (m: MemberAdminRow, on: boolean) =>
+    run(() => updateMember(m.id, { workEnabled: on }), `${m.name}의 업무비를 ${on ? '켰어요' : '껐어요. 업무비 메뉴가 숨겨져요'}.`);
 
   const runConfirm = async () => {
     if (!confirm || busy) return;
@@ -293,6 +295,11 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
         title={self ? '내 권한은 바꿀 수 없어요' : undefined} onChange={v => { void setAdmin(m, v); }} />
     );
   };
+  // 업무비 사용 여부 (관리자만) — 끄면 그 사람의 업무비 메뉴 · 집행 선택지가 숨겨짐
+  const workSwitch = (m: MemberAdminRow) => (
+    <Switch checked={m.workEnabled !== false} disabled={busy} label={`${m.name} 업무비 사용`} text={m.workEnabled !== false ? '사용' : '안 씀'}
+      onChange={v => { void setWork(m, v); }} />
+  );
   // 사용자 보기 끄면 조직만 펼치고 접는 트리 (이 기기에 기억)
   // 기본은 '조직만' — 사용자 포함을 고른 적이 있으면 그 선택을 따름
   const [showPeople, setShowPeopleState] = useState(() => { try { return localStorage.getItem(ORG_PEOPLE_KEY) === '1'; } catch { return false; } });
@@ -599,6 +606,7 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
                                 <div><dt>슬랙 DM</dt><dd title={m.slackError ?? undefined}>{slackStatus(m)}</dd></div>
                                 <div><dt>상태</dt><dd>{activeBadge(m)}</dd></div>
                                 {isAdmin && <div><dt>관리자</dt><dd>{adminSwitch(m)}</dd></div>}
+                                {isAdmin && <div><dt>업무비</dt><dd>{workSwitch(m)}</dd></div>}
                                 {m.mustChangePassword && <div><dt>비밀번호</dt><dd><Badge variant="gray" size="sm">초기 비밀번호 사용 중</Badge></dd></div>}
                               </dl>
                               <div className="member-detail__btns">
@@ -622,7 +630,7 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
                 <table className="table member-table">
                   <thead>
                     <tr>
-                      <th>성명</th><th>사번</th><th>소속</th><th>슬랙 DM</th><th>상태</th>{isAdmin && <th>관리자</th>}
+                      <th>성명</th><th>사번</th><th>소속</th><th>슬랙 DM</th><th>상태</th>{isAdmin && <><th>관리자</th><th>업무비</th></>}
                       <th className="t-center">비밀번호</th><th className="t-center">수정</th><th className="t-center">삭제</th>
                     </tr>
                   </thead>
@@ -641,7 +649,7 @@ export default function Admin({ section }: { section: 'users' | 'org' }) {
                           <td className="member-table__org">{pathOf(m.teamId)}</td>
                           <td title={m.slackError ?? m.email ?? '회사 이메일 없음'}>{slackStatus(m)}</td>
                           <td>{activeBadge(m)}</td>
-                          {isAdmin && <td>{adminSwitch(m)}</td>}
+                          {isAdmin && <><td>{adminSwitch(m)}</td><td>{workSwitch(m)}</td></>}
                           <td className="t-center">
                             <Btn size="sm" variant="secondary" disabled={!editable || self} title={self ? '내 비밀번호는 내 정보에서 바꾸세요' : undefined}
                               onClick={() => setConfirm({ kind: 'reset', member: m })}>초기화</Btn>

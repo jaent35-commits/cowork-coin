@@ -11,6 +11,7 @@ import Donut from '@/components/Donut';
 import YearPicker, { YearBar } from '@/components/layout/YearPicker';
 import { useViewYear } from '@/lib/viewYear';
 import { SEED_QUARTERS } from '@/data/seed';
+import { deptOf, isMeetingLeader, workEnabled } from '@/lib/access';
 import WorkBudget from './WorkBudget';
 import './Meeting.css';
 
@@ -30,8 +31,8 @@ function initialCounts(quarters: QuarterData[], qi: number, carry?: QuarterData[
   return hc.map(() => count);
 }
 
-/** 팀 운영 = 팀 회의비 · 팀 업무비 (고정 2개) */
-const TEAM_TABS = ['팀 회의비', '팀 업무비'] as const;
+/** 팀 운영 = 팀 회의비 · 업무비 (고정 2개) */
+const TEAM_TABS = ['팀 회의비', '업무비'] as const;
 type TeamTab = (typeof TEAM_TABS)[number];
 /** 메뉴로 들어오면 항상 첫 탭 — 다른 화면에서 특정 탭으로 보낼 때만 한 번 지정 (예: 홈 '업무비 관리 →') */
 let pendingTab: TeamTab | null = null;
@@ -40,9 +41,15 @@ export const openTeamTab = (t: TeamTab) => { pendingTab = t; };
 const isTeamTab = (t: string) => (TEAM_TABS as readonly string[]).includes(t);
 
 export default function Meeting({ onNavigate }: { onNavigate: (v: View) => void }) {
-  const { quarters, meetingRate, records, plannedQuarters } = useAppState();
+  const state = useAppState();
+  const { quarters, meetingRate, records, plannedQuarters } = state;
   const dispatch = useDispatch();
   const [viewYear] = useViewYear();
+  // 회의비는 부서가 함께 봄 — 인원(예산) 설정은 팀장(부서 직속) · 관리자만, 업무비 탭은 사용하는 사람만
+  const leader = isMeetingLeader(state);
+  const dept = deptOf(state.teams, state.session?.team);
+  const showWork = workEnabled(state);
+  const tabs = showWork ? TEAM_TABS : TEAM_TABS.filter(t => t !== '업무비');
   // 올해 = 저장된 분기 · 다음 해(9월부터) = 미리 입력한 계획 · 지난 해 = 집행 이력의 분기별 집행액만
   const isCurYear = viewYear === CUR_YEAR;
   const isPlanYear = viewYear > CUR_YEAR;
@@ -109,10 +116,10 @@ export default function Meeting({ onNavigate }: { onNavigate: (v: View) => void 
         actions={<Btn className="exec-cta" onClick={() => onNavigate('exec-new')}><IconPlus size={14} />집행 등록</Btn>}
       />
 
-      <Tabs tabs={TEAM_TABS} active={tab} onSelect={setTab} />
+      <Tabs tabs={tabs} active={showWork ? tab : '팀 회의비'} onSelect={setTab} />
       <YearBar allowNextYear />
 
-      {tab === '팀 업무비' ? <WorkBudget key={viewYear} onToast={showToast} /> : (<>
+      {showWork && tab === '업무비' ? <WorkBudget key={viewYear} onToast={showToast} /> : (<>
       <Card className="card--clip mb-20">
         <TableWrap>
           <table className="table q-table">
@@ -186,26 +193,39 @@ export default function Meeting({ onNavigate }: { onNavigate: (v: View) => void 
         <Card pad="lg">
           <SectionHead title={`${isPlanYear ? `${viewYear}년 ` : ''}${q.label}${isCurYear && selected === CUR_QUARTER ? ' (현재)' : ''} 팀 인원 정보`} />
           <div className="label mb-14 hc-label">
-            <span>월별 팀 인원 수</span>
-            {autoFilled && <span className="hc-auto">저장 전 · 전월({prev.month}) {prev.count}명 자동 입력</span>}
+            <span>월별 팀 인원 수{dept && state.session?.member && ` · ${dept.name}`}</span>
+            {leader && autoFilled && <span className="hc-auto">저장 전 · 전월({prev.month}) {prev.count}명 자동 입력</span>}
           </div>
-          <div className="hc-list">
-            {q.months.map((month, i) => (
-              <div key={month} className="hc-row">
-                <label className="hc-row__month" htmlFor={`hc-${i}`}>{month}</label>
-                <div className="stepper">
-                  <button type="button" onClick={() => setAt(i, headcounts[i] - 1)} aria-label={`${month} 인원 감소`}>−</button>
-                  {/* 숫자만 입력 (모바일 숫자 키패드) — 숫자 외 문자는 제거 */}
-                  <input id={`hc-${i}`} type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" maxLength={3}
-                    value={String(headcounts[i])} onFocus={e => e.target.select()}
-                    onChange={e => setAt(i, Number(e.target.value.replace(/\D/g, '')) || 0)} />
-                  <button type="button" onClick={() => setAt(i, headcounts[i] + 1)} aria-label={`${month} 인원 증가`}>+</button>
+          {leader ? (<>
+            <div className="hc-list">
+              {q.months.map((month, i) => (
+                <div key={month} className="hc-row">
+                  <label className="hc-row__month" htmlFor={`hc-${i}`}>{month}</label>
+                  <div className="stepper">
+                    <button type="button" onClick={() => setAt(i, headcounts[i] - 1)} aria-label={`${month} 인원 감소`}>−</button>
+                    {/* 숫자만 입력 (모바일 숫자 키패드) — 숫자 외 문자는 제거 */}
+                    <input id={`hc-${i}`} type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" maxLength={3}
+                      value={String(headcounts[i])} onFocus={e => e.target.select()}
+                      onChange={e => setAt(i, Number(e.target.value.replace(/\D/g, '')) || 0)} />
+                    <button type="button" onClick={() => setAt(i, headcounts[i] + 1)} aria-label={`${month} 인원 증가`}>+</button>
+                  </div>
+                  <span className="hc-row__unit">명</span>
                 </div>
-                <span className="hc-row__unit">명</span>
-              </div>
-            ))}
-          </div>
-          <Btn block onClick={save} disabled={!dirty}>{dirty ? '저장' : '저장됨'}</Btn>
+              ))}
+            </div>
+            <Btn block onClick={save} disabled={!dirty}>{dirty ? '저장' : '저장됨'}</Btn>
+          </>) : (<>
+            {/* 팀원: 팀장이 정한 인원을 보기만 */}
+            <div className="hc-list">
+              {q.months.map((month, i) => (
+                <div key={month} className="hc-row">
+                  <span className="hc-row__month">{month}</span>
+                  <span className="hc-row__value">{q.headcounts[i] > 0 ? `${q.headcounts[i]}명` : '미입력'}</span>
+                </div>
+              ))}
+            </div>
+            <Alert variant="info">팀 회의비 인원은 팀장(부서에 바로 속한 사람)이 정해요. 정해진 회의비는 부서 모두가 함께 봅니다.</Alert>
+          </>)}
         </Card>
 
         <Card pad="lg">

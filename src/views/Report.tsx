@@ -5,6 +5,7 @@ import { currentQuarter, teamAllocOf } from '@/store/selectors';
 import { YEARLY_HISTORY } from '@/data/seed';
 import { CUR_MONTH, CUR_QUARTER, CUR_YEAR, TODAY, monthsUntil, quarterOf, spentDateOf, ym } from '@/lib/date';
 import { workBudgetOf, workUsedOf } from '@/lib/budget';
+import { workEnabled } from '@/lib/access';
 import { fmt, fmtMan, pct } from '@/lib/format';
 import { Btn, Card, FilterChip, PageHead, ProgressBar, Segmented, Select, StepNav, Tabs, cx, progVariant } from '@/components/ui';
 import { MTag } from '@/components/ui/MTag';
@@ -22,7 +23,7 @@ type Period = 'month' | 'quarter' | 'year';
 type Line = 'total' | 'team' | 'project';
 /** 차트 '팀 운영' 선택 시 하위 목록 */
 type TeamSub = 'all' | 'meeting' | 'work';
-const TEAM_SUBS: { value: TeamSub; label: string }[] = [{ value: 'all', label: '팀 운영 전체' }, { value: 'meeting', label: '팀 회의비' }, { value: 'work', label: '팀 업무비' }];
+const TEAM_SUBS: { value: TeamSub; label: string }[] = [{ value: 'all', label: '팀 운영 전체' }, { value: 'meeting', label: '팀 회의비' }, { value: 'work', label: '업무비' }];
 /** 월별 집행(−) — 팀 운영 = 회의비 + 업무비 */
 interface MonthRow { month: number; meeting: number; work: number; project: number }
 /** 월별 예산 배분(+) — 회의비·업무비는 매월, 프로젝트는 착수월에 우리 팀 배분액 */
@@ -113,6 +114,9 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
   const { records, quarters, projects } = state;
   const [year] = useViewYear();
   const isCurYear = year === CUR_YEAR;
+  // 업무비를 쓰지 않는 사용자는 업무비 예산 · 코인 · 필터 없음
+  const showWork = workEnabled(state);
+  const workBudget = (m: string) => (showWork ? workBudgetOf(state, m).amount : 0);
   // 올해: 저장된 월별 회의비·프로젝트 집행 + 업무비는 집행 기록에서
   const monthly: MonthRow[] = isCurYear
     ? state.monthly.map(m => ({ ...m, work: workUsedOf(state, ym(year, m.month)) }))
@@ -152,7 +156,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
     const key = ym(year, mi);
     // 팀 회의비는 분기 단위 — 분기 첫 달에 3개월치 예산이 한 번에 생김 (매달 생기지 않음)
     const meeting = isCurYear && mi % 3 === 0 ? quarters[quarterOf(mi)]?.budget ?? 0 : 0;
-    const work = workBudgetOf(state, key).amount;
+    const work = workBudget(key);
     const project = projectAddOf(mi, teamProjects, myAlloc);
     return { meeting, work, team: meeting + work, project };
   };
@@ -200,20 +204,17 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
 
   /* ── 보유 코웍-코인 ── */
   const q = currentQuarter(state);
-  // 팀 업무비 — 회의비처럼 이번 분기 누적 (분기 세 달의 월 예산 합 · 집행 합)
-  const qMonths = [0, 1, 2].map(i => ym(CUR_YEAR, CUR_QUARTER * 3 + i));
-  const workQ = {
-    budget: qMonths.reduce((s, m) => s + workBudgetOf(state, m).amount, 0),
-    used: qMonths.reduce((s, m) => s + workUsedOf(state, m), 0),
-  };
+  // 업무비 — 월 단위 (이번 달 예산 · 집행, 이월 없음 → 이번 달이 기한)
+  const thisMonth = ym(CUR_YEAR, CUR_MONTH);
+  const workM = { budget: workBudget(thisMonth), used: workUsedOf(state, thisMonth) };
   const coins = [
-    // 회의비·업무비는 분기 단위로 보므로 분기 마지막 달을 기한으로 본다
+    // 팀 회의비는 분기 단위 → 분기 마지막 달이 기한
     { key: 'meeting', label: `팀 회의비 (${q.label})`, endDate: ym(CUR_YEAR, CUR_QUARTER * 3 + 2), active: true, budget: q.budget, used: q.used },
-    { key: 'work', label: `팀 업무비 (${q.label})`, endDate: ym(CUR_YEAR, CUR_QUARTER * 3 + 2), active: true, budget: workQ.budget, used: workQ.used },
+    ...(showWork ? [{ key: 'work', label: `업무비 (${CUR_MONTH + 1}월)`, endDate: thisMonth, active: true, budget: workM.budget, used: workM.used }] : []),
     // 프로젝트는 우리 팀 배분 행 기준 (주관 = My 경비, 참여 = 우리 팀 배분) — 배분이 없는 프로젝트는 우리 팀 코인이 아님
     ...projects.flatMap(p => { const a = teamAllocOf(state, p); return a ? [{ key: p.id, label: p.name, endDate: a.endDate, active: p.active, budget: a.amount, used: a.used }] : []; }),
   ];
-  /** 선택된 코인 = 지금 운영일지·차트 필터 (팀 회의비 · 팀 업무비 · 프로젝트 하나) */
+  /** 선택된 코인 = 지금 운영일지·차트 필터 (팀 회의비 · 업무비 · 프로젝트 하나) */
   const selCoin = line === 'team' && teamSub !== 'all' ? teamSub : line === 'project' && projectId !== ALL ? projectId : null;
   /** 코인을 누르면 운영일지·차트를 그 항목으로, 선택된 코인을 다시 누르면 전체로 */
   const pickCoin = (key: string) => {
@@ -249,7 +250,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
   /**
    * 잔액선 — 그 달 말 기준 쓸 수 있는 예산 (예산이 처음 생긴 달 전에는 0)
    * · 팀 회의비: 분기 예산이 분기 첫 달에 한 번에 생기고, 분기 안에서만 씀 → 분기가 끝나면 남은 금액 소멸
-   * · 팀 업무비: 그 달 예산을 그 달에만 씀 (이월 없음 · 남으면 소멸)
+   * · 업무비: 그 달 예산을 그 달에만 씀 (이월 없음 · 남으면 소멸)
    * · 프로젝트: 착수월에 배분 가능 금액이 생기고(올해 전에 착수했으면 1월) 사업 기간 동안 누적
    * 과거 연도는 예산을 보관하지 않아 0 (단일 프로젝트는 표시)
    */
@@ -260,7 +261,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
     if (oneProject) return projectRemainAt(mi, [oneProject]);
     const qStart = quarterOf(mi) * 3;
     const meeting = Math.max(0, (quarters[quarterOf(mi)]?.budget ?? 0) - sum(qStart, i => execOf(i, 'meeting')));
-    const work = Math.max(0, workBudgetOf(state, ym(year, mi)).amount - execOf(mi, 'work'));
+    const work = Math.max(0, workBudget(ym(year, mi)) - execOf(mi, 'work'));
     // 우리 팀 기준: 우리 팀이 배분받은 금액(주관 프로젝트의 My 경비 + 참여 프로젝트 배분) − 우리 팀 프로젝트 집행
     const project = projectRemainAt(mi, teamProjects);
     const teamPart = teamSub === 'meeting' ? meeting : teamSub === 'work' ? work : meeting + work;
@@ -320,7 +321,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
       {/* 팀 운영: 회의비 · 업무비 목록 */}
       {line === 'team' && (
         <Select size="sm" className="chart-filter__select" value={teamSub} onChange={e => setTeamSub(e.target.value as TeamSub)} aria-label={`${id} 팀 운영 항목 선택`}>
-          {TEAM_SUBS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {TEAM_SUBS.filter(o => showWork || o.value !== 'work').map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </Select>
       )}
       {line === 'project' && (
@@ -369,7 +370,7 @@ export default function Report({ onNavigate }: { onNavigate: (v: View) => void }
             {dayRecords.length === 0 && <div className="day-list__empty">이 날 사용한 집행이 없습니다</div>}
             {dayRecords.map(r => (
               <div key={r.id} className="day-list__row">
-                <span>{r.type === 'meeting' ? '👥 팀 회의비' : r.type === 'work' ? '💼 팀 업무비' : `📁 ${projects.find(p => p.id === r.projectId)?.name ?? '프로젝트'}`}</span>
+                <span>{r.type === 'meeting' ? '👥 팀 회의비' : r.type === 'work' ? '💼 업무비' : `📁 ${projects.find(p => p.id === r.projectId)?.name ?? '프로젝트'}`}</span>
                 <b>{fmt(r.total)}</b>
               </div>
             ))}

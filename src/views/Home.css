@@ -53,7 +53,7 @@
   display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 7px 10px; border-radius: var(--r-sm);
   background: var(--coral-50); font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--danger-600);
 }
-/* 안내(녹색) — 팀 업무비 이번 달 사용 가능 금액 */
+/* 안내(녹색) — 업무비 이번 달 사용 가능 금액 */
 .stat__avail {
   display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 7px 10px; border-radius: var(--r-sm);
   background: var(--success-50); font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--success-600);

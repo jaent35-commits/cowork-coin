@@ -35,7 +35,7 @@ function loadInitial(): AppState {
         state.plannedQuarters = rest;
         state.quartersYear = CUR_YEAR;
       }
-      // 팀 업무비가 없던 저장본 → 시드 월 예산으로 시작
+      // 업무비가 없던 저장본 → 시드 월 예산으로 시작
       state.workBudgets = state.workBudgets ?? seed.workBudgets;
       state.records = splitRecords(state.records ?? []);
       // 착수월·종료월(YYYY-MM) 저장본 → 착수일(1일)·종료일(말일)
