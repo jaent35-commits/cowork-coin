@@ -25,6 +25,7 @@ import Notification from './views/Notification';
 import Search from './views/Search';
 import Admin from './views/Admin';
 import AdminLocal from './views/AdminLocal';
+import AdminOcr from './views/AdminOcr';
 import { SYNC_ERROR_EVENT } from './store/StoreContext';
 import { useToast } from './hooks/useToast';
 import { Toast } from './components/ui';
@@ -61,6 +62,7 @@ export default function App() {
   const canAdmin = !!session && (session.isAdmin || !!session.canManage);
   useEffect(() => {
     if (session && isAdminView(view) && !canAdmin) navigate('home');
+    else if (session && view === 'admin-ocr' && (!session.isAdmin || !REMOTE_AUTH)) navigate('home'); // 영수증 인식은 관리자만
     else if (!REMOTE_AUTH && view === 'admin-org') navigate('admin'); // 브라우저 저장본: 팀 = 조직
   }, [session, canAdmin, view, navigate]);
 
@@ -122,10 +124,10 @@ export default function App() {
   const backTo = sheetBack[view];
   return (
     <div className={['app', gnbCollapsed && 'is-gnb-collapsed', backTo && 'is-sheet'].filter(Boolean).join(' ')}>
-      <Header view={view} teamName={session.member?.name ?? session.team} isAdmin={canAdmin} unread={unreadCount(state)} onNavigate={navigate} onLogout={logout}
+      <Header view={view} teamName={session.member?.name ?? session.team} isAdmin={canAdmin} fullAdmin={!!session.isAdmin} unread={unreadCount(state)} onNavigate={navigate} onLogout={logout}
         onBack={backTo ? () => navigate(backTo) : undefined}
         title={view === 'project-detail' ? state.projects.find(p => p.id === readDetailId())?.name : undefined} />
-      <Sidebar view={view} isAdmin={canAdmin} collapsed={gnbCollapsed} onToggle={toggleGnb} onNavigate={navigate} />
+      <Sidebar view={view} isAdmin={canAdmin} fullAdmin={!!session.isAdmin} collapsed={gnbCollapsed} onToggle={toggleGnb} onNavigate={navigate} />
 
       <Toast msg={syncToast} />
       <main className="app-main">
@@ -145,6 +147,7 @@ export default function App() {
           {view === 'search' && <Search onNavigate={navigate} />}
           {view === 'admin' && canAdmin && (REMOTE_AUTH ? <Admin section="users" /> : <AdminLocal />)}
           {view === 'admin-org' && canAdmin && REMOTE_AUTH && <Admin section="org" />}
+          {view === 'admin-ocr' && session.isAdmin && REMOTE_AUTH && <AdminOcr />}
         </div>
       </main>
 

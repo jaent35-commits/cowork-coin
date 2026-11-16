@@ -61,6 +61,13 @@ export const IconOrg = (p: P) => (
     <path d="M12 8v4M6 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" />
   </Svg>
 );
+/** 영수증 인식 — 스캔 테두리 안의 글자 줄 */
+export const IconScan = (p: P) => (
+  <Svg strokeWidth={1.8} {...p}>
+    <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
+    <path d="M8 9h8M8 12h8M8 15h5" />
+  </Svg>
+);
 export const IconLogout = (p: P) => (
   <Svg strokeWidth={1.8} {...p}><path d="M9 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h4M16 17l5-5-5-5M21 12H9" /></Svg>
 );

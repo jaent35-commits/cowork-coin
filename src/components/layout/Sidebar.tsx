@@ -21,8 +21,8 @@ function Item({ item, active, collapsed, onClick }: { item: NavItem; active: boo
   );
 }
 
-export default function Sidebar({ view, isAdmin, collapsed, onToggle, onNavigate }: {
-  view: View; isAdmin: boolean; collapsed: boolean; onToggle: () => void; onNavigate: (v: View) => void;
+export default function Sidebar({ view, isAdmin, fullAdmin, collapsed, onToggle, onNavigate }: {
+  view: View; isAdmin: boolean; fullAdmin: boolean; collapsed: boolean; onToggle: () => void; onNavigate: (v: View) => void;
 }) {
   const label = collapsed ? '메뉴 펼치기' : '메뉴 접기';
   const { theme } = useTheme();
@@ -53,7 +53,7 @@ export default function Sidebar({ view, isAdmin, collapsed, onToggle, onNavigate
         <nav className="sidebar__nav sidebar__nav--admin" aria-label="관리 메뉴">
           <div className="sidebar__group" role="group" aria-label={ADMIN_GROUP_TITLE}>
             <div className="sidebar__group-title" aria-hidden="true">{ADMIN_GROUP_TITLE}</div>
-            {adminNav(REMOTE_AUTH).map(item => (
+            {adminNav(REMOTE_AUTH, fullAdmin).map(item => (
               <Item key={item.view} item={item} collapsed={collapsed} active={isActive(item, view)} onClick={() => onNavigate(item.view)} />
             ))}
           </div>

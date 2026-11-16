@@ -34,7 +34,7 @@ self.addEventListener('message', async (e: MessageEvent<Req>) => {
       const blob = await (prepare(img, area, m.targetW, m.C, make) as OffscreenCanvas).convertToBlob({ type: 'image/png' });
       post({ id: m.id, blob });
     } else if (m.type === 'upload') {
-      // PaddleOCR 서버로 보낼 사진 — 긴 변 maxEdge 초과만 비율 유지 축소(EXIF 방향 반영) → JPEG. 작으면 blob 없이 응답(원본 그대로)
+      // 서버 인식(Vision)으로 보낼 사진 — 긴 변 maxEdge 초과만 비율 유지 축소(EXIF 방향 반영) → JPEG. 작으면 blob 없이 응답(원본 그대로)
       const bmp = await createImageBitmap(m.file, { imageOrientation: 'from-image' });
       try {
         const long = Math.max(bmp.width, bmp.height);

@@ -12,7 +12,7 @@ import { supabase } from './supabase';
 export type AuthErrorCode =
   | 'bad_request' | 'unauthorized' | 'forbidden' | 'already_setup' | 'duplicate' | 'weak_password'
   | 'same_password' | 'wrong_password' | 'not_found' | 'self_target' | 'last_admin'
-  | 'invalid_login' | 'not_member' | 'network' | 'server';
+  | 'invalid_login' | 'not_member' | 'quota' | 'unavailable' | 'network' | 'server';
 
 export class AuthApiError extends Error {
   constructor(public code: AuthErrorCode, message: string) { super(message); }
@@ -183,3 +183,29 @@ export async function removeTeam(id: string) {
 // ── 슬랙 ──
 /** 로그인한 본인에게 테스트 DM */
 export const sendSlackTest = () => invoke<{ ok: boolean; message?: string }>('notify-slack', { action: 'test' });
+
+// ── 영수증 인식 (Google Cloud Vision · supabase/functions/ocr-receipt · db/migrations/20261117_receipt_ocr_quota.sql) ──
+/** 영수증 사진(base64) → 인식한 글자. 월 한도를 다 쓰면 AuthApiError('quota'), 서버 인식을 못 쓰면 'unavailable' */
+export const ocrReceiptText = (image: string) => invoke<{ text: string }>('ocr-receipt', { image }).then(r => r.text ?? '');
+
+export interface OcrQuota { limit: number; used: number }
+/** 이번 달(한국 시간 1일 ~ 말일) 서비스 전체 영수증 서버 인식 한도 · 사용 */
+export async function ocrQuota(): Promise<OcrQuota> {
+  const { data, error } = await client().rpc('ocr_quota');
+  if (error) rpcFail(error, '영수증 인식 한도를 불러오지 못했습니다');
+  const row = (Array.isArray(data) ? data[0] : data) as { monthly_limit: number; used: number } | null;
+  return { limit: row?.monthly_limit ?? 0, used: row?.used ?? 0 };
+}
+/** 관리자: 월 한도 바꾸기 (0 ~ 1,000) */
+export async function setOcrLimit(limit: number) {
+  const { error } = await client().rpc('set_ocr_limit', { p_limit: limit });
+  if (error) rpcFail(error, '영수증 인식 한도를 저장하지 못했습니다');
+}
+export interface OcrMemberUsage { memberId: string | null; name: string | null; used: number; lastUsed: string }
+/** 관리자: 이번 달 사용자별 사용 횟수 (많이 쓴 순) */
+export async function ocrUsageByMember(): Promise<OcrMemberUsage[]> {
+  const { data, error } = await client().rpc('ocr_usage_by_member');
+  if (error) rpcFail(error, '사용 기록을 불러오지 못했습니다');
+  return ((data ?? []) as { member_id: number | null; name: string | null; used: number; last_used: string }[])
+    .map(r => ({ memberId: r.member_id == null ? null : String(r.member_id), name: r.name, used: r.used, lastUsed: r.last_used }));
+}

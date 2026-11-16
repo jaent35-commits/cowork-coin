@@ -27,8 +27,8 @@ function FontToggle() {
  * 로그인한 사람(브라우저 저장본: 팀) 이름 → 계정 메뉴 (내 정보 · 비밀번호 · 화면 설정 · 알림 설정 · 사용자 · 조직 관리 · 로그아웃)
  *   관리자 메뉴는 모바일(왼쪽 메뉴가 없는 폭)에서만 — PC 는 왼쪽 메뉴의 관리자 그룹을 씀
  */
-function TeamButton({ teamName, isAdmin, onNavigate, onLogout }: {
-  teamName: string; isAdmin: boolean; onNavigate: (v: View) => void; onLogout: () => void;
+function TeamButton({ teamName, isAdmin, fullAdmin, onNavigate, onLogout }: {
+  teamName: string; isAdmin: boolean; fullAdmin: boolean; onNavigate: (v: View) => void; onLogout: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -54,7 +54,7 @@ function TeamButton({ teamName, isAdmin, onNavigate, onLogout }: {
           <button type="button" role="menuitem" onClick={() => go('mypage')}><IconLock size={15} />{REMOTE_AUTH ? '내 정보 · 비밀번호' : '비밀번호 변경'}</button>
           <button type="button" role="menuitem" onClick={() => go('settings')}><IconDisplay size={15} />화면 설정</button>
           <button type="button" role="menuitem" onClick={() => { requestFocus('tab', '알림 설정'); go('notification'); }}><IconBell size={15} />알림 설정</button>
-          {isAdmin && adminNav(REMOTE_AUTH).map(({ view, label, icon: Icon }) => (
+          {isAdmin && adminNav(REMOTE_AUTH, fullAdmin).map(({ view, label, icon: Icon }) => (
             <button key={view} type="button" role="menuitem" className="team-menu__admin" onClick={() => go(view)}><Icon size={15} />{label}</button>
           ))}
           <button type="button" role="menuitem" className="team-menu__logout" onClick={() => { setOpen(false); onLogout(); }}>
@@ -66,8 +66,8 @@ function TeamButton({ teamName, isAdmin, onNavigate, onLogout }: {
   );
 }
 
-export default function Header({ view, teamName, isAdmin, unread, onNavigate, onLogout, onBack, title }: {
-  view: View; teamName: string; isAdmin: boolean; unread: number; onNavigate: (v: View) => void; onLogout: () => void;
+export default function Header({ view, teamName, isAdmin, fullAdmin, unread, onNavigate, onLogout, onBack, title }: {
+  view: View; teamName: string; isAdmin: boolean; fullAdmin: boolean; unread: number; onNavigate: (v: View) => void; onLogout: () => void;
   /** 모바일 하위 화면(집행 등록): 로고 자리에 ‹ 뒤로 버튼 */
   onBack?: () => void;
   /** 모바일 헤더 제목을 직접 지정 (예: 프로젝트 상세 = 프로젝트명) */
@@ -107,7 +107,7 @@ export default function Header({ view, teamName, isAdmin, unread, onNavigate, on
         <HeaderSearch onNavigate={onNavigate} />
         <span className="app-header__divider" aria-hidden="true" />
         <FontToggle />
-        <TeamButton teamName={teamName} isAdmin={isAdmin} onNavigate={onNavigate} onLogout={onLogout} />
+        <TeamButton teamName={teamName} isAdmin={isAdmin} fullAdmin={fullAdmin} onNavigate={onNavigate} onLogout={onLogout} />
         <IconBtn onClick={() => onNavigate('notification')} badge={unread > 0} title="알림"
           aria-label={unread > 0 ? `알림 ${unread}건 읽지 않음` : '알림'}>
           <IconBell size={18} />

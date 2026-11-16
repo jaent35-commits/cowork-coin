@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from 'react';
 import type { View } from '@/types';
-import { IconChecklist, IconFolder, IconHome, IconMeeting, IconOrg, IconReceipt, IconReport, IconUser } from '../icons';
+import { IconChecklist, IconFolder, IconHome, IconMeeting, IconOrg, IconReceipt, IconReport, IconScan, IconUser } from '../icons';
 
 export interface NavItem {
   view: View;
@@ -9,6 +9,8 @@ export interface NavItem {
   icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
   /** 이 메뉴가 활성으로 보일 하위 화면 */
   match?: View[];
+  /** 관리자만 (부서장 이상에게는 안 보임) */
+  adminOnly?: boolean;
 }
 
 export const GNB: NavItem[] = [
@@ -34,19 +36,22 @@ export const BOTTOM_NAV: NavItem[] = BOTTOM_ORDER.map(v => {
   return v === 'exec' ? { ...item, match: [...(item.match ?? []), 'cowork'] } : item;
 });
 
-/** 관리자 그룹 — 관리자 · 부서장 이상만. 조직 관리는 Supabase 로그인에서만 (브라우저 저장본은 팀 = 조직) */
+/** 관리자 그룹 — 관리자 · 부서장 이상만. 조직 관리 · 영수증 인식은 Supabase 로그인에서만 (브라우저 저장본은 팀 = 조직), 영수증 인식은 관리자만 */
 export const ADMIN_GROUP_TITLE = '관리자';
 export const ADMIN_NAV: NavItem[] = [
   { view: 'admin', label: '사용자 관리', short: '사용자', icon: IconUser },
   { view: 'admin-org', label: '조직 관리', short: '조직', icon: IconOrg },
+  { view: 'admin-ocr', label: '영수증 인식', short: '영수증', icon: IconScan, adminOnly: true },
 ];
-export const adminNav = (remote: boolean) => (remote ? ADMIN_NAV : ADMIN_NAV.filter(i => i.view === 'admin'));
+/** remote: Supabase 로그인 · fullAdmin: 관리자(부서장 이상이 아니라) */
+export const adminNav = (remote: boolean, fullAdmin: boolean) =>
+  (remote ? ADMIN_NAV.filter(i => fullAdmin || !i.adminOnly) : ADMIN_NAV.filter(i => i.view === 'admin'));
 export const isAdminView = (view: View) => ADMIN_NAV.some(i => i.view === view);
 
 /** 모바일(≤1024) 상단 헤더에 표시할 화면 제목 — 코웍 체크리스트는 모바일에서 집행 현황 안의 화면이므로 '집행 현황' */
 const MOBILE_TITLE: Record<View, string> = {
   home: '홈', meeting: '팀 운영', project: '프로젝트 운영', exec: '집행 현황', 'exec-new': '집행 등록', 'project-new': '프로젝트 등록', 'project-detail': '프로젝트 상세',
-  cowork: '집행 현황', report: '리포트', mypage: '비밀번호 변경', settings: '화면 설정', notification: '알림', admin: '사용자 관리', 'admin-org': '조직 관리', search: '검색 결과',
+  cowork: '집행 현황', report: '리포트', mypage: '비밀번호 변경', settings: '화면 설정', notification: '알림', admin: '사용자 관리', 'admin-org': '조직 관리', 'admin-ocr': '영수증 인식', search: '검색 결과',
 };
 export const mobileTitle = (view: View) => MOBILE_TITLE[view];
 

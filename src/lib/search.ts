@@ -5,6 +5,7 @@ import { checkDateOf, visibleChecklist } from '@/store/selectors';
 import { fmt } from './format';
 import { CUR_YEAR, spentDateOf, ym } from './date';
 import { workBudgetOf, workUsedOf } from './budget';
+import { REMOTE_AUTH } from './supabase';
 
 /**
  * 전체 메뉴 검색
@@ -48,7 +49,7 @@ export type SearchResult = Record<HitGroup, SearchHit[]> & { count: Record<HitGr
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '');
 
 /** 메뉴 바로가기 — kw: 메뉴 이름 외에 이 이름으로도 찾힘 */
-const MENUS: { title: string; view: View; sub: string; kw: string; tab?: string; anchor?: string; admin?: boolean }[] = [
+const MENUS: { title: string; view: View; sub: string; kw: string; tab?: string; anchor?: string; admin?: boolean; adminOnly?: boolean }[] = [
   { title: '홈', view: 'home', sub: '예산 현황 · 내 체크리스트', kw: '대시보드 메인 잔여 금액' },
   { title: '팀 회의비', view: 'meeting', tab: '팀 회의비', sub: '팀 운영 · 분기별 인원·예산', kw: '팀운영 회의비 분기 인원 기준 수량' },
   { title: '업무비', view: 'meeting', tab: '업무비', sub: '팀 운영 · 월별 예산', kw: '팀운영 업무비 월 예산 변경' },
@@ -65,6 +66,7 @@ const MENUS: { title: string; view: View; sub: string; kw: string; tab?: string;
   { title: '화면 설정 (글씨 크기 · 화면 모드)', view: 'settings', anchor: 'display', sub: '계정 메뉴', kw: '마이페이지 글씨 크기 큰글씨 폰트 화면 다크 모드 라이트 테마 어둡게 밝게 야간' },
   { title: '사용자 관리', view: 'admin', sub: '사용자 추가·수정·비밀번호 초기화 · 엑셀 등록', kw: '관리자 메뉴 사용자 회원 가입 등록 엑셀 추가 휴면 권한 초기화 사번', admin: true },
   { title: '조직 관리', view: 'admin-org', sub: '회사 › 본부 › 부서 › 파트 · 소속 옮기기', kw: '관리자 메뉴 조직 조직도 회사 본부 부서 파트 팀 소속 이동', admin: true },
+  { title: '영수증 인식', view: 'admin-ocr', sub: '서버 인식 월 한도 · 사용량', kw: '관리자 메뉴 영수증 인식 OCR 구글 비전 Vision 한도 횟수 업로드 사용량', admin: true, adminOnly: true },
 ];
 
 /** 검색 — limit: 묶음별 최대 건수 (count 는 자르기 전 전체 건수) */
@@ -80,6 +82,7 @@ export function searchAll(q: string, state: AppState, limit = 8): SearchResult {
   // 메뉴 바로가기
   for (const m of MENUS) {
     if (m.admin && !state.session?.isAdmin && !state.session?.canManage) continue;
+    if (m.adminOnly && (!state.session?.isAdmin || !REMOTE_AUTH)) continue;
     if (!has(m.title) && !has(m.kw) && !has(m.sub)) continue;
     out.menu.push({ key: `m-${m.title}`, kind: 'menu', group: 'menu', view: m.view, id: m.title, title: m.title, sub: m.sub, tab: m.tab, anchor: m.anchor });
   }

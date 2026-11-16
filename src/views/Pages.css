@@ -262,6 +262,27 @@ label.btn.is-disabled { opacity: 0.45; pointer-events: none; }
 .org-row__pos { margin-left: 6px; font-size: calc(12.5px * var(--fs)); font-weight: 500; color: var(--muted); }
 .org-row__no { flex-shrink: 0; font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--faint); }
 .org-row--person .check-row__meta { margin-top: 2px; }
+/* ── 관리자 > 영수증 인식 — 이번 달 사용량 · 월 한도 · 사용자별 사용 ── */
+.ocr-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.ocr-usage__period { margin-left: 6px; font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--faint); }
+.ocr-usage__big { display: flex; align-items: baseline; gap: 6px; margin: 4px 0 12px; }
+.ocr-usage__big b { font-size: calc(30px * var(--fs)); font-weight: 900; color: var(--text); letter-spacing: -0.01em; }
+.ocr-usage__big span { font-size: calc(15px * var(--fs)); font-weight: 700; color: var(--muted); }
+.ocr-usage__left { margin: 10px 0 0; font-size: calc(12.5px * var(--fs)); color: var(--muted); }
+.ocr-usage__left b { color: var(--primary-600); font-weight: 800; }
+.ocr-usage__left.is-out { color: var(--danger-600); font-weight: 700; }
+.ocr-limit__row { display: flex; align-items: center; gap: 8px; }
+.ocr-limit__input { position: relative; flex: 0 1 200px; }
+.ocr-limit__input .input { padding-right: 34px; text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ocr-limit__input > span { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: calc(13px * var(--fs)); color: var(--muted); pointer-events: none; }
+.ocr-limit__presets { margin: 12px 0 8px; }
+.ocr-limit__hint, .ocr-limit__warn, .ocr-limit__err { display: block; font-size: calc(12px * var(--fs)); line-height: 1.6; }
+.ocr-limit__hint { color: var(--faint); }
+.ocr-limit__warn { color: var(--primary-700); font-weight: 600; }
+.ocr-limit__err { color: var(--danger-600); font-weight: 600; }
+.ocr-members__head { padding: 16px 18px 4px; }
+.ocr-members__head small { margin-left: 6px; font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--faint); }
+@media (max-width: 760px) { .ocr-grid { grid-template-columns: 1fr; } }
 /* 가운데 팝업 (모바일은 바텀 시트) */
 .modal { position: fixed; inset: 0; z-index: var(--z-prompt); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .modal__dim { position: absolute; inset: 0; background: var(--dim); animation: fade-in 0.2s ease both; }

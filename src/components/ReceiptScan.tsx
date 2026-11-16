@@ -121,7 +121,7 @@ export default function ReceiptScan({ onResult, className }: { onResult: (r: Rec
           <strong>{reading ? '영수증 읽는 중…' : '영수증 찍어서 바로 올리기'}</strong>
           <small>{phase.kind === 'reading'
             ? phase.stage === 'server' ? '서버에서 읽는 중 · 잠시만 기다려주세요'
-              : phase.progress > 0 ? `휴대폰에서 읽는 중 ${Math.round(phase.progress * 100)}%` : '휴대폰에서 읽을 준비 중 (처음 한 번은 인식 모델을 내려받아요)'
+              : `${phase.stage === 'device-quota' ? '이번 달 서버 인식 한도를 다 써서 ' : ''}${phase.progress > 0 ? `휴대폰에서 읽는 중 ${Math.round(phase.progress * 100)}%` : '휴대폰에서 읽을 준비 중 (처음 한 번은 인식 모델을 내려받아요)'}`
             : '카메라·사진첩 선택 → 사용일자·상호명·금액 자동 입력'}</small>
         </span>
       </button>

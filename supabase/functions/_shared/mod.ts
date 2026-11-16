@@ -21,7 +21,7 @@ const CORS = {
 /** 앱이 화면 문구를 고르는 오류 코드 */
 export type ErrorCode =
   | 'bad_request' | 'unauthorized' | 'forbidden' | 'already_setup' | 'duplicate' | 'weak_password'
-  | 'same_password' | 'wrong_password' | 'not_found' | 'self_target' | 'last_admin' | 'server';
+  | 'same_password' | 'wrong_password' | 'not_found' | 'self_target' | 'last_admin' | 'quota' | 'unavailable' | 'server';
 
 export class HttpError extends Error {
   constructor(public status: number, public code: ErrorCode, message: string) { super(message); }

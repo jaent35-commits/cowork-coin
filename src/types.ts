@@ -13,6 +13,7 @@ export type View =
   | 'notification'
   | 'admin'
   | 'admin-org'
+  | 'admin-ocr'
   | 'search';
 
 /** 로그인한 사용자 (Supabase 로그인 — 1인 1계정, 사번 로그인 · db/migrations/20261111b_org_members.sql) */
